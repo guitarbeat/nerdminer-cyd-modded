@@ -1056,6 +1056,9 @@ void esp32_2432S028R_Init(void)
   {
     invertColors = Settings.invertColors;
   }
+#if defined(TFT_INVERSION_ON)
+  invertColors = !invertColors;
+#endif
   tft.invertDisplay(invertColors);
   tft.setRotation(Settings.flipDisplay ? 3 : 1); // 1 = USB on the right, 3 = USB on the left (touch follows automatically)
   tft.setSwapBytes(true);
