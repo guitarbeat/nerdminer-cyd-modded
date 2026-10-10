@@ -1,0 +1,21 @@
+{
+  "name": "NerdMiner_v2 TTGO Webflasher",
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "improv": false,
+      "parts": [
+        { "path": "ESP32-2432S028R_bootloader.bin", "offset": 4096 },
+        { "path": "ESP32-2432S028R_partitions.bin", "offset": 32768 },
+        { "path": "boot_app0.bin", "offset": 57344 },
+        { "path": "ttgo_t_display_firmware.bin", "offset": 65536 }
+      ]
+    },
+    {
+      "chipFamily": "ESP8266",
+      "parts": [
+        { "path": "esp8266.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
