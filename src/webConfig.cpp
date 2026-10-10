@@ -89,7 +89,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(9500);
+  page.reserve(12500);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -101,7 +101,7 @@ static void handleRoot()
             "}"
             "* {box-sizing:border-box;margin:0;padding:0}"
             "body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:16px 12px 48px;line-height:1.5}"
-            ".container{max-width:620px;margin:0 auto}"
+            ".container{max-width:640px;margin:0 auto}"
             "header{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--card-border);margin-bottom:18px}"
             ".brand{display:flex;align-items:center;gap:10px}"
             ".logo-box{width:34px;height:34px;background:var(--amber);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px}"
@@ -112,12 +112,38 @@ static void handleRoot()
             ".dot-green{background:var(--green);box-shadow:0 0 8px var(--green)}"
             ".dot-amber{background:var(--warn);box-shadow:0 0 8px var(--warn)}"
             ".dot-gray{background:var(--muted)}"
-            ".grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}"
-            "@media(min-width:480px){.grid{grid-template-columns:repeat(4,1fr)}}"
-            ".stat-tile{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:12px 14px}"
-            ".stat-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}"
+            ".grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}"
+            "@media(min-width:520px){.grid{grid-template-columns:repeat(4,1fr)}}"
+            ".stat-tile{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:12px 14px;position:relative}"
+            ".stat-label-wrap{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}"
+            ".stat-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}"
+            ".has-tip{position:relative;cursor:help;display:inline-flex;align-items:center}"
+            ".tip-icon{font-size:9px;background:var(--card-border);color:var(--muted);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;font-weight:bold}"
+            ".tip-box{position:absolute;bottom:125%;left:50%;transform:translateX(-50%) translateY(4px);background:#1c2128;border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:500;padding:6px 10px;border-radius:6px;white-space:normal;width:190px;text-align:center;line-height:1.3;box-shadow:0 4px 12px rgba(0,0,0,0.5);opacity:0;visibility:hidden;transition:all .15s ease;pointer-events:none;z-index:100}"
+            ".has-tip:hover .tip-box,.has-tip:focus .tip-box{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}"
             ".stat-val{font-size:20px;font-weight:800;color:var(--text);font-feature-settings:'tnum'}"
             ".stat-sub{font-size:11px;color:var(--muted);margin-top:2px}"
+            ".sub-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}"
+            ".pow-card{background:var(--card);border:1px solid var(--card-border);border-radius:8px;margin-bottom:18px;overflow:hidden}"
+            ".pow-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;background:linear-gradient(90deg,rgba(247,147,26,0.06),transparent);user-select:none}"
+            ".pow-header:hover{background:linear-gradient(90deg,rgba(247,147,26,0.1),transparent)}"
+            ".pow-icon{width:28px;height:28px;background:rgba(247,147,26,0.15);color:var(--amber);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold}"
+            ".chevron{font-size:12px;color:var(--muted);transition:transform .2s}"
+            ".pow-card.open .chevron{transform:rotate(180deg)}"
+            ".pow-content{display:none;padding:0 16px 16px;border-top:1px solid var(--card-border)}"
+            ".pow-card.open .pow-content{display:block}"
+            ".pow-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:14px}"
+            "@media(min-width:520px){.pow-grid{grid-template-columns:repeat(2,1fr)}}"
+            ".pow-item{background:#0d1117;border:1px solid var(--card-border);border-radius:6px;padding:12px}"
+            ".pow-item-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}"
+            ".pow-badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px}"
+            ".badge-hash{background:rgba(247,147,26,0.15);color:var(--amber)}"
+            ".badge-share{background:rgba(34,197,94,0.15);color:var(--green)}"
+            ".badge-diff{background:rgba(59,130,246,0.15);color:#60a5fa}"
+            ".badge-jackpot{background:rgba(234,179,8,0.15);color:var(--warn)}"
+            ".pow-item h4{font-size:13px;font-weight:700;color:var(--text)}"
+            ".pow-item p{font-size:12px;color:var(--muted);line-height:1.45}"
+            ".pow-footer{margin-top:14px;padding:10px 12px;background:#0d1117;border-left:3px solid var(--amber);border-radius:0 6px 6px 0;font-size:12px;color:var(--muted);line-height:1.4}"
             ".pool-banner{background:linear-gradient(135deg,rgba(247,147,26,0.1),rgba(34,197,94,0.06));border:1px solid rgba(247,147,26,0.3);border-radius:8px;padding:14px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}"
             ".pool-info{font-size:13px}"
             ".pool-btn{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:6px;transition:opacity .2s}"
@@ -166,29 +192,89 @@ static void handleRoot()
 
   page += F("</div></header>"
             "<div class='grid'>"
-            "<div class='stat-tile'><div class='stat-label'>Hashrate</div>"
+            "<div class='stat-tile'>"
+            "<div class='stat-label-wrap'>"
+            "<span class='stat-label'>Hashrate</span>"
+            "<span class='has-tip'><span class='tip-icon'>?</span><span class='tip-box'>Computing ~1M SHA-256 double-hash guesses/sec across 32-bit nonces.</span></span>"
+            "</div>"
             "<div class='stat-val' id='st-hash'>");
   page += d.currentHashRate.length() ? d.currentHashRate : String("0");
   page += F(" <span style='font-size:12px;font-weight:600;color:var(--muted)'>KH/s</span></div>"
-            "<div class='stat-sub'>Target ~990 KH/s</div></div>"
-            "<div class='stat-tile'><div class='stat-label'>Shares</div>"
+            "<div class='stat-sub'>~1,000,000 guesses/s</div></div>"
+            "<div class='stat-tile'>"
+            "<div class='stat-label-wrap'>"
+            "<span class='stat-label'>Shares</span>"
+            "<span class='has-tip'><span class='tip-icon'>?</span><span class='tip-box'>'Accounting units' proving active mathematical work to the pool.</span></span>"
+            "</div>"
             "<div class='stat-val' id='st-shares'>");
   page += d.completedShares.length() ? d.completedShares : String("0");
-  page += F("</div><div class='stat-sub'>Best: <span id='st-diff'>");
-  page += d.bestDiff.length() ? d.bestDiff : String("-");
-  page += F("</span></div></div>"
-            "<div class='stat-tile'><div class='stat-label'>Core Temp</div>"
+  page += F("</div><div class='stat-sub'>Accepted by pool</div></div>"
+            "<div class='stat-tile'>"
+            "<div class='stat-label-wrap'>"
+            "<span class='stat-label'>Best Diff</span>"
+            "<span class='has-tip'><span class='tip-icon'>?</span><span class='tip-box'>Closest hash to a block so far (extra leading zeroes).</span></span>"
+            "</div>"
+            "<div class='stat-val' id='st-diff'>");
+  page += d.bestDiff.length() ? d.bestDiff : String("0.0000");
+  page += F("</div><div class='stat-sub'>Personal record</div></div>"
+            "<div class='stat-tile'>"
+            "<div class='stat-label-wrap'>"
+            "<span class='stat-label'>Block Reward</span>"
+            "<span class='has-tip'><span class='tip-icon'>?</span><span class='tip-box'>Full block subsidy + fees awarded if your chip solves a valid block!</span></span>"
+            "</div>"
+            "<div class='stat-val' style='color:var(--amber)'>3.125 BTC</div>"
+            "<div class='stat-sub'>~$200,000+ USD</div></div>"
+            "</div>"
+            "<div class='sub-grid'>"
+            "<div class='stat-tile'><div class='stat-label'>Core Temp &bull; Uptime</div>"
             "<div class='stat-val' id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
   page += F("&deg;C</div><div class='stat-sub'>Uptime: <span id='st-uptime'>");
   page += d.timeMining.length() ? d.timeMining : String("--");
   page += F("</span></div></div>"
-            "<div class='stat-tile'><div class='stat-label'>Wi-Fi Signal</div>"
+            "<div class='stat-tile'><div class='stat-label'>Wi-Fi &bull; Free Heap</div>"
             "<div class='stat-val'>");
   page += String(getWifiQuality(WiFi.RSSI())) + F("%</div>"
             "<div class='stat-sub'>");
   page += String(WiFi.RSSI()) + F(" dBm &bull; <span id='st-heap'>");
   page += String(ESP.getFreeHeap() / 1024) + F(" KB free</span></div></div></div>");
+
+  // Proof of Work Anatomy Card
+  page += F("<div class='pow-card open' id='pow-widget'>"
+            "<div class='pow-header' onclick='togglePow()'>"
+            "<div style='display:flex;align-items:center;gap:10px'>"
+            "<div class='pow-icon'>&#9889;</div>"
+            "<div>"
+            "<div style='font-size:14px;font-weight:700;color:var(--text)'>Proof of Work Anatomy: Demystifying the Numbers</div>"
+            "<div style='font-size:12px;color:var(--muted)'>What your ESP32 is actually doing under the hood &bull; Click to collapse</div>"
+            "</div>"
+            "</div>"
+            "<span class='chevron'>&#9662;</span>"
+            "</div>"
+            "<div class='pow-content'>"
+            "<div class='pow-grid'>"
+            "<div class='pow-item'>"
+            "<div class='pow-item-hdr'><span class='pow-badge badge-hash'>HASHING</span><h4>Hashrate &amp; Nonces</h4></div>"
+            "<p>The ESP32 runs nearly <strong>1 million SHA-256 double-hash guesses every second</strong> (~985 KH/s). It iterates through 32-bit integer values called <em>nonces</em>, altering the block header to find an output below the network target.</p>"
+            "</div>"
+            "<div class='pow-item'>"
+            "<div class='pow-item-hdr'><span class='pow-badge badge-share'>ACCOUNTING</span><h4>Shares Submitted</h4></div>"
+            "<p>Because finding a full block is rare, pools assign easier difficulty targets. When your chip hits a hash matching that lower target, it sends a <em>share</em>—an accounting unit proving your miner is actively expending computational energy.</p>"
+            "</div>"
+            "<div class='pow-item'>"
+            "<div class='pow-item-hdr'><span class='pow-badge badge-diff'>PRECISION</span><h4>Best Difficulty</h4></div>"
+            "<p>Measures the closest your ESP32 has gotten to landing a valid Bitcoin block. A higher difficulty means more leading zeroes in the resulting hash. A score like <code>1.2M</code> means beating a 1-in-1.2-million difficulty target on a single guess!</p>"
+            "</div>"
+            "<div class='pow-item'>"
+            "<div class='pow-item-hdr'><span class='pow-badge badge-jackpot'>JACKPOT</span><h4>Target Block Reward (3.125 BTC)</h4></div>"
+            "<p>If your ESP32 solves a hash that meets global network difficulty, your candidate block is broadcast to the network. On a solo pool like Public-Pool, you win the entire <strong>3.125 BTC subsidy</strong> (~$200,000+ USD) plus all transaction fees directly!</p>"
+            "</div>"
+            "</div>"
+            "<div class='pow-footer'>"
+            "<strong>Satoshi CPU Era Context:</strong> In 2009, Satoshi Nakamoto mined the Genesis block on an ordinary processor. The NerdMiner is a standalone homage to that 2009 CPU era—running the exact same SHA-256 mathematics as a decentralized lottery ticket."
+            "</div>"
+            "</div>"
+            "</div>");
 
   if (isPublicPool && cleanWallet.length() > 0)
   {
@@ -307,6 +393,7 @@ static void handleRoot()
             "function setPool(h,p,pass){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;}"
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
+            "function togglePow(){const w=document.getElementById('pow-widget');w.classList.toggle('open');}"
             "function pollReboot(){let s=8;document.getElementById('overlay').style.display='flex';"
             "const t=setInterval(()=>{s--;if(s>=0)document.getElementById('cd').textContent=s;"
             "if(s<=0){clearInterval(t);checkBack();}},1000);}"
