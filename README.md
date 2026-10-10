@@ -56,6 +56,16 @@ Once flashed and powered on:
 
 To view your miner stats online, visit [web.public-pool.io](https://web.public-pool.io/) and enter your BTC payout address.
 
+### 🌐 On-Device Web Settings Portal
+
+Once connected to your home WiFi, the miner runs a local web configuration server accessible from any browser on your network:
+
+1. Open `http://<miner-ip>` (e.g. `http://192.168.0.27`)
+2. Log in with:
+   - **Username**: `admin`
+   - **Password**: `MineYourCoins`
+3. You can change your **Timezone (UTC offset)**, **Bitcoin Wallet Address**, **Mining Pool**, **Currency**, **Display Brightness**, **Color Inversion**, and **Screen Rotation** directly without reflashing!
+
 ---
 
 ## 🛠️ Building & Developing with PlatformIO
