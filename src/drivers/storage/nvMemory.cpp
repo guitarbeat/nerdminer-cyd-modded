@@ -38,6 +38,7 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_INVCOLOR] = Settings->invertColors;
         json[JSON_SPIFFS_KEY_BRIGHTNESS] = Settings->Brightness;
         json[JSON_SPIFFS_KEY_FLIPDISPLAY] = Settings->flipDisplay;
+        json[JSON_SPIFFS_KEY_ROTATION] = Settings->screenRotation;
         json[JSON_SPIFFS_KEY_CURRENCY] = Settings->Currency;
 
         // Open config file
@@ -112,6 +113,11 @@ bool nvMemory::loadConfig(TSettings* Settings)
                         Settings->Brightness = 250;
                     }
                     Settings->flipDisplay = json[JSON_SPIFFS_KEY_FLIPDISPLAY] | false;
+                    if (json.containsKey(JSON_SPIFFS_KEY_ROTATION)) {
+                        Settings->screenRotation = json[JSON_SPIFFS_KEY_ROTATION].as<int>();
+                    } else {
+                        Settings->screenRotation = Settings->flipDisplay ? 3 : 1;
+                    }
                     Settings->Currency = json[JSON_SPIFFS_KEY_CURRENCY] | DEFAULT_CURRENCY;
                     return true;
                 }

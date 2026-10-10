@@ -48,6 +48,7 @@
 #define JSON_SPIFFS_KEY_INVCOLOR	"invertColors"
 #define JSON_SPIFFS_KEY_BRIGHTNESS	"Brightness"
 #define JSON_SPIFFS_KEY_FLIPDISPLAY	"flipDisplay"
+#define JSON_SPIFFS_KEY_ROTATION	"screenRotation"
 #define JSON_SPIFFS_KEY_CURRENCY	"currency"
 
 // settings
@@ -64,6 +65,7 @@ struct TSettings
 	bool invertColors{ DEFAULT_INVERTCOLORS };
 	int Brightness{ DEFAULT_BRIGHTNESS };
 	bool flipDisplay{ DEFAULT_FLIPDISPLAY };	// rotate display 180 degrees (USB on the left)
+	int screenRotation{ 1 };	// 0=Portrait (USB bottom), 1=Landscape (USB right), 2=Portrait Inv (USB top), 3=Landscape Inv (USB left)
 	String Currency{ DEFAULT_CURRENCY };	// fiat currency for the BTC price (CoinGecko vs_currency code)
 };
 

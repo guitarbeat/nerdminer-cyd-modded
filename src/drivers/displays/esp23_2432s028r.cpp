@@ -52,35 +52,21 @@ TFT_eTouch<TFT_eSPI> touch(tft, ETOUCH_CS, 0xFF, hSPI);
 
 #define RGB565(r, g, b) ((uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3)))
 
-static const uint16_t C_BG = RGB565(5, 7, 13);      // near-black ink
-static const uint16_t C_PANEL = RGB565(13, 18, 30); // raised surface
-static const uint16_t C_EDGE = RGB565(30, 41, 62);  // hairlines
-static const uint16_t C_TRACK = RGB565(22, 30, 46); // unlit gauge / bar tracks
-static const uint16_t C_TEXT = RGB565(232, 238, 248);
-static const uint16_t C_DIM = RGB565(112, 128, 156);
-static const uint16_t C_GOOD = RGB565(61, 255, 176);
-static const uint16_t C_WARN = RGB565(255, 176, 40);
-static const uint16_t C_BAD = RGB565(255, 92, 112);
-static const uint16_t C_GOLD = RGB565(255, 206, 64);
-
-struct Accent
-{
-  uint16_t main; // hot end of gradients, wordmark, dots
-  uint16_t alt;  // cool end of gradients
-};
-
-static const Accent ACCENTS[] = {
-    {RGB565(34, 225, 255), RGB565(140, 92, 255)}, // ice / violet
-    {RGB565(61, 255, 176), RGB565(38, 148, 255)}, // mint / azure
-    {RGB565(255, 176, 40), RGB565(255, 72, 112)}, // amber / rose
-    {RGB565(255, 84, 190), RGB565(122, 92, 255)}, // magenta / indigo
-    {RGB565(190, 255, 60), RGB565(30, 208, 160)}, // lime / teal
-};
-#define ACCENT_COUNT (sizeof(ACCENTS) / sizeof(ACCENTS[0]))
+static const uint16_t C_BG = RGB565(8, 10, 14);       // deep matte background
+static const uint16_t C_PANEL = RGB565(16, 20, 28);    // flat structural surface
+static const uint16_t C_EDGE = RGB565(34, 42, 54);     // subtle hairlines
+static const uint16_t C_TRACK = RGB565(24, 30, 40);    // unlit meter tracks
+static const uint16_t C_TEXT = RGB565(245, 247, 250);  // crisp high-contrast text
+static const uint16_t C_DIM = RGB565(135, 145, 160);   // quiet neutral label typography
+static const uint16_t C_GOOD = RGB565(52, 211, 153);   // functional status: operational / success
+static const uint16_t C_WARN = RGB565(251, 191, 36);   // functional status: connecting / caution
+static const uint16_t C_BAD = RGB565(248, 113, 113);   // functional status: error
+static const uint16_t C_GOLD = RGB565(245, 158, 11);   // exceptional state: block found
+static const uint16_t C_METER = RGB565(247, 147, 26);  // functional gauge fill (Bitcoin amber)
 
 static int accentIdx = 0;
-static uint16_t cAcc = ACCENTS[0].main;
-static uint16_t cAlt = ACCENTS[0].alt;
+static uint16_t cAcc = C_METER;
+static uint16_t cAlt = C_METER;
 
 // t = 0..255 blends a -> b
 static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
@@ -103,11 +89,22 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_MARKET 1
 #define SCR_CLOCK 2
 
+static inline bool isPortrait()
+{
+  int r = tft.getRotation();
+  return (r == 0 || r == 2);
+}
+
+static inline int gCX() { return isPortrait() ? 120 : 92; }
+static inline int gCY() { return isPortrait() ? 104 : 110; }
+static inline int gR()  { return isPortrait() ? 72 : 78; }
+static inline int gRI() { return isPortrait() ? 62 : 67; }
+
 // Hashrate ring
-#define G_CX 92
-#define G_CY 110
-#define G_R 78
-#define G_RI 67
+#define G_CX (gCX())
+#define G_CY (gCY())
+#define G_R (gR())
+#define G_RI (gRI())
 #define G_SEGS 30
 #define G_MAX_KH 1200.0f // full-scale of the ring: 40 KH/s per segment (the CYD runs ~950)
 
@@ -217,7 +214,7 @@ static void wEnd(int x, int y)
 // ------------------------------------------------------------ draw helpers --
 
 // fillScreen() is not virtual in TFT_eSPI, so it would ignore sprite targets
-static void clearScreen(TFT_eSPI &d) { d.fillRect(0, 0, SCR_W, SCR_H, C_BG); }
+static void clearScreen(TFT_eSPI &d) { d.fillRect(0, 0, d.width(), d.height(), C_BG); }
 
 static void text(TFT_eSPI &d, const char *s, int x, int y, unsigned size, uint16_t fg, uint16_t bg,
                  Align a = Align::TopLeft)
@@ -246,11 +243,11 @@ static void textPair(TFT_eSPI &d, int cx, int y, const char *val, const char *un
   text(d, unit, x0 + wv + 4, y + (size - usz), usz, cu, bg);
 }
 
-// rounded card: 1px edge, AA corners
+// structural cell: crisp 1px hairline border, flat surface
 static void panel(TFT_eSPI &d, int x, int y, int w, int h, int r, uint16_t fill, uint16_t edge, uint16_t behind)
 {
-  d.fillSmoothRoundRect(x, y, w, h, r, edge, behind);
-  d.fillSmoothRoundRect(x + 1, y + 1, w - 2, h - 2, r - 1, fill, edge);
+  d.fillRect(x, y, w, h, fill);
+  d.drawRect(x, y, w, h, edge);
 }
 
 // horizontal gradient bar (alt -> accent) with softly rounded ends
@@ -382,9 +379,7 @@ static void gaugeDraw(TFT_eSPI &d, float v)
     uint8_t lvl = f >= 1.0f ? 4 : (f <= 0.05f ? 0 : 1 + (int)(f * 3.0f)); // 0, 1..3 (partial), 4
     if (lvl == segLvl[i])
       continue;
-    segLvl[i] = lvl;
-    uint16_t full = mix565(cAlt, cAcc, (uint8_t)(i * 255 / (G_SEGS - 1)));
-    uint16_t col = lvl == 0 ? C_TRACK : (lvl == 4 ? full : mix565(C_TRACK, full, lvl * 64));
+    uint16_t col = lvl == 0 ? C_TRACK : (lvl == 4 ? C_METER : mix565(C_TRACK, C_METER, lvl * 64));
     int a0 = 45 + i * 9; // 270 degree sweep, gap at 6 o'clock
     d.drawArc(G_CX, G_CY, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
   }
@@ -403,20 +398,18 @@ struct HdrV
 static void drawHeader(const HdrV &h)
 {
   char k[64];
-  snprintf(k, sizeof(k), "%s|%s|%d|%d|%d", h.time.c_str(), h.ip.c_str(), h.bars, h.status, accentIdx);
+  snprintf(k, sizeof(k), "%s|%s|%d|%d|%d", h.time.c_str(), h.ip.c_str(), h.bars, h.status, isPortrait() ? 1 : 0);
   if (!need(W_HDR, k))
     return;
-  const int X0 = 24, W = SCR_W - X0;
+  const int X0 = 10, W = (isPortrait() ? 240 : 320) - X0;
   if (!wBegin(W, HDR_H, C_BG))
     return;
 
-  // wordmark
-  int wn = textW("NERD", 14);
-  text(wgt, "NERD", 2, 5, 14, C_TEXT, C_BG);
-  text(wgt, "MINER", 2 + wn + 1, 5, 14, cAcc, C_BG);
-  int wm = 2 + wn + 1 + textW("MINER", 14);
+  // Wordmark: unified, crisp typography
+  text(wgt, "NERDMINER", 0, 5, 13, C_TEXT, C_BG);
+  int wm = textW("NERDMINER", 13);
 
-  // state chip
+  // Status: purely typographic indicator with a minimal 3px status dot (no pill container)
   const char *label = "SETUP";
   uint16_t col = C_DIM;
   if (h.status == NM_hashing)
@@ -429,48 +422,37 @@ static void drawHeader(const HdrV &h)
     label = "LINKING";
     col = C_WARN;
   }
-  int cw = textW(label, 9) + 14;
-  int cx = wm + 10;
-  wgt.fillSmoothRoundRect(cx, 6, cw, 15, 7, mix565(C_BG, col, 46), C_BG);
-  text(wgt, label, cx + cw / 2, 8, 9, col, mix565(C_BG, col, 46), Align::TopCenter);
+  int sx = wm + (isPortrait() ? 10 : 14);
+  wgt.fillCircle(sx + 2, 12, 3, col);
+  text(wgt, label, sx + 9, 6, 9, col, C_BG);
 
-  // time (right)
-  text(wgt, h.time.c_str(), W - 8, 5, 14, C_TEXT, C_BG, Align::TopRight);
+  // Time (right-aligned)
+  text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
 
-  // wifi bars
+  int timeW = textW(h.time.c_str(), 13);
+  int barX = (W - 4) - timeW - 18;
+
+  // Signal indicator (neutral, functional)
   for (int i = 0; i < 4; i++)
   {
-    int bh = 4 + i * 3;
-    wgt.fillRect(220 + i * 5, 20 - bh, 3, bh, i < h.bars ? cAcc : C_TRACK);
+    int bh = 3 + i * 3;
+    wgt.fillRect(barX + i * 4, 18 - bh, 2, bh, i < h.bars ? C_TEXT : C_TRACK);
   }
 
-  // local IP, right-aligned before the wifi bars; shrinks to fit beside the state chip
-  if (h.ip.length())
+  // Local IP (landscape only, quiet secondary information)
+  if (!isPortrait() && h.ip.length())
   {
-    const int right = 212, room = right - (cx + cw) - 8;
-    unsigned sz = 12;
-    while (sz > 8 && textW(h.ip.c_str(), sz) > room)
-      sz--;
-    text(wgt, h.ip.c_str(), right, 14 - (int)sz / 2 - 1, sz, C_DIM, C_BG, Align::TopRight);
+    int right = barX - 12;
+    text(wgt, h.ip.c_str(), right, 6, 10, C_DIM, C_BG, Align::TopRight);
   }
 
   wEnd(X0, 0);
   done(W_HDR, k);
 }
 
-// Breathing status dot, left of the wordmark. Called every animation frame.
 static void drawPulse(unsigned long frame)
 {
-  static int lastLvl = -1;
-  int ph = frame % 20;
-  int lvl = ph < 10 ? ph : 20 - ph; // 0..10..0
-  int st = uiStatus();
-  uint16_t base = st == NM_hashing ? cAcc : (st == NM_Connecting ? C_WARN : C_DIM);
-  int key = lvl + 11 * st + 40 * accentIdx;
-  if (key == lastLvl)
-    return;
-  lastLvl = key;
-  tft.fillSmoothCircle(13, 13, 4, mix565(C_TRACK, base, 70 + lvl * 18), C_BG);
+  // No-op: eliminated distracting pulsing dot
 }
 
 // -------------------------------------------------------------- pool strip --
@@ -483,21 +465,29 @@ struct StripV
 
 static void chromeStrip(TFT_eSPI &d)
 {
-  panel(d, 8, STRIP_Y, 304, STRIP_H, 8, C_PANEL, C_EDGE, C_BG);
+  if (isPortrait())
+    panel(d, 6, 266, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
+  else
+    panel(d, 8, STRIP_Y, 304, STRIP_H, 8, C_PANEL, C_EDGE, C_BG);
 }
 
 static void drawStrip(const StripV &s)
 {
+  int sy = isPortrait() ? 269 : (STRIP_Y + 3);
+  int cw = isPortrait() ? 54 : 70;
+  int ch = isPortrait() ? 42 : 32;
+  int xstep = isPortrait() ? 57 : 74;
+  int x0 = isPortrait() ? 8 : 14;
   for (int i = 0; i < 4; i++)
   {
-    String k = s.l[i] + "|" + s.v[i] + "|" + accentIdx;
+    String k = s.l[i] + "|" + s.v[i] + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
     if (!need(W_P0 + i, k))
       continue;
-    if (!wBegin(70, 32, C_PANEL))
+    if (!wBegin(cw, ch, C_PANEL))
       continue;
-    text(wgt, s.l[i].c_str(), 6, 3, 9, C_DIM, C_PANEL);
-    text(wgt, s.v[i].c_str(), 6, 15, 14, C_TEXT, C_PANEL);
-    wEnd(14 + 74 * i, STRIP_Y + 3);
+    text(wgt, s.l[i].c_str(), isPortrait() ? 2 : 6, 3, isPortrait() ? 8 : 9, C_DIM, C_PANEL);
+    text(wgt, s.v[i].c_str(), isPortrait() ? 2 : 6, isPortrait() ? 18 : 15, isPortrait() ? 12 : 14, C_TEXT, C_PANEL);
+    wEnd(x0 + xstep * i, sy);
     done(W_P0 + i, k);
   }
 }
@@ -505,25 +495,33 @@ static void drawStrip(const StripV &s)
 static void chromeStripCells(TFT_eSPI &d)
 {
   chromeStrip(d);
-  for (int i = 1; i < 4; i++)
-    d.drawFastVLine(12 + 74 * i, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
+  if (isPortrait())
+  {
+    for (int i = 1; i < 4; i++)
+      d.drawFastVLine(6 + 57 * i, 272, 36, C_EDGE);
+  }
+  else
+  {
+    for (int i = 1; i < 4; i++)
+      d.drawFastVLine(12 + 74 * i, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
+  }
 }
 
-// generic stat tile (label over value, coloured stripe at the left)
+// generic stat tile (quiet uppercase label over bold value, crisp hairline border)
 static void drawTile(int id, int x, int y, int w, int h, const char *label, const char *value,
-                     uint16_t stripe, uint16_t valCol, uint16_t edge)
+                     uint16_t valCol, uint16_t edge)
 {
   char k[64];
-  snprintf(k, sizeof(k), "%s|%s|%u|%u|%u", label, value, stripe, valCol, edge);
+  snprintf(k, sizeof(k), "%s|%s|%u|%u", label, value, valCol, edge);
   if (!need(id, k))
     return;
   if (!wBegin(w, h, C_BG))
     return;
-  panel(wgt, 0, 0, w, h, 8, C_PANEL, edge, C_BG);
-  int top = (h - 28) / 2;
-  wgt.fillSmoothRoundRect(8, 8, 3, h - 16, 1, stripe, C_PANEL);
-  text(wgt, label, 18, top, 9, C_DIM, C_PANEL);
-  text(wgt, value, 18, top + 12, strlen(value) > 8 ? 12 : 15, valCol, C_PANEL);
+  wgt.fillRect(0, 0, w, h, C_PANEL);
+  wgt.drawRect(0, 0, w, h, edge);
+  int top = (h - 26) / 2;
+  text(wgt, label, 8, top, 9, C_DIM, C_PANEL);
+  text(wgt, value, 8, top + 11, strlen(value) > 8 ? 12 : 15, valCol, C_PANEL);
   wEnd(x, y);
   done(id, k);
 }
@@ -552,8 +550,11 @@ static void paintMine(const MineV &m)
 {
   drawHeader(m.hdr);
 
+  int cx = G_CX;
+  int cy = G_CY;
+
   // hero readout inside the ring
-  String k = m.hash + "|" + accentIdx;
+  String k = m.hash + "|" + (isPortrait() ? "P" : "L");
   if (need(W_HERO, k))
   {
     if (wBegin(104, 74, C_BG))
@@ -561,31 +562,44 @@ static void paintMine(const MineV &m)
       text(wgt, "HASHRATE", 52, 4, 9, C_DIM, C_BG, Align::TopCenter);
       unsigned sz = m.hash.length() <= 5 ? 36 : (m.hash.length() == 6 ? 30 : 26);
       text(wgt, m.hash.c_str(), 52, 15, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", 52, 56, 13, cAcc, C_BG, Align::TopCenter);
-      wEnd(G_CX - 52, G_CY - 38);
+      text(wgt, "KH/s", 52, 56, 11, C_DIM, C_BG, Align::TopCenter);
+      wEnd(cx - 52, cy - 38);
       done(W_HERO, k);
     }
   }
 
   // lifetime hashes, in the gap at the bottom of the ring
-  k = m.total + "|" + accentIdx;
+  k = m.total + "|" + (isPortrait() ? "P" : "L");
   if (need(W_TOTAL, k))
   {
     if (wBegin(120, 16, C_BG))
     {
       textPair(wgt, 60, 1, commas(m.total).c_str(), "MH TOTAL", 11, C_TEXT, C_DIM, C_BG);
-      wEnd(G_CX - 60, 171);
+      wEnd(cx - 60, isPortrait() ? 156 : 171);
       done(W_TOTAL, k);
     }
   }
 
-  const int tx = 184, tw = 128, th = 36;
-  drawTile(W_T0, tx, TILE_Y[0], tw, th, "SHARES", m.shares.c_str(), cAcc, C_TEXT, m.flash ? cAcc : C_EDGE);
-  drawTile(W_T1, tx, TILE_Y[1], tw, th, "BEST DIFF", m.best.c_str(), cAlt, C_TEXT, C_EDGE);
-  drawTile(W_T2, tx, TILE_Y[2], tw, th, "TEMPLATES", m.tmpl.c_str(), C_DIM, C_TEXT, C_EDGE);
   bool found = m.blocks.toInt() > 0;
-  drawTile(W_T3, tx, TILE_Y[3], tw, th, "BLOCKS FOUND", m.blocks.c_str(), found ? C_GOLD : C_GOOD,
-           found ? C_GOLD : C_TEXT, found ? C_GOLD : C_EDGE);
+  uint16_t sharesCol = m.flash ? C_GOOD : C_TEXT;
+  uint16_t blocksCol = found ? C_GOLD : C_TEXT;
+
+  if (isPortrait())
+  {
+    const int tw = 112, th = 36;
+    drawTile(W_T0, 6, 180, tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
+    drawTile(W_T1, 122, 180, tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_T2, 6, 222, tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_T3, 122, 222, tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
+  }
+  else
+  {
+    const int tx = 184, tw = 128, th = 36;
+    drawTile(W_T0, tx, TILE_Y[0], tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
+    drawTile(W_T1, tx, TILE_Y[1], tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_T2, tx, TILE_Y[2], tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_T3, tx, TILE_Y[3], tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
+  }
 
   drawStrip(m.strip);
 }
@@ -603,56 +617,80 @@ struct MarketV
 
 static void chromeMarket(TFT_eSPI &d)
 {
-  panel(d, 8, 32, 304, 70, 10, C_PANEL, C_EDGE, C_BG);
-  text(d, btcPairLabel().c_str(), 20, 39, 9, C_DIM, C_PANEL);
-  text(d, "LATEST BLOCK", 300, 39, 9, C_DIM, C_PANEL, Align::TopRight);
-  panel(d, 8, 156, 304, 36, 8, C_PANEL, C_EDGE, C_BG);
-  chromeStripCells(d);
+  if (isPortrait())
+  {
+    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, btcPairLabel().c_str(), 14, 38, 9, C_DIM, C_PANEL);
+    text(d, "LATEST BLOCK", 224, 38, 9, C_DIM, C_PANEL, Align::TopRight);
+    panel(d, 6, 196, 228, 36, 8, C_PANEL, C_EDGE, C_BG);
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 32, 304, 70, 10, C_PANEL, C_EDGE, C_BG);
+    text(d, btcPairLabel().c_str(), 20, 39, 9, C_DIM, C_PANEL);
+    text(d, "LATEST BLOCK", 300, 39, 9, C_DIM, C_PANEL, Align::TopRight);
+    panel(d, 8, 156, 304, 36, 8, C_PANEL, C_EDGE, C_BG);
+    chromeStripCells(d);
+  }
 }
 
 static void paintMarket(const MarketV &m)
 {
   drawHeader(m.hdr);
 
-  String k = m.price + "|" + accentIdx;
-  if (need(W_PRICE, k) && wBegin(176, 46, C_PANEL))
+  String k = m.price + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
+  int priceW = isPortrait() ? 130 : 176;
+  if (need(W_PRICE, k) && wBegin(priceW, 46, C_PANEL))
   {
     const unsigned len = m.price.length();
-    text(wgt, m.price.c_str(), 2, 0, len > 8 ? 38 * 8 / len : 38, C_TEXT, C_PANEL);
-    wEnd(18, 52);
+    int baseSz = isPortrait() ? 32 : 38;
+    text(wgt, m.price.c_str(), 2, 0, len > 8 ? baseSz * 8 / len : baseSz, C_TEXT, C_PANEL);
+    wEnd(isPortrait() ? 12 : 18, 52);
     done(W_PRICE, k);
   }
 
-  k = m.block + "|" + accentIdx;
-  if (need(W_BLOCK, k) && wBegin(110, 46, C_PANEL))
+  k = m.block + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
+  int blockW = isPortrait() ? 84 : 110;
+  if (need(W_BLOCK, k) && wBegin(blockW, 46, C_PANEL))
   {
-    text(wgt, m.block.c_str(), 106, 17, 22, cAcc, C_PANEL, Align::TopRight);
-    wEnd(190, 52);
+    text(wgt, m.block.c_str(), blockW - 4, isPortrait() ? 10 : 17, isPortrait() ? 18 : 22, C_TEXT, C_PANEL, Align::TopRight);
+    wEnd(isPortrait() ? 144 : 190, 52);
     done(W_BLOCK, k);
   }
 
-  const int y = 108, w = 98, h = 42;
-  drawTile(W_M0, 8, y, w, h, "FEE / HALF HOUR", m.fee.c_str(), cAcc, C_TEXT, C_EDGE);
-  drawTile(W_M1, 111, y, w, h, "DIFFICULTY", m.diff.c_str(), cAlt, C_TEXT, C_EDGE);
-  drawTile(W_M2, 214, y, w, h, "NETWORK RATE", m.net.c_str(), C_DIM, C_TEXT, C_EDGE);
+  if (isPortrait())
+  {
+    drawTile(W_M0, 6, 106, 112, 40, "FEE / HALF HOUR", m.fee.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M1, 122, 106, 112, 40, "DIFFICULTY", m.diff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M2, 6, 150, 228, 40, "NETWORK RATE", m.net.c_str(), C_TEXT, C_EDGE);
+  }
+  else
+  {
+    const int y = 108, w = 98, h = 42;
+    drawTile(W_M0, 8, y, w, h, "FEE / HALF HOUR", m.fee.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M1, 111, y, w, h, "DIFFICULTY", m.diff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M2, 214, y, w, h, "NETWORK RATE", m.net.c_str(), C_TEXT, C_EDGE);
+  }
 
   char kb[48];
-  snprintf(kb, sizeof(kb), "%d|%s|%d", m.pct, m.remaining.c_str(), accentIdx);
-  if (need(W_HALV, kb) && wBegin(288, 30, C_PANEL))
+  snprintf(kb, sizeof(kb), "%d|%s|%d|%d", m.pct, m.remaining.c_str(), accentIdx, isPortrait() ? 1 : 0);
+  int halvW = isPortrait() ? 216 : 288;
+  int halvY = isPortrait() ? 199 : 159;
+  int barW = isPortrait() ? 208 : 280;
+  if (need(W_HALV, kb) && wBegin(halvW, 30, C_PANEL))
   {
     text(wgt, "NEXT HALVING", 4, 1, 9, C_DIM, C_PANEL);
     char pc[8];
     snprintf(pc, sizeof(pc), "%d%%", m.pct);
-    text(wgt, pc, 4 + textW("NEXT HALVING", 9) + 8, 0, 11, cAcc, C_PANEL);
-    String rem = commas(m.remaining) + " blocks left";
-    text(wgt, rem.c_str(), 284, 1, 10, C_TEXT, C_PANEL, Align::TopRight);
-    wgt.fillSmoothRoundRect(4, 17, 280, 8, 4, C_TRACK, C_PANEL);
-    int fw = (280 * m.pct) / 100;
-    if (fw < 8 && m.pct > 0)
-      fw = 8;
+    text(wgt, pc, 4 + textW("NEXT HALVING", 9) + 8, 0, 11, C_TEXT, C_PANEL);
+    String rem = commas(m.remaining) + (isPortrait() ? " blk" : " blocks left");
+    text(wgt, rem.c_str(), halvW - 4, 1, 10, C_TEXT, C_PANEL, Align::TopRight);
+    wgt.fillRect(4, 17, barW, 6, C_TRACK);
+    int fw = (barW * m.pct) / 100;
     if (fw > 0)
-      gradBar(wgt, 4, 17, fw, 8, C_TRACK);
-    wEnd(16, 159);
+      wgt.fillRect(4, 17, fw, 6, C_METER);
+    wEnd(isPortrait() ? 12 : 16, halvY);
     done(W_HALV, kb);
   }
 
@@ -676,11 +714,11 @@ static void chromeClock(TFT_eSPI &d)
 
 static void drawChart()
 {
-  char k[24];
-  snprintf(k, sizeof(k), "%lu|%u|%d", (unsigned long)histEpoch, histCount, accentIdx);
+  char k[32];
+  snprintf(k, sizeof(k), "%lu|%u|%d|%d", (unsigned long)histEpoch, histCount, accentIdx, isPortrait() ? 1 : 0);
   if (!need(W_CHART, k))
     return;
-  const int W = 288, H = 30;
+  const int W = isPortrait() ? 216 : 288, H = 30;
   if (!wBegin(W, H, C_PANEL))
     return;
   float mx = 1;
@@ -688,12 +726,13 @@ static void drawChart()
     if (hist[i] > mx)
       mx = hist[i];
   mx *= 1.08f;
+  const int numSlots = isPortrait() ? 36 : HIST_N;
   const int step = 6;
-  for (int i = 0; i < HIST_N; i++)
+  for (int i = 0; i < numSlots; i++)
   {
-    int slot = i - (HIST_N - histCount); // right-align so the newest bar is on the right
+    int slot = i - (numSlots - histCount); // right-align so the newest bar is on the right
     int x = i * step;
-    if (slot < 0)
+    if (slot < 0 || slot >= HIST_N)
     {
       wgt.fillRect(x, H - 2, 5, 2, C_TRACK); // not sampled yet
       continue;
@@ -701,10 +740,9 @@ static void drawChart()
     int bh = (int)(H * hist[slot] / mx);
     if (bh < 2)
       bh = 2;
-    uint16_t c = mix565(cAlt, cAcc, (uint8_t)(i * 255 / (HIST_N - 1)));
-    wgt.fillRect(x, H - bh, 5, bh, c);
+    wgt.fillRect(x, H - bh, 5, bh, C_METER);
   }
-  wEnd(16, STRIP_Y + 4);
+  wEnd(isPortrait() ? 12 : 16, isPortrait() ? 272 : (STRIP_Y + 4));
   done(W_CHART, k);
 }
 
@@ -712,44 +750,83 @@ static void paintClock(const ClockV &c)
 {
   drawHeader(c.hdr);
 
-  // Glyph boxes start well above the digits (ascender space), so draw the
-  // text 31px above the widget: digits then span local y 2..67.
-  String k = c.hh + "|" + accentIdx;
-  if (need(W_HH, k) && wBegin(112, 70, C_BG))
+  if (isPortrait())
   {
-    text(wgt, c.hh.c_str(), 110, -31, 92, C_TEXT, C_BG, Align::TopRight);
-    wEnd(34, 32);
-    done(W_HH, k);
-  }
-  k = c.mm + "|" + accentIdx;
-  if (need(W_MM, k) && wBegin(112, 70, C_BG))
-  {
-    text(wgt, c.mm.c_str(), 2, -31, 92, cAcc, C_BG, Align::TopLeft);
-    wEnd(174, 32);
-    done(W_MM, k);
-  }
-  k = String(c.colon) + "|" + accentIdx;
-  if (need(W_COLON, k) && wBegin(28, 70, C_BG))
-  {
-    uint16_t dot = c.colon ? C_DIM : C_BG;
-    wgt.fillSmoothCircle(14, 22, 5, dot, C_BG);
-    wgt.fillSmoothCircle(14, 47, 5, dot, C_BG);
-    wEnd(146, 32);
-    done(W_COLON, k);
-  }
+    String k = c.hh + "|P";
+    if (need(W_HH, k) && wBegin(86, 56, C_BG))
+    {
+      text(wgt, c.hh.c_str(), 84, -22, 70, C_TEXT, C_BG, Align::TopRight);
+      wEnd(16, 36);
+      done(W_HH, k);
+    }
+    k = c.mm + "|P";
+    if (need(W_MM, k) && wBegin(86, 56, C_BG))
+    {
+      text(wgt, c.mm.c_str(), 2, -22, 70, C_TEXT, C_BG, Align::TopLeft);
+      wEnd(138, 36);
+      done(W_MM, k);
+    }
+    k = String(c.colon) + "|P";
+    if (need(W_COLON, k) && wBegin(28, 56, C_BG))
+    {
+      uint16_t dot = c.colon ? C_DIM : C_BG;
+      wgt.fillCircle(14, 18, 4, dot);
+      wgt.fillCircle(14, 38, 4, dot);
+      wEnd(106, 36);
+      done(W_COLON, k);
+    }
 
-  k = c.date;
-  if (need(W_DATE, k) && wBegin(220, 18, C_BG))
-  {
-    text(wgt, c.date.c_str(), 110, 1, 12, C_DIM, C_BG, Align::TopCenter);
-    wEnd(50, 108);
-    done(W_DATE, k);
-  }
+    k = c.date + "|P";
+    if (need(W_DATE, k) && wBegin(220, 18, C_BG))
+    {
+      text(wgt, c.date.c_str(), 110, 1, 12, C_DIM, C_BG, Align::TopCenter);
+      wEnd(10, 96);
+      done(W_DATE, k);
+    }
 
-  const int y = 140, w = 98, h = 48;
-  drawTile(W_C0, 8, y, w, h, btcPairLabel().c_str(), c.price.c_str(), cAcc, C_TEXT, C_EDGE);
-  drawTile(W_C1, 111, y, w, h, "BLOCK", c.block.c_str(), cAlt, C_TEXT, C_EDGE);
-  drawTile(W_C2, 214, y, w, h, "HASHRATE KH/s", c.hash.c_str(), C_GOOD, C_TEXT, C_EDGE);
+    drawTile(W_C0, 6, 120, 112, 44, btcPairLabel().c_str(), c.price.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_C1, 122, 120, 112, 44, "BLOCK", c.block.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_C2, 6, 170, 228, 44, "HASHRATE KH/s", c.hash.c_str(), C_TEXT, C_EDGE);
+  }
+  else
+  {
+    String k = c.hh + "|L";
+    if (need(W_HH, k) && wBegin(112, 70, C_BG))
+    {
+      text(wgt, c.hh.c_str(), 110, -31, 92, C_TEXT, C_BG, Align::TopRight);
+      wEnd(34, 32);
+      done(W_HH, k);
+    }
+    k = c.mm + "|L";
+    if (need(W_MM, k) && wBegin(112, 70, C_BG))
+    {
+      text(wgt, c.mm.c_str(), 2, -31, 92, C_TEXT, C_BG, Align::TopLeft);
+      wEnd(174, 32);
+      done(W_MM, k);
+    }
+    k = String(c.colon) + "|L";
+    if (need(W_COLON, k) && wBegin(28, 70, C_BG))
+    {
+      uint16_t dot = c.colon ? C_DIM : C_BG;
+      wgt.fillCircle(14, 22, 5, dot);
+      wgt.fillCircle(14, 47, 5, dot);
+      wEnd(146, 32);
+      done(W_COLON, k);
+    }
+
+    k = c.date + "|L";
+    if (need(W_DATE, k) && wBegin(220, 18, C_BG))
+    {
+      text(wgt, c.date.c_str(), 110, 1, 12, C_DIM, C_BG, Align::TopCenter);
+      wEnd(50, 108);
+      done(W_DATE, k);
+    }
+
+    const int y = 140, w = 98, h = 48;
+    drawTile(W_C0, 8, y, w, h, btcPairLabel().c_str(), c.price.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_C1, 111, y, w, h, "BLOCK", c.block.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_C2, 214, y, w, h, "HASHRATE KH/s", c.hash.c_str(), C_TEXT, C_EDGE);
+  }
 
   drawChart();
 }
@@ -759,46 +836,46 @@ static void paintClock(const ClockV &c)
 static void paintLoading(TFT_eSPI &d)
 {
   clearScreen(d);
-  // full-circle segmented ring, gradient around it
-  const int cx = 160, cy = 92, r = 50, ri = 41, n = 24;
+  const int cx = isPortrait() ? 120 : 160;
+  const int cy = isPortrait() ? 110 : 92;
+  const int r = 50, ri = 41, n = 24;
   for (int i = 0; i < n; i++)
   {
-    uint16_t c = mix565(cAlt, cAcc, (uint8_t)(i * 255 / (n - 1)));
     int a0 = i * 15;
-    d.drawArc(cx, cy, r, ri, a0, a0 + 11, c, C_BG, true);
+    d.drawArc(cx, cy, r, ri, a0, a0 + 11, C_METER, C_BG, true);
   }
   text(d, "#", cx, cy - 27, 54, C_TEXT, C_BG, Align::TopCenter);
-  int wn = textW("NERD", 30), wm = textW("MINER", 30);
-  int x0 = cx - (wn + wm + 2) / 2;
-  text(d, "NERD", x0, 152, 30, C_TEXT, C_BG);
-  text(d, "MINER", x0 + wn + 2, 152, 30, cAcc, C_BG);
-  text(d, CURRENT_VERSION, cx, 196, 12, C_DIM, C_BG, Align::TopCenter);
-  text(d, "STARTING UP", cx, 216, 9, C_DIM, C_BG, Align::TopCenter);
+  int wn = textW("NERDMINER", 26);
+  int x0 = cx - wn / 2;
+  int textY = isPortrait() ? 180 : 152;
+  text(d, "NERDMINER", x0, textY, 26, C_TEXT, C_BG);
+  text(d, CURRENT_VERSION, cx, textY + 40, 12, C_DIM, C_BG, Align::TopCenter);
+  text(d, "INITIALIZING", cx, textY + 58, 9, C_DIM, C_BG, Align::TopCenter);
 }
 
 static void paintSetup(TFT_eSPI &d)
 {
   clearScreen(d);
-  text(d, "SETUP", 16, 10, 24, C_TEXT, C_BG);
-  text(d, "MODE", 16 + textW("SETUP", 24) + 7, 10, 24, cAcc, C_BG);
-  text(d, "Join the miner's WiFi to configure it", 16, 42, 11, C_DIM, C_BG);
+  text(d, "SETUP MODE", 16, 12, 22, C_TEXT, C_BG);
+  text(d, "Connect to miner access point to configure", 16, 40, 11, C_DIM, C_BG);
 
   String ap = readCustomAPName();
   if (ap.length() == 0)
     ap = DEFAULT_SSID;
-  const char *lab[3] = {"JOIN THIS WIFI NETWORK", "PASSWORD", "THEN OPEN IN A BROWSER"};
-  const char *val[3] = {ap.c_str(), DEFAULT_WIFIPW, "192.168.4.1"};
+  const char *lab[3] = {"WIFI NETWORK", "PASSWORD", "SETTINGS URL"};
+  const char *val[3] = {ap.c_str(), DEFAULT_WIFIPW, "http://192.168.4.1"};
+  int pw = isPortrait() ? 224 : 304;
   for (int i = 0; i < 3; i++)
   {
-    int y = 68 + i * 50;
-    panel(d, 8, y, 304, 44, 10, C_PANEL, C_EDGE, C_BG);
-    d.fillSmoothCircle(32, y + 22, 13, mix565(C_PANEL, cAcc, 60), C_PANEL);
-    char n[2] = {(char)('1' + i), 0};
-    text(d, n, 32, y + 12, 17, cAcc, mix565(C_PANEL, cAcc, 60), Align::TopCenter);
-    text(d, lab[i], 58, y + 6, 9, C_DIM, C_PANEL);
-    text(d, val[i], 58, y + 19, 17, C_TEXT, C_PANEL);
+    int y = 66 + i * 50;
+    panel(d, 8, y, pw, 44, 0, C_PANEL, C_EDGE, C_BG);
+    char n[4];
+    snprintf(n, sizeof(n), "0%d", i + 1);
+    text(d, n, 16, y + 13, 14, C_METER, C_PANEL);
+    text(d, lab[i], 46, y + 6, 8, C_DIM, C_PANEL);
+    text(d, val[i], 46, y + 18, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
   }
-  text(d, "Save the form and the miner restarts by itself", 160, 222, 10, C_DIM, C_BG, Align::TopCenter);
+  text(d, "Settings will persist across reboots", isPortrait() ? 120 : 160, isPortrait() ? 230 : 222, 10, C_DIM, C_BG, Align::TopCenter);
 }
 
 // ---------------------------------------------------------------- chrome --
@@ -806,7 +883,7 @@ static void paintSetup(TFT_eSPI &d)
 static void paintChrome(TFT_eSPI &d, int scr)
 {
   clearScreen(d);
-  d.drawFastHLine(0, HDR_H, SCR_W, C_EDGE);
+  d.drawFastHLine(0, HDR_H, isPortrait() ? 240 : 320, C_EDGE);
   switch (scr)
   {
   case SCR_MINE:
@@ -834,16 +911,10 @@ static void repaintCached(int scr);
 
 static void setAccent(int idx)
 {
-  accentIdx = idx % ACCENT_COUNT;
-  cAcc = ACCENTS[accentIdx].main;
-  cAlt = ACCENTS[accentIdx].alt;
-  if (uiLive)
-  {
-    int s = currentDisplayDriver->current_cyclic_screen;
-    uiScreen = -1;
-    ensureChrome(s);
-    repaintCached(s);
-  }
+  (void)idx;
+  accentIdx = 0;
+  cAcc = C_METER;
+  cAlt = C_METER;
 }
 
 // Last view painted per screen, so a page change can repaint instantly
@@ -864,12 +935,11 @@ static void repaintCached(int scr)
 }
 
 // ------------------------------------------------------- saved UI choices --
-// Accent colour and last-viewed page live in their own NVS namespace (the
+// Last-viewed page lives in its own NVS namespace (the
 // pool/wallet/brightness/invert/flip settings are in the main config file).
 
 #define UI_PREFS_NS "cyd_ui"
 
-static int savedAccent = 0;
 static int savedPage = 0;
 static int restorePage = 0; // applied on the first data tick (the monitor resets the page to 0 at start)
 
@@ -878,28 +948,25 @@ static void loadUiPrefs()
   Preferences p;
   if (!p.begin(UI_PREFS_NS, true))
     return; // namespace not created yet: defaults
-  accentIdx = p.getUChar("accent", 0) % ACCENT_COUNT;
   int page = p.getUChar("page", 0);
   p.end();
-  cAcc = ACCENTS[accentIdx].main;
-  cAlt = ACCENTS[accentIdx].alt;
-  savedAccent = accentIdx;
+  accentIdx = 0;
+  cAcc = C_METER;
+  cAlt = C_METER;
   savedPage = restorePage = page;
 }
 
 static void saveUiPrefs()
 {
   int page = currentDisplayDriver->current_cyclic_screen;
-  if (page == savedPage && accentIdx == savedAccent)
+  if (page == savedPage)
     return;
   Preferences p;
   if (p.begin(UI_PREFS_NS, false))
   {
-    p.putUChar("accent", accentIdx);
     p.putUChar("page", page);
     p.end();
   }
-  savedAccent = accentIdx;
   savedPage = page;
 }
 
@@ -1060,7 +1127,10 @@ void esp32_2432S028R_Init(void)
   invertColors = !invertColors;
 #endif
   tft.invertDisplay(invertColors);
-  tft.setRotation(Settings.flipDisplay ? 3 : 1); // 1 = USB on the right, 3 = USB on the left (touch follows automatically)
+  int rot = Settings.screenRotation;
+  if (rot < 0 || rot > 3)
+    rot = Settings.flipDisplay ? 3 : 1;
+  tft.setRotation(rot); // 0=Portrait (USB bottom), 1=Landscape (USB right), 2=Portrait Inv (USB top), 3=Landscape Inv (USB left)
   tft.setSwapBytes(true);
   if (invertColors)
   {
@@ -1127,25 +1197,30 @@ void esp32_2432S028R_AlternateScreenState(void)
 // Save the orientation into the main config file, same field the portal and
 // LAN page use. Load a fresh copy first so only this one value changes
 // (the in-memory Settings can hold portal defaults that must not be saved).
-static void persistFlip(bool flipped)
+static void persistRotation(int rot)
 {
-  Settings.flipDisplay = flipped;
+  Settings.screenRotation = rot;
+  Settings.flipDisplay = (rot == 3);
   TSettings stored;
   if (nvMem.loadConfig(&stored))
   {
-    stored.flipDisplay = flipped;
+    stored.screenRotation = rot;
+    stored.flipDisplay = (rot == 3);
     nvMem.saveConfig(&stored);
   }
 }
 
 void esp32_2432S028R_AlternateRotation(void)
 {
-  tft.setRotation(flipRotation(tft.getRotation()));
-  persistFlip(tft.getRotation() == 3); // rotation 1 = USB right, 3 = USB left
+  int nextRot = (tft.getRotation() + 1) % 4;
+  tft.setRotation(nextRot);
+  persistRotation(nextRot);
   if (uiLive)
   {
     int s = currentDisplayDriver->current_cyclic_screen;
     uiScreen = -1;
+    resetWidgets();
+    clearScreen(out());
     ensureChrome(s);
     repaintCached(s);
   }
@@ -1205,12 +1280,10 @@ static void touchTask(void *)
       if (++downCount == 2 && !wasDown) // two consecutive samples: real press, act once per touch
       {
         wasDown = true;
-        if (t_y < HDR_H + 4 && t_x > 235)
+        if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
           pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
-        else if (t_y < HDR_H + 4 && t_x < 110)
-          pendingTouch = TA_ACCENT; // wordmark: next accent colour
         else
-          pendingTouch = t_x > 160 ? TA_NEXT : TA_PREV;
+          pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
       }
     }
     else
@@ -1234,7 +1307,6 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     esp32_2432S028R_AlternateScreenState();
     break;
   case TA_ACCENT:
-    setAccent(accentIdx + 1);
     break;
   case TA_NEXT:
     drv->current_cyclic_screen = (drv->current_cyclic_screen + 1) % drv->num_cyclic_screens;

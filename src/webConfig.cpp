@@ -73,7 +73,12 @@ static void handleRoot()
   page += "<label><input type='checkbox' name='savestats' " + String(Settings.saveStats ? "checked" : "") + "> Save mining statistics to flash</label>";
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
   page += "<label><input type='checkbox' name='invert' " + String(Settings.invertColors ? "checked" : "") + "> Invert display colors</label>";
-  page += "<label><input type='checkbox' name='flip' " + String(Settings.flipDisplay ? "checked" : "") + "> Flip display (USB on the left)</label>";
+  page += "<label>Display Orientation</label><select name='rot'>";
+  page += "<option value='0'" + String(Settings.screenRotation == 0 ? " selected" : "") + ">Portrait (USB at bottom)</option>";
+  page += "<option value='1'" + String(Settings.screenRotation == 1 ? " selected" : "") + ">Landscape (USB on right)</option>";
+  page += "<option value='2'" + String(Settings.screenRotation == 2 ? " selected" : "") + ">Portrait Inverted (USB at top)</option>";
+  page += "<option value='3'" + String(Settings.screenRotation == 3 ? " selected" : "") + ">Landscape Inverted (USB on left)</option>";
+  page += "</select>";
   page += "<label>Screen brightness (0-255)</label><input type='number' name='brightness' min='0' max='255' value='" + String(Settings.Brightness) + "'>";
 #endif
 #if defined(ES3C35P) || defined(ESP32_4IN_ST7796)
@@ -107,7 +112,21 @@ static void handleSave()
   Settings.saveStats = webCfgServer.hasArg("savestats");
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
   Settings.invertColors = webCfgServer.hasArg("invert");
-  Settings.flipDisplay = webCfgServer.hasArg("flip");
+  if (webCfgServer.hasArg("rot"))
+  {
+    Settings.screenRotation = webCfgServer.arg("rot").toInt();
+    Settings.flipDisplay = (Settings.screenRotation == 3);
+  }
+  else if (webCfgServer.hasArg("flip"))
+  {
+    Settings.flipDisplay = true;
+    Settings.screenRotation = 3;
+  }
+  else
+  {
+    Settings.flipDisplay = false;
+    Settings.screenRotation = 1;
+  }
   if (webCfgServer.hasArg("brightness"))
     Settings.Brightness = webCfgServer.arg("brightness").toInt();
 #endif
