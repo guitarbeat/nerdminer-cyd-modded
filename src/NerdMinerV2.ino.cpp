@@ -153,13 +153,8 @@ void setup()
   Serial.println("Initiating tasks...");
   static const char monitor_name[] = "(Monitor)";
   #if defined(CONFIG_IDF_TARGET_ESP32)
-  // Increased stack for ESP32 classic due to NVS operations
-  // Core 0, joining Stratum and the WiFi driver task (which ESP-IDF
-  // mandatorily pins to core 0 on classic ESP32) -- core 1 is reserved
-  // exclusively for the HW pipelined mining hot loop; see its
-  // xTaskCreatePinnedToCore call below for why sharing a core with it at
-  // any priority regresses hashrate.
-  BaseType_t res1 = xTaskCreatePinnedToCore(runMonitor, "Monitor", 9500, (void*)monitor_name, 5, NULL,0);
+  // Increased stack for ESP32 classic due to NVS and HTTPS pool API operations
+  BaseType_t res1 = xTaskCreatePinnedToCore(runMonitor, "Monitor", 12500, (void*)monitor_name, 5, NULL,0);
   #elif defined(S3_HW_MINER_OWNS_CORE1)
   BaseType_t res1 = xTaskCreatePinnedToCore(runMonitor, "Monitor", 10000, (void*)monitor_name, 5, NULL,0);
   #else
