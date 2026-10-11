@@ -1,7 +1,9 @@
 MIT License
 
 Copyright (c) 2023 Bitmaker
-Copyright (c) 2026 HenrysCat (NerdMiner Modded modifications)
+Copyright (c) 2024-2026 Aaron Lorenzo Woods (guitarbeat)
+Copyright (c) 2024-2026 HenrysCat
+Copyright (c) 2022 Valerio Vaccaro (HAN Miner)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,5 +23,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Previous work:
-HAN Miner - Copyright (c) 2022 Valerio Vaccaro

@@ -2,7 +2,7 @@
 
 [![Web Flasher](https://img.shields.io/badge/Web%20Flasher-Launch%20Now-brightgreen?style=for-the-badge&logo=googlechrome)](https://guitarbeat.github.io/nerdminer-cyd-modded/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/guitarbeat/nerdminer-cyd-modded)
-[![License](https://img.shields.io/badge/License-GPL--3.0-orange?style=for-the-badge)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 An all-in-one ESP32 Bitcoin solo-mining project combining **high-performance firmware optimizations (~990 KH/s)** with full hardware support for **Cheap Yellow Display (CYD)** boards and an **instant browser-based 1-click Web Flasher**.
 
