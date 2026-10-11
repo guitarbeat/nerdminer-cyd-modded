@@ -244,11 +244,11 @@ static void handleRoot()
             "<p class='pow-expl'>Hitting the jackpot is rare, so the pool gives your chip easier practice targets. Every solved target gets turned in like homework to prove your miner is actively working.</p>"
             "</div>"
             "<div class='pow-card'>"
-            "<div class='pow-meta'><span class='pow-label'>Best Diff</span><span class='pow-stage'>Closest Guess</span></div>"
+            "<div class='pow-meta'><span class='pow-label'>Best Diff</span><span class='pow-stage'>Luckiest Guess</span></div>"
             "<div class='pow-val' id='st-diff'>");
   page += d.bestDiff.length() ? d.bestDiff : String("0.0000");
   page += F("</div><div class='pow-sub'>Personal chip high score</div>"
-            "<p class='pow-expl'>This is your chip's all-time record. A score like 42K means one of your guesses was so close it beat 1-in-42,000 odds—like scratching a lottery ticket just one digit away from winning.</p>"
+            "<p class='pow-expl'>Think of this as your personal high score. Every guess is graded on how rare it is. A score of 42 means this was your luckiest guess yet—42 times rarer than normal. The higher this number climbs, the closer you got!</p>"
             "</div>"
             "<div class='pow-card'>"
             "<div class='pow-meta'><span class='pow-label'>Block Reward</span><span class='pow-stage'>The Grand Prize</span></div>"
