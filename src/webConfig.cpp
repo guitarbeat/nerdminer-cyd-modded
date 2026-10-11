@@ -52,7 +52,8 @@ static void handleApiStats()
   json.reserve(512);
   json += "{";
   json += "\"status\":";
-  if (mMonitor.NerdStatus == NM_hashing)
+  bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
+  if (isHashing)
     json += "\"hashing\"";
   else if (mMonitor.NerdStatus == NM_Connecting)
     json += "\"connecting\"";
@@ -213,7 +214,8 @@ static void handleRoot()
             "<div class='status-badge'>"
             "<span id='st-dot' class='dot ");
 
-  if (mMonitor.NerdStatus == NM_hashing)
+  bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
+  if (isHashing)
     page += F("dot-green'></span><span id='st-txt'>HASHING</span>");
   else if (mMonitor.NerdStatus == NM_Connecting)
     page += F("dot-amber'></span><span id='st-txt'>CONNECTING</span>");
@@ -288,10 +290,10 @@ static void handleRoot()
             "<div class='card-title'>Stratum Pool Settings</div>"
             "<div class='presets'>"
             "<span style='font-size:11px;color:var(--muted);align-self:center;margin-right:2px;'>Low-Diff Presets:</span>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",21496,\"x\")'>Public-Pool (21496)</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",3333,\"x\")'>Public-Pool (3333)</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"pool.nerdminers.org\",3333,\"x\")'>NerdMiners.org</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"pool.solomining.de\",3333,\"x\")'>SoloMining.de</button>"
+            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",3333,\"x\")'>Public-Pool (3333 &bull; Recommended)</button>"
+            "<button type='button' class='preset-btn' onclick='setPool(\"pool.nerdminers.org\",3333,\"x\")'>NerdMiners.org (3333)</button>"
+            "<button type='button' class='preset-btn' onclick='setPool(\"pool.solomining.de\",3333,\"x\")'>SoloMining.de (3333)</button>"
+            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",21496,\"x\")'>Public-Pool (21496 &bull; Legacy)</button>"
             "</div>"
             "<div class='field'><label>Pool Host / URL</label>"
             "<input type='text' id='f-pool' name='pool' value='");
