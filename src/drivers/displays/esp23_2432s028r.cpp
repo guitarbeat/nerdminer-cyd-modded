@@ -52,21 +52,54 @@ TFT_eTouch<TFT_eSPI> touch(tft, ETOUCH_CS, 0xFF, hSPI);
 
 #define RGB565(r, g, b) ((uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3)))
 
-static const uint16_t C_BG = RGB565(8, 10, 14);       // deep matte background
-static const uint16_t C_PANEL = RGB565(16, 20, 28);    // flat structural surface
-static const uint16_t C_EDGE = RGB565(34, 42, 54);     // subtle hairlines
-static const uint16_t C_TRACK = RGB565(24, 30, 40);    // unlit meter tracks
-static const uint16_t C_TEXT = RGB565(245, 247, 250);  // crisp high-contrast text
-static const uint16_t C_DIM = RGB565(135, 145, 160);   // quiet neutral label typography
-static const uint16_t C_GOOD = RGB565(52, 211, 153);   // functional status: operational / success
-static const uint16_t C_WARN = RGB565(251, 191, 36);   // functional status: connecting / caution
-static const uint16_t C_BAD = RGB565(248, 113, 113);   // functional status: error
-static const uint16_t C_GOLD = RGB565(245, 158, 11);   // exceptional state: block found
-static const uint16_t C_METER = RGB565(247, 147, 26);  // functional gauge fill (Bitcoin amber)
+struct ThemePalette {
+  const char *name;
+  uint16_t bg;
+  uint16_t panel;
+  uint16_t edge;
+  uint16_t track;
+  uint16_t text;
+  uint16_t dim;
+  uint16_t meter;
+  uint16_t good;
+  uint16_t warn;
+  uint16_t bad;
+  uint16_t gold;
+};
+
+static const ThemePalette THEMES[] = {
+  // 0: Instrument Amber (Default) - Bitcoin Amber precision instrument
+  { "Instrument Amber", RGB565(8, 10, 14), RGB565(16, 20, 28), RGB565(34, 42, 54), RGB565(24, 30, 40), RGB565(245, 247, 250), RGB565(135, 145, 160), RGB565(247, 147, 26), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  // 1: Matrix Phosphor Green - Retro CRT terminal
+  { "Matrix Green", RGB565(4, 8, 4), RGB565(8, 20, 10), RGB565(18, 52, 24), RGB565(12, 32, 16), RGB565(220, 252, 231), RGB565(74, 222, 128), RGB565(34, 197, 94), RGB565(74, 222, 128), RGB565(250, 204, 21), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  // 2: Cyber Amber (1980s CRT) - Warm amber monochrome terminal
+  { "Cyber Amber", RGB565(10, 8, 4), RGB565(24, 18, 8), RGB565(56, 40, 16), RGB565(36, 26, 12), RGB565(254, 243, 199), RGB565(217, 119, 6), RGB565(245, 158, 11), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  // 3: Arcade Neon - Playful classic mod neon
+  { "Arcade Neon", RGB565(10, 8, 18), RGB565(22, 16, 38), RGB565(54, 38, 86), RGB565(32, 24, 54), RGB565(245, 243, 255), RGB565(192, 132, 252), RGB565(6, 182, 212), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(236, 72, 153) },
+  // 4: Ice Blue (Clean Slate) - Cool slate & ice blue tech
+  { "Ice Blue", RGB565(10, 14, 22), RGB565(17, 24, 39), RGB565(35, 48, 68), RGB565(24, 34, 50), RGB565(240, 249, 255), RGB565(125, 211, 252), RGB565(56, 189, 248), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  // 5: Minimalist Monochrome - E-ink stark white on black
+  { "Monochrome", RGB565(0, 0, 0), RGB565(18, 18, 18), RGB565(48, 48, 48), RGB565(28, 28, 28), RGB565(255, 255, 255), RGB565(160, 160, 160), RGB565(255, 255, 255), RGB565(255, 255, 255), RGB565(200, 200, 200), RGB565(255, 255, 255), RGB565(255, 255, 255) },
+};
+
+static const int THEME_COUNT = sizeof(THEMES) / sizeof(THEMES[0]);
+static int currentThemeIdx = 0;
+
+static uint16_t C_BG = THEMES[0].bg;
+static uint16_t C_PANEL = THEMES[0].panel;
+static uint16_t C_EDGE = THEMES[0].edge;
+static uint16_t C_TRACK = THEMES[0].track;
+static uint16_t C_TEXT = THEMES[0].text;
+static uint16_t C_DIM = THEMES[0].dim;
+static uint16_t C_GOOD = THEMES[0].good;
+static uint16_t C_WARN = THEMES[0].warn;
+static uint16_t C_BAD = THEMES[0].bad;
+static uint16_t C_GOLD = THEMES[0].gold;
+static uint16_t C_METER = THEMES[0].meter;
 
 static int accentIdx = 0;
-static uint16_t cAcc = C_METER;
-static uint16_t cAlt = C_METER;
+static uint16_t cAcc = THEMES[0].meter;
+static uint16_t cAlt = THEMES[0].meter;
 
 // t = 0..255 blends a -> b
 static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
@@ -934,6 +967,43 @@ static void repaintCached(int scr)
     paintClock(lastClock);
 }
 
+void esp32_2432S028R_SetTheme(int idx)
+{
+  if (idx < 0 || idx >= THEME_COUNT)
+    idx = 0;
+  currentThemeIdx = idx;
+  Settings.displayTheme = idx;
+  const ThemePalette &p = THEMES[idx];
+  C_BG = p.bg;
+  C_PANEL = p.panel;
+  C_EDGE = p.edge;
+  C_TRACK = p.track;
+  C_TEXT = p.text;
+  C_DIM = p.dim;
+  C_GOOD = p.good;
+  C_WARN = p.warn;
+  C_BAD = p.bad;
+  C_GOLD = p.gold;
+  C_METER = p.meter;
+  cAcc = p.meter;
+  cAlt = p.meter;
+
+  if (uiLive)
+  {
+    int s = currentDisplayDriver->current_cyclic_screen;
+    uiScreen = -1;
+    resetWidgets();
+    clearScreen(out());
+    ensureChrome(s);
+    repaintCached(s);
+  }
+}
+
+int esp32_2432S028R_GetTheme()
+{
+  return currentThemeIdx;
+}
+
 // ------------------------------------------------------- saved UI choices --
 // Last-viewed page lives in its own NVS namespace (the
 // pool/wallet/brightness/invert/flip settings are in the main config file).
@@ -1153,6 +1223,7 @@ void esp32_2432S028R_Init(void)
   ledcWrite(0, Settings.Brightness);
 
   loadUiPrefs();
+  esp32_2432S028R_SetTheme(Settings.displayTheme);
 
   if (render.loadFont(NotoSans_Bold, sizeof(NotoSans_Bold)))
   {

@@ -136,3 +136,24 @@ void doLedStuff(unsigned long frame)
 {
   currentDisplayDriver->doLedStuff(frame);
 }
+
+#if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+void esp32_2432S028R_SetTheme(int id);
+int esp32_2432S028R_GetTheme();
+#endif
+
+void setDisplayTheme(int idx)
+{
+#if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+  esp32_2432S028R_SetTheme(idx);
+#endif
+}
+
+int getDisplayTheme()
+{
+#if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+  return esp32_2432S028R_GetTheme();
+#else
+  return 0;
+#endif
+}

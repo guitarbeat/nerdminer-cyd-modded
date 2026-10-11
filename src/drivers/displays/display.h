@@ -15,5 +15,7 @@ void drawSetupScreen();
 void drawCurrentScreen(unsigned long mElapsed);
 void animateCurrentScreen(unsigned long frame);
 void doLedStuff(unsigned long frame);
+void setDisplayTheme(int idx);
+int getDisplayTheme();
 
 #endif // DISPLAY_H

@@ -6,6 +6,7 @@
 #include "drivers/storage/storage.h"
 #include "currency.h"
 #include "monitor.h"
+#include "drivers/displays/display.h"
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -69,7 +70,33 @@ static void handleApiStats()
   json += ",\"rssi\":" + String(WiFi.RSSI());
   json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
+  json += ",\"theme\":" + String(Settings.displayTheme);
   json += "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
+static void handleGetTheme()
+{
+  String json = "{\"theme\":" + String(Settings.displayTheme) + "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
+static void handleSetTheme()
+{
+  int th = 0;
+  if (webCfgServer.hasArg("id"))
+    th = webCfgServer.arg("id").toInt();
+  else if (webCfgServer.hasArg("theme"))
+    th = webCfgServer.arg("theme").toInt();
+
+  if (th < 0 || th > 5)
+    th = 0;
+
+  Settings.displayTheme = th;
+  setDisplayTheme(th);
+  saveSettingsToFlash();
+
+  String json = "{\"status\":\"ok\",\"theme\":" + String(th) + "}";
   webCfgServer.send(200, "application/json", json);
 }
 
@@ -89,7 +116,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(12500);
+  page.reserve(15000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -104,7 +131,7 @@ static void handleRoot()
             ".container{max-width:640px;margin:0 auto}"
             "header{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--card-border);margin-bottom:18px}"
             ".brand{display:flex;align-items:center;gap:10px}"
-            ".logo-box{width:34px;height:34px;background:var(--amber);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px}"
+            ".logo-box{width:34px;height:34px;background:var(--amber);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px;transition:background .3s}"
             ".brand-title{font-size:18px;font-weight:800;letter-spacing:-0.5px}"
             ".brand-subtitle{font-size:12px;color:var(--muted)}"
             ".status-badge{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--card-border);padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}"
@@ -159,6 +186,16 @@ static void handleRoot()
             ".presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:12px}"
             ".preset-btn{background:#21262d;border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:600;padding:4px 9px;border-radius:4px;cursor:pointer;transition:all .2s}"
             ".preset-btn:hover{background:#30363d;border-color:var(--amber)}"
+            ".theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px}"
+            "@media(min-width:520px){.theme-grid{grid-template-columns:repeat(3,1fr)}}"
+            ".theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:8px;padding:12px;cursor:pointer;transition:all .2s ease;user-select:none;position:relative}"
+            ".theme-card:hover{border-color:var(--amber);background:#161b22}"
+            ".theme-card.active{border-color:var(--amber);background:rgba(247,147,26,0.08);box-shadow:0 0 0 1px var(--amber)}"
+            ".theme-swatch{display:flex;align-items:center;gap:6px;margin-bottom:8px}"
+            ".swatch-dot{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid rgba(255,255,255,0.2)}"
+            ".theme-card h4{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}"
+            ".theme-card p{font-size:11px;color:var(--muted);line-height:1.3}"
+            ".theme-toast{margin-top:10px;padding:8px 12px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:var(--green);border-radius:6px;font-size:12px;font-weight:600;text-align:center}"
             ".slider-row{display:flex;align-items:center;gap:12px}"
             "input[type=range]{flex:1;accent-color:var(--amber)}"
             ".slider-val{font-size:13px;font-weight:700;min-width:70px;text-align:right;color:var(--text)}"
@@ -176,7 +213,7 @@ static void handleRoot()
             "<div class='container'>"
             "<header>"
             "<div class='brand'>"
-            "<div class='logo-box'>&#8383;</div>"
+            "<div class='logo-box' id='site-logo'>&#8383;</div>"
             "<div><div class='brand-title'>NerdMiner CYD</div><div class='brand-subtitle'>v1.6.3 &bull; ");
 
   page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>"
@@ -340,8 +377,50 @@ static void handleRoot()
   if (Settings.invertColors) page += F(" checked");
   page += F("> Invert display colors</label>"
             "<div class='help'>Enable if the screen colors look inverted or cyan.</div></div>"
+            "</div>");
+
+  // Display Themes Selector Card
+  int curTheme = Settings.displayTheme;
+  page += F("<div class='card'>"
+            "<div class='card-title'>Display Theme (Live Instant Switch)</div>"
+            "<div class='theme-grid'>"
+            "<div class='theme-card");
+  if (curTheme == 0) page += F(" active");
+  page += F("' id='thm-0' onclick='selectTheme(0,\"#f7931a\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#f7931a'></span><span class='swatch-dot' style='background:#10141c'></span></div>"
+            "<h4>Instrument Amber</h4><p>Matte black &amp; Bitcoin amber instrument (Default)</p></div>"
+            "<div class='theme-card");
+  if (curTheme == 1) page += F(" active");
+  page += F("' id='thm-1' onclick='selectTheme(1,\"#22c55e\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#22c55e'></span><span class='swatch-dot' style='background:#08140a'></span></div>"
+            "<h4>Matrix Green</h4><p>Retro phosphor terminal CRT aesthetic</p></div>"
+            "<div class='theme-card");
+  if (curTheme == 2) page += F(" active");
+  page += F("' id='thm-2' onclick='selectTheme(2,\"#f59e0b\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#f59e0b'></span><span class='swatch-dot' style='background:#181208'></span></div>"
+            "<h4>Cyber Amber</h4><p>Vintage 1980s monochrome CRT terminal</p></div>"
+            "<div class='theme-card");
+  if (curTheme == 3) page += F(" active");
+  page += F("' id='thm-3' onclick='selectTheme(3,\"#06b6d4\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#06b6d4'></span><span class='swatch-dot' style='background:#ec4899'></span></div>"
+            "<h4>Arcade Neon</h4><p>Vibrant cyan &amp; magenta classic mod colors</p></div>"
+            "<div class='theme-card");
+  if (curTheme == 4) page += F(" active");
+  page += F("' id='thm-4' onclick='selectTheme(4,\"#38bdf8\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#38bdf8'></span><span class='swatch-dot' style='background:#111827'></span></div>"
+            "<h4>Ice Blue</h4><p>Cool midnight slate &amp; ice blue precision</p></div>"
+            "<div class='theme-card");
+  if (curTheme == 5) page += F(" active");
+  page += F("' id='thm-5' onclick='selectTheme(5,\"#ffffff\")'>"
+            "<div class='theme-swatch'><span class='swatch-dot' style='background:#ffffff'></span><span class='swatch-dot' style='background:#181818'></span></div>"
+            "<h4>Monochrome</h4><p>Stark pure white on void black (E-Ink style)</p></div>"
             "</div>"
-            "<div class='card'>"
+            "<input type='hidden' id='f-theme' name='theme' value='");
+  page += String(curTheme) + F("'>"
+            "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Live theme applied instantly to CYD screen!</div>"
+            "</div>");
+
+  page += F("<div class='card'>"
             "<div class='card-title'>Regional &amp; System Preferences</div>"
             "<div class='field'><label>Timezone (UTC Offset)</label>"
             "<div style='display:flex;gap:10px'>"
@@ -394,6 +473,16 @@ static void handleRoot()
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
             "function togglePow(){const w=document.getElementById('pow-widget');w.classList.toggle('open');}"
+            "function selectTheme(id,col){"
+            "document.getElementById('f-theme').value=id;"
+            "document.querySelectorAll('.theme-card').forEach(c=>c.classList.remove('active'));"
+            "const el=document.getElementById('thm-'+id);"
+            "if(el)el.classList.add('active');"
+            "if(col){document.documentElement.style.setProperty('--amber',col);}"
+            "fetch('/api/theme?id='+id,{method:'POST'}).then(r=>r.json()).then(d=>{"
+            "const t=document.getElementById('thm-toast');"
+            "if(t){t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}"
+            "}).catch(e=>{});}"
             "function pollReboot(){let s=8;document.getElementById('overlay').style.display='flex';"
             "const t=setInterval(()=>{s--;if(s>=0)document.getElementById('cd').textContent=s;"
             "if(s<=0){clearInterval(t);checkBack();}},1000);}"
@@ -432,6 +521,12 @@ static void handleSave()
   if (webCfgServer.hasArg("currency"))
     Settings.Currency = currencyFor(webCfgServer.arg("currency")).code;
   Settings.saveStats = webCfgServer.hasArg("savestats");
+
+  if (webCfgServer.hasArg("theme"))
+  {
+    Settings.displayTheme = webCfgServer.arg("theme").toInt();
+    setDisplayTheme(Settings.displayTheme);
+  }
 
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
   Settings.invertColors = webCfgServer.hasArg("invert");
@@ -485,6 +580,8 @@ void setup_webConfig(void)
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);
+  webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
+  webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
   webCfgServer.onNotFound([]()
   {
