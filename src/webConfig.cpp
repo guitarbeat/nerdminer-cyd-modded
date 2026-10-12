@@ -127,7 +127,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(56000);
+  page.reserve(60000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -362,6 +362,13 @@ static void handleRoot()
             "Block difficulty (<strong>bdiff</strong>) uses Satoshi's truncated target; pool share difficulty (<strong>pdiff</strong>) uses untruncated <code>0x00000000FFFFFFFF...</code>. "
             "Average time to find a block is <code>Time = (D &times; 2<sup>32</sup>) / Hashrate</code>, and network hashrate is <code>(D &times; 2<sup>32</sup>) / 600s</code> (adjusted every 2,016 blocks)."
             "</div>"
+            "<div style='margin-top:8px;font-size:12px;background:rgba(0,0,0,0.25);border-left:3px solid var(--amber);padding:6px 10px;border-radius:0 4px 4px 0;'>"
+            "<strong>21 Million Cap, Lost Coins &amp; Satoshis:</strong> "
+            "Bitcoin has a strict mathematical supply limit of <strong>20,999,999.9769 BTC</strong>. The block subsidy halves every 210,000 blocks via an arithmetic right bitwise shift (<code>&gt;&gt; 1</code>), rounding down to zero at block #6,929,999 around the year 2140. "
+            "<br><strong>What happens when coins are lost?</strong> When private keys are lost, those bitcoins are gone forever from circulation. As Satoshi Nakamoto explained: <em>&quot;Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.&quot;</em> "
+            "<br><strong>Why deflation does not break Bitcoin:</strong> Bitcoin is infinitely divisible! 1 Bitcoin = <strong>100,000,000 Satoshis</strong> (0.00000001 BTC). Internally, Bitcoin Core stores all balances and values as 64-bit integer Satoshis (<code>int64_t</code>), never fractional BTC. Even if 99% of coins are lost, transactions scale into smaller units (millibitcoins, bits, or Lightning millisatoshis). "
+            "<br><strong>After Year 2140:</strong> Blocks are still mined every 10 minutes forever! Miners will be incentivized 100% by user transaction fees rather than new coin issuance."
+            "</div>"
             "</div></div></div>"
             "<div class='card' id='pow-sim-card'>"
             "<div class='card-title'>"
@@ -420,6 +427,36 @@ static void handleRoot()
             "<button type='button' class='preset-pill active' onclick='simStep()' style='padding:6px 14px;font-size:12px;'>Test Next Nonce (+1)</button>"
             "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()' style='padding:6px 14px;font-size:12px;'>&#9654; Auto Mine (10 H/s)</button>"
             "<button type='button' class='preset-pill' onclick='simReset()' style='padding:6px 10px;font-size:12px;'>Reset</button>"
+            "</div></div>"
+            "<div class='card' id='sats-calc-card'>"
+            "<div class='card-title'>"
+            "<span>🪙 Bitcoin Supply &amp; Satoshis Converter</span>"
+            "<span class='story-tag' style='margin-left:auto;'>Divisibility &amp; Units</span>"
+            "</div>"
+            "<p style='font-size:13px;color:var(--muted);margin-bottom:12px;'>"
+            "Explore how 1 Bitcoin divides into 100 million Satoshis, bits, and millibitcoins to prevent deflationary crises:"
+            "</p>"
+            "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;'>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
+            "<label style='font-size:11px;color:var(--muted);'>Bitcoin (BTC)</label>"
+            "<input type='text' id='calc-btc' value='1.0' oninput='calcFromBtc(this.value)' style='padding:6px;font-size:13px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
+            "<label style='font-size:11px;color:var(--muted);'>Satoshis (sats)</label>"
+            "<input type='text' id='calc-sats' value='100,000,000' oninput='calcFromSats(this.value)' style='padding:6px;font-size:13px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
+            "<label style='font-size:11px;color:var(--muted);'>Bits (&mu;BTC)</label>"
+            "<input type='text' id='calc-bits' value='1,000,000' oninput='calcFromBits(this.value)' style='padding:6px;font-size:13px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
+            "<label style='font-size:11px;color:var(--muted);'>Millibitcoins (mBTC)</label>"
+            "<input type='text' id='calc-mbtc' value='1,000' oninput='calcFromMbtc(this.value)' style='padding:6px;font-size:13px;'>"
+            "</div>"
+            "</div>"
+            "<div style='font-size:11px;color:var(--muted);line-height:1.5;'>"
+            "&bull; <strong>Protocol Representation:</strong> <code>1 Satoshi = 10<sup>-8</sup> BTC</code>. Internally, Bitcoin Core never uses floats&mdash;all balances are 64-bit integer Satoshis.<br>"
+            "&bull; <strong>Satoshi's Rule on Lost Coins:</strong> <em>&quot;Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.&quot;</em>"
             "</div></div>");
 
   if (isPublicPool && cleanWallet.length() > 0)
@@ -782,6 +819,10 @@ static void handleRoot()
             "const eH=document.getElementById('sim-hash');if(eH)eH.textContent='Click \"Test Next Nonce\" to hash';"
             "const eR=document.getElementById('sim-result');if(eR)eR.textContent=simIsHist?'Status: Ready (Solves at Nonce 856,192,328)':'Status: Ready to test';"
             "}"
+            "function calcFromBtc(v){const n=parseFloat(v);if(isNaN(n))return;document.getElementById('calc-sats').value=Math.round(n*1e8).toLocaleString();document.getElementById('calc-bits').value=(n*1e6).toLocaleString();document.getElementById('calc-mbtc').value=(n*1e3).toLocaleString();}"
+            "function calcFromSats(v){const s=parseFloat(String(v).replace(/,/g,''));if(isNaN(s))return;document.getElementById('calc-btc').value=(s/1e8).toFixed(8);document.getElementById('calc-bits').value=(s/100).toLocaleString();document.getElementById('calc-mbtc').value=(s/1e5).toLocaleString();}"
+            "function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}"
+            "function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1000).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1000).toLocaleString();}"
             "function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}"
             "pollStats();setInterval(pollStats,3000);"
             "</script></body></html>");

@@ -78,9 +78,9 @@ If your CYD board has a MicroSD slot on the back, you can configure your miner h
 
 ---
 
-## 🖥️ 7-Screen Carousel System
+## 🖥️ 8-Screen Carousel System
 
-The display firmware features a seamlessly rotating carousel of **7 distinct views**, combining real-time telemetry, market analytics, and beginner-accessible educational breakdowns:
+The display firmware features a seamlessly rotating carousel of **8 distinct views**, combining real-time telemetry, market analytics, and beginner-accessible educational breakdowns:
 
 | Index | Screen Name | Layout & Key Information |
 |:---:|:---|:---|
@@ -91,13 +91,14 @@ The display firmware features a seamlessly rotating carousel of **7 distinct vie
 | **4** | **LOTTERY (Solo Lottery Analytics)** | Current block reward jackpot (3.125 BTC + fees &approx; $300k+), total hashes tested since boot, best difficulty rarity score (clarifying it is a score, not % progress), mathematical difficulty formula ($\text{Difficulty} = \text{Target}_1 / \text{Current Target}$), expected hashes calculation ($\text{Diff} \times 2^{32} \approx \text{Diff} \times 4.295\text{B}$), distinction between **bdiff** (truncated Satoshi target) and **pdiff** (pool target), block time equation ($\text{Time} = \text{Diff} \times 2^{32} / \text{Hashrate}$), and the **256-bit die roll finish line**. |
 | **5** | **DIAGNOSTICS (System Telemetry)** | Stratum pool connection (host, port, live ping in milliseconds, primary vs. fallback failover route), Wi-Fi metrics (SSID, RSSI in dBm, quality bars, local IP), ESP32 hardware health (core temperature in °C/°F, free heap RAM, max alloc block, system uptime). |
 | **6** | **HEADER (80-Byte Block Header)** | Complete educational breakdown of the 6 fields of the candidate block header (**Version 4B**, **Prev Hash 32B**, **Merkle Root 32B**, **Time 4B**, **Bits 4B**, **Nonce 4B**). Demonstrates that 76 bytes are fixed by the network and the Nonce is the only dial the CYD turns. Teaches target unpacking from Bits ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), little-endian serialization, ExtraNonce rollover, pool coinbase commitment preventing stolen blocks, double-hash (**SHA256d**), and the **avalanche effect**. |
+| **7** | **SUPPLY (21M Cap, Lost Coins & Satoshis)** | Educational breakdown of Bitcoin economics based on the **Bitcoin Wiki FAQ**: strict **20,999,999.9769 BTC** hard cap, halving subsidy decay via bitwise shift `>> 1` reaching zero at block #6,929,999 (~year 2140). Explains what happens when Bitcoins are lost (permanent out-of-circulation loss, gentle deflation, Satoshi's *"donation to everyone"* principle), how **infinite divisibility** prevents deflation crises (1 BTC = 100M Satoshis, 64-bit integer `int64_t` protocol storage, bits, and Lightning msats), and explains why blocks continue every 10 minutes forever sustained 100% by transaction fees. |
 
 ---
 
 ### 👆 Touchscreen & Physical Controls
 
 #### Touch Zones (Resistive & Capacitive CYD)
-- **Tap Right Half**: Cycle forward to next screen (`0 → 1 → 2 → 3 → 4 → 5 → 6 → 0`)
+- **Tap Right Half**: Cycle forward to next screen (`0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 0`)
 - **Tap Left Half**: Cycle backward to previous screen
 - **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
 - **NVS Memory**: Automatically saves your active screen index to flash and restores it across reboots!
@@ -134,16 +135,25 @@ Once connected to your home network, the miner serves a full web dashboard and c
      - Satoshi defined base $\text{Target}_1$ as `0x00000000FFFF0000000000000000000000000000000000000000000000000000` (packed bits `0x1d00ffff`).
      - Because $\text{Target}_1 / 2^{256} \approx 1 / 2^{32}$, finding a difficulty 1 share requires an expected **$2^{32} = 4,294,967,296$ hashes**! Any difficulty $D$ requires an expected $D \times 2^{32}$ hashes.
      - Distinguishes between **bdiff** (Bitcoin Core block difficulty using Satoshi's truncated mantissa) and **pdiff** (Stratum pool share difficulty using untruncated 32 leading zero bits `0x00000000FFFFFFFF...`).
-     - Derives expected block time $\text{Time} = (D \times 2^{32}) / \text{Hashrate}$ and network hashrate $(D \times 2^{32}) / 600\text{s}$ retargeted every 2,016 blocks.
+      - Derives expected block time $\text{Time} = (D \times 2^{32}) / \text{Hashrate}$ and network hashrate $(D \times 2^{32}) / 600\text{s}$ retargeted every 2,016 blocks.
+   - **21 Million Hard Cap, Lost Coins & Deflationary Model**:
+     - Total supply is mathematically capped at **20,999,999.9769 BTC** with the final subsidy block (#6,929,999) mined around year 2140.
+     - Subsidy halves every 210,000 blocks via arithmetic right bitwise shifts (`>> 1`) until rounding down to zero.
+     - Explains what happens when Bitcoins are lost: private keys lost = coins permanently removed from circulation. As Satoshi explained: *"Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone."*
+     - **Infinite Divisibility**: 1 BTC = 100,000,000 Satoshis ($10^{-8}$ BTC). Internally, Bitcoin Core stores all balances and values as 64-bit integer Satoshis (`int64_t`), never floats. Deflation cannot freeze trade because commerce seamlessly denominates in sats, bits, and Lightning millisats.
+     - **Life After 2140**: Blocks continue to be mined every 10 minutes indefinitely, supported 100% by transaction fees.
    - Detailed interactive breakdown of the **80 bytes you're actually hashing**, how `Bits` unpacks into the 256-bit target number, why headers use little-endian byte ordering, and why previous block hashes make the blockchain immutable.
    - **ExtraNonce & Merkle Trees**: Explains what happens when the 4.29B Nonce dial exhausts (incrementing ExtraNonce in the coinbase transaction generates a new Merkle Root, resetting the search space).
    - **Pool Payout Security**: Explains why miners cannot steal blocks (the pool payout address is committed into the coinbase and bound by the Merkle root; altering it scrambles the block hash and invalidates the proof-of-work).
    - Explains the target as the finish line: an independent roll of a 256-bit die where you win if `hash < target`.
-3. **Conversational Plain-English Story**:
+3. **🪙 Interactive Bitcoin Supply & Satoshis Converter**:
+   - Live bidirectional unit converter translating between **Bitcoin (BTC)**, **Satoshis (sats)**, **Bits ($\mu$BTC)**, and **Millibitcoins (mBTC)**.
+   - Highlights internal 64-bit integer protocol storage and quotes Satoshi's law on lost coins.
+4. **Conversational Plain-English Story**:
    - Translates raw metrics into normal English sentences: hashrate in hashes/sec, total hashes since boot, share submissions, best difficulty rarity, statistical wait time, and power consumption (~1.2 W).
-4. **Historical Perspective Banner**:
+5. **Historical Perspective Banner**:
    - Contrasts the 2009 Satoshi CPU era (~100 BTC in 3 hours with 8 zeros) with modern reality (18+ zeros, 800+ EH/s worldwide).
-5. **AxeOS-Style Live Theme Switcher**:
+6. **AxeOS-Style Live Theme Switcher**:
    - Hot-swap between **6 visual palettes** with one click in `<30ms` without rebooting or dropping mining connections:
      - **Instrument Amber** *(Default)*
      - **Matrix Green**
@@ -151,11 +161,11 @@ Once connected to your home network, the miner serves a full web dashboard and c
      - **Arcade Neon**
      - **Ice Blue**
      - **Monochrome**
-6. **Hardware Diagnostics & Quick Controls**:
+7. **Hardware Diagnostics & Quick Controls**:
    - Live telemetry for core temperature, Stratum ping latency, Wi-Fi RSSI signal quality, free heap RAM, and a 1-click **Session Reset** button (resets current session shares/best diff while preserving lifetime flash counters).
-7. **Conversational Setup Guide**:
+8. **Conversational Setup Guide**:
    - Inline blanks with 1-click solo pool presets (Public-Pool port 3333, NerdMiners.org, SoloMining.de), wallet & worker configuration, and screen rotation/brightness adjustments.
-8. **REST API**:
+9. **REST API**:
    - Query live JSON statistics at `GET /api/stats`, switch themes at `POST /api/theme?id=X`, or reset session stats at `POST /api/reset-session`.
 
 ---

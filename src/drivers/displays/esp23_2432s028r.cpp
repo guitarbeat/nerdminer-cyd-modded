@@ -125,6 +125,7 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_LOTTERY 4
 #define SCR_DIAG 5
 #define SCR_HEADER 6
+#define SCR_SUPPLY 7
 
 extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
@@ -1391,6 +1392,85 @@ static void paintBlockHeader(const BlockHeaderV &bh)
   drawStrip(bh.strip);
 }
 
+// ============================================================ SUPPLY screen ==
+
+struct SupplyV
+{
+  HdrV hdr;
+  StripV strip;
+};
+
+static SupplyV lastSupply;
+static bool haveSupply = false;
+
+static void chromeSupply(TFT_eSPI &d)
+{
+  if (isPortrait())
+  {
+    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "21M HARD CAP & BITCOIN UNITS", 12, 36, 8, C_DIM, C_PANEL);
+    text(d, "MAX SUPPLY: 20,999,999.9769 BTC", 12, 49, 9, C_GOLD, C_PANEL);
+    text(d, "* 1 BTC = 100,000,000 Satoshis (sats).", 12, 62, 8, C_TEXT, C_PANEL);
+    text(d, "* 1 mBTC = 100k sats | 1 Bit = 100 sats.", 12, 73, 8, C_DIM, C_PANEL);
+    text(d, "* Final coin mined ~2140 at Block #6.93M.", 12, 84, 8, C_METER, C_PANEL);
+
+    panel(d, 6, 106, 228, 76, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "WHAT HAPPENS WHEN COINS ARE LOST?", 12, 110, 8, C_DIM, C_PANEL);
+    text(d, "* Lost private keys = gone forever from supply.", 12, 122, 8, C_BAD, C_PANEL);
+    text(d, "* Deflationary model: supply continually shrinks.", 12, 134, 8, C_TEXT, C_PANEL);
+    text(d, "* Satoshi: 'Lost coins make all other coins", 12, 146, 8, C_GOLD, C_PANEL);
+    text(d, "  worth slightly more. A donation to everyone!'", 12, 157, 8, C_GOLD, C_PANEL);
+    text(d, "* Purchasing power rises as supply decreases.", 12, 168, 8, C_GOOD, C_PANEL);
+
+    panel(d, 6, 188, 228, 72, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "INFINITE DIVISIBILITY & YEAR 2140", 12, 192, 8, C_DIM, C_PANEL);
+    text(d, "* Divisibility prevents deflation crises:", 12, 204, 8, C_TEXT, C_PANEL);
+    text(d, "  Even with 1 BTC left, world trade functions!", 12, 215, 8, C_GOOD, C_PANEL);
+    text(d, "* Balances stored as 64-bit integer Satoshis.", 12, 226, 8, C_DIM, C_PANEL);
+    text(d, "* After 2140: Blocks mined every 10m forever;", 12, 237, 8, C_METER, C_PANEL);
+    text(d, "  100% of miner rewards come from TX fees!", 12, 248, 8, C_METER, C_PANEL);
+
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 30, 304, 62, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "21M HARD CAP & SATOSHI DIVISIBILITY", 14, 34, 8, C_DIM, C_PANEL);
+
+    panel(d, 14, 46, 92, 40, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "21M HARD CAP", 18, 49, 8, C_GOLD, C_TRACK);
+    text(d, "20,999,999.9769 BTC", 18, 59, 7, C_TEXT, C_TRACK);
+    text(d, "Last coin ~yr 2140", 18, 69, 7, C_DIM, C_TRACK);
+
+    panel(d, 112, 46, 94, 40, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "1 SATOSHI", 116, 49, 8, C_METER, C_TRACK);
+    text(d, "10^-8 BTC (100M/coin)", 116, 59, 7, C_TEXT, C_TRACK);
+    text(d, "64-bit int64_t sats", 116, 69, 7, C_DIM, C_TRACK);
+
+    panel(d, 212, 46, 94, 40, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BLOCK REWARD", 216, 49, 8, C_GOOD, C_TRACK);
+    text(d, "50 -> 3.125 -> 0 BTC", 216, 59, 7, C_TEXT, C_TRACK);
+    text(d, "Bitwise >> 1 decay", 216, 69, 7, C_DIM, C_TRACK);
+
+    panel(d, 8, 98, 304, 92, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "WHAT HAPPENS WHEN COINS ARE LOST? (DEFLATIONARY MODEL)", 14, 102, 8, C_DIM, C_PANEL);
+    text(d, "* Lost keys = coins gone forever. Supply shrinks over time (deflationary).", 14, 115, 8, C_TEXT, C_PANEL);
+    text(d, "* Satoshi: 'Lost coins make everyone else's coins worth slightly more.'", 14, 126, 8, C_GOLD, C_PANEL);
+    text(d, "* Infinite divisibility: Even if 99% of coins were lost, Bitcoin still works!", 14, 137, 8, C_GOOD, C_PANEL);
+    text(d, "* Transactions denominate into sats, bits (100 sats), or Lightning millisats.", 14, 148, 8, C_DIM, C_PANEL);
+    text(d, "* After year 2140: Blocks mined every 10 min forever; fees fund 100% of mining!", 14, 159, 8, C_METER, C_PANEL);
+    text(d, "* Reward rounds down to 0 via bitwise right shift; transactions secure network.", 14, 170, 8, C_TEXT, C_PANEL);
+
+    chromeStripCells(d);
+  }
+}
+
+static void paintSupply(const SupplyV &sv)
+{
+  drawHeader(sv.hdr);
+  drawStrip(sv.strip);
+}
+
 // ------------------------------------------------------ boot / setup pages --
 
 static void paintLoading(TFT_eSPI &d)
@@ -1467,6 +1547,9 @@ static void paintChrome(TFT_eSPI &d, int scr)
   case SCR_HEADER:
     chromeBlockHeader(d);
     break;
+  case SCR_SUPPLY:
+    chromeSupply(d);
+    break;
   default:
     chromeClock(d);
     break;
@@ -1521,6 +1604,8 @@ static void repaintCached(int scr)
     paintDiag(lastDiag);
   else if (scr == SCR_HEADER && haveHeader)
     paintBlockHeader(lastHeader);
+  else if (scr == SCR_SUPPLY && haveSupply)
+    paintSupply(lastSupply);
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -1877,6 +1962,32 @@ void esp32_2432S028R_HeaderScreen(unsigned long mElapsed)
   lastHeader = bh;
   haveHeader = true;
   paintBlockHeader(bh);
+
+  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
+}
+
+void esp32_2432S028R_SupplyScreen(unsigned long mElapsed)
+{
+  mining_data data = getMiningData(mElapsed);
+  refreshPool();
+  uiLive = true;
+  ensureChrome(SCR_SUPPLY);
+  float kh = data.currentHashRate.toFloat();
+  noteHashrate(kh);
+
+  SupplyV sv;
+  sv.hdr = liveHeader(data.currentTime);
+  sv.strip.l[0] = "HARD CAP";
+  sv.strip.v[0] = "21M BTC";
+  sv.strip.l[1] = "1 SATOSHI";
+  sv.strip.v[1] = "10^-8 BTC";
+  sv.strip.l[2] = "END YEAR";
+  sv.strip.v[2] = "YR 2140";
+  sv.strip.l[3] = "POST-2140";
+  sv.strip.v[3] = "100% FEES";
+  lastSupply = sv;
+  haveSupply = true;
+  paintSupply(sv);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -2250,7 +2361,8 @@ CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_ExplainerScreen,
     esp32_2432S028R_LotteryScreen,
     esp32_2432S028R_DiagScreen,
-    esp32_2432S028R_HeaderScreen};
+    esp32_2432S028R_HeaderScreen,
+    esp32_2432S028R_SupplyScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
