@@ -33,6 +33,8 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_POOLPORT] = Settings->PoolPort;
         json[JSON_SPIFFS_KEY_POOLPASS] = Settings->PoolPassword;
         json[JSON_SPIFFS_KEY_WALLETID] = Settings->BtcWallet;
+        json[JSON_SPIFFS_KEY_FBPOOL] = Settings->FallbackPoolAddress;
+        json[JSON_SPIFFS_KEY_FBPORT] = Settings->FallbackPoolPort;
         json[JSON_SPIFFS_KEY_TIMEZONE] = Settings->Timezone;
         json[JSON_SPIFFS_KEY_STATS2NV] = Settings->saveStats;
         json[JSON_SPIFFS_KEY_INVCOLOR] = Settings->invertColors;
@@ -99,6 +101,10 @@ bool nvMemory::loadConfig(TSettings* Settings)
                     strcpy(Settings->BtcWallet, json[JSON_SPIFFS_KEY_WALLETID] | Settings->BtcWallet);
                     if (json.containsKey(JSON_SPIFFS_KEY_POOLPORT))
                         Settings->PoolPort = json[JSON_SPIFFS_KEY_POOLPORT].as<int>();
+                    if (json.containsKey(JSON_SPIFFS_KEY_FBPOOL))
+                        Settings->FallbackPoolAddress = json[JSON_SPIFFS_KEY_FBPOOL].as<String>();
+                    if (json.containsKey(JSON_SPIFFS_KEY_FBPORT))
+                        Settings->FallbackPoolPort = json[JSON_SPIFFS_KEY_FBPORT].as<int>();
                     if (json.containsKey(JSON_SPIFFS_KEY_TIMEZONE))
                         Settings->Timezone = json[JSON_SPIFFS_KEY_TIMEZONE].as<int>();
                     if (json.containsKey(JSON_SPIFFS_KEY_STATS2NV))

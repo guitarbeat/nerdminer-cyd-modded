@@ -7,6 +7,7 @@
 #include "currency.h"
 #include "monitor.h"
 #include "drivers/displays/display.h"
+#include "mining.h"
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -49,7 +50,7 @@ static void handleApiStats()
 {
   mining_data d = getMiningData(millis());
   String json;
-  json.reserve(512);
+  json.reserve(576);
   json += "{";
   json += "\"status\":";
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
@@ -72,8 +73,17 @@ static void handleApiStats()
   json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
   json += ",\"theme\":" + String(Settings.displayTheme);
+  json += ",\"ping\":" + String(g_stratumPing);
+  json += ",\"net_diff\":" + (g_networkDifficulty > 0.0 ? String(g_networkDifficulty, 2) : String("100000000000000.00"));
+  json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += "}";
   webCfgServer.send(200, "application/json", json);
+}
+
+static void handleResetSession()
+{
+  resetSessionStats();
+  webCfgServer.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Session stats reset\"}");
 }
 
 static void handleGetTheme()
@@ -151,11 +161,14 @@ static void handleRoot()
             ".hl-key{color:var(--amber);font-weight:700}"
             ".hl-val{color:var(--text);font-weight:700;font-feature-settings:'tnum'}"
             ".diag-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}"
-            "@media(min-width:480px){.diag-strip{grid-template-columns:repeat(4,1fr)}}"
-            ".diag-item{background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:10px 12px}"
+            "@media(min-width:480px){.diag-strip{grid-template-columns:repeat(3,1fr)}}"
+            "@media(min-width:620px){.diag-strip{grid-template-columns:repeat(6,1fr)}}"
+            ".diag-item{background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center}"
             ".diag-label{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}"
             ".diag-val{font-size:13px;font-weight:700;color:var(--text);font-feature-settings:'tnum'}"
             ".diag-sub{font-size:11px;font-weight:400;color:var(--muted)}"
+            ".btn-reset-stats{background:transparent;border:1px solid var(--card-border);color:var(--muted);border-radius:4px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;margin-top:2px;text-align:center}"
+            ".btn-reset-stats:hover{border-color:var(--amber);color:var(--amber);background:rgba(247,147,26,0.08)}"
             ".pool-banner{background:linear-gradient(135deg,rgba(247,147,26,0.1),rgba(34,197,94,0.06));border:1px solid rgba(247,147,26,0.3);border-radius:8px;padding:14px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}"
             ".pool-info{font-size:13px}"
             ".pool-btn{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:12px;padding:8px 14px;border-radius:6px;transition:opacity .2s}"
@@ -260,7 +273,7 @@ static void handleRoot()
   page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
   page += F("</span></strong>. Only about 1 in every <strong class='hl-val'><span id='dyn-rarity'>--</span></strong> random hashes would be expected to score this well or better. This is a statistical measure of rarity&mdash;higher is better.</div></div>"
             "<div class='story-p'><span class='story-num'>5</span><div class='story-text'>"
-            "A valid Bitcoin block currently requires roughly <strong class='hl-val'>100 trillion</strong> network difficulty. Your best result reached about <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of the target difficulty required to solve a block.</div></div>"
+            "A valid Bitcoin block currently requires roughly <strong class='hl-val'><span id='dyn-netdiff'>100 trillion</span></strong> network difficulty. Your best result reached about <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of the target difficulty required to solve a block.</div></div>"
             "<div class='story-p'><span class='story-num'>6</span><div class='story-text'>"
             "At your current speed, the estimated chance of finding a Bitcoin block is about <strong class='hl-val'><span id='dyn-dayodds'>--</span> per day</strong> (or <strong class='hl-val'><span id='dyn-yrodds'>--</span> per year</strong>). The statistical average wait time would be roughly <strong class='hl-val'><span id='dyn-avgwait'>--</span></strong>. You could theoretically solve a block on your very next guess&mdash;or never.</div></div>"
             "<div class='story-p'><span class='story-num'>7</span><div class='story-text'>"
@@ -275,11 +288,15 @@ static void handleRoot()
             "<div class='diag-item'><span class='diag-label'>Uptime</span><span class='diag-val' id='st-uptime'>");
   page += d.timeMining.length() ? d.timeMining : String("--");
   page += F("</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
+  page += String(g_stratumPing) + F("</span> ms</span></div>"
             "<div class='diag-item'><span class='diag-label'>Wi-Fi Signal</span><span class='diag-val'><span id='st-wifi'>");
   page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
   page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
-  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div></div>");
+  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
+            "</div>");
 
   if (isPublicPool && cleanWallet.length() > 0)
   {
@@ -308,6 +325,10 @@ static void handleRoot()
   page += String(Settings.PoolPort);
   page += F("' required> using pool password <input type='text' id='f-pass' class='blank-input' style='width:50px' name='poolpass' value='");
   page += htmlEscape(String(Settings.PoolPassword));
+  page += F("'>. If the primary pool is unreachable after 3 attempts, automatically fail over to fallback pool <input type='text' id='f-fbpool' class='blank-input' style='min-width:140px' name='fbpool' value='");
+  page += htmlEscape(Settings.FallbackPoolAddress);
+  page += F("'> on port <input type='number' id='f-fbport' class='blank-input' style='width:68px' name='fbport' value='");
+  page += String(Settings.FallbackPoolPort);
   page += F("'>."
             "<div class='preset-pills'>"
             "<span style='font-size:11px;color:var(--muted);align-self:center;'>Quick Solo Presets:</span>"
@@ -465,6 +486,9 @@ static void handleRoot()
             "function rebootDevice(){if(confirm('Reboot the miner now?')){fetch('/restart',{method:'POST'}).then(pollReboot).catch(pollReboot);}}"
             "function fmtNum(n){if(isNaN(n)||n<=0)return'0';if(n>=1e12)return(n/1e12).toFixed(2)+' trillion';if(n>=1e9)return(n/1e9).toFixed(1)+' billion';if(n>=1e6)return(n/1e6).toFixed(1)+' million';return Math.round(n).toLocaleString();}"
             "function fmtUptime(u){if(!u)return'--';const p=u.trim().split(/\\s+/);let d=0,t=u;if(p.length===2){d=parseInt(p[0])||0;t=p[1];}const c=t.split(':');if(c.length===3){const hrs=parseInt(c[0])||0,mins=parseInt(c[1])||0;return(d>0?d+'d ':'')+(hrs>0?hrs+'h ':'')+mins+'m';}return u;}"
+            "function resetSession(){"
+            "if(confirm('Reset current session shares and session best difficulty? (Lifetime total hashes in flash remain preserved)')){"
+            "fetch('/api/reset-session',{method:'POST'}).then(r=>r.json()).then(()=>{pollStats();}).catch(()=>{});}}"
             "function updateStats(d){"
             "const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;"
             "const mhashes=Number(d.mhashes)||0,totHashes=mhashes*1e6,shares=parseInt(d.shares)||0,diff=parseFloat(d.best_diff)||0;"
@@ -480,7 +504,8 @@ static void handleRoot()
             "const eDiff=document.getElementById('dyn-diff');if(eDiff)eDiff.textContent=diff>0?diff.toFixed(3):'0.000';"
             "const rarity=diff*4294967296;"
             "const eRar=document.getElementById('dyn-rarity');if(eRar)eRar.textContent=diff>0?fmtNum(rarity):'N/A';"
-            "const netDiff=100e12;"
+            "const netDiff=(d.net_diff&&d.net_diff>0)?Number(d.net_diff):100e12;"
+            "const eNetdiff=document.getElementById('dyn-netdiff');if(eNetdiff)eNetdiff.textContent=fmtNum(netDiff);"
             "const eNetpct=document.getElementById('dyn-netpct');if(eNetpct){if(diff>0){const pct=(diff/netDiff)*100;eNetpct.textContent=pct.toExponential(2)+'% (~'+pct.toFixed(8)+'%)';}else eNetpct.textContent='0%';}"
             "const targetHashes=netDiff*4294967296,dayOdds=hpd>0?(targetHashes/hpd):0,yrOdds=dayOdds/365.25;"
             "const eDayOdds=document.getElementById('dyn-dayodds');if(eDayOdds)eDayOdds.textContent=dayOdds>0?('1 in '+fmtNum(dayOdds)):'--';"
@@ -489,10 +514,11 @@ static void handleRoot()
             "const netHps=700e18,eNetpow=document.getElementById('dyn-netpow');if(eNetpow){const netSharePct=(hps/netHps)*100;eNetpow.textContent=netSharePct.toExponential(1)+'%';}"
             "if(d.temp)document.getElementById('st-temp').textContent=d.temp;"
             "if(d.uptime)document.getElementById('st-uptime').textContent=d.uptime;"
+            "const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;"
             "if(d.free_heap)document.getElementById('st-heap').textContent=Math.round(d.free_heap/1024)+' KB';"
             "if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}"
             "const dot=document.getElementById('st-dot'),txt=document.getElementById('st-txt');"
-            "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent='HASHING';}"
+            "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent=d.using_fallback?'HASHING (FALLBACK)':'HASHING';}"
             "else if(d.status==='connecting'){dot.className='dot dot-amber';txt.textContent='CONNECTING';}"
             "else{dot.className='dot dot-gray';txt.textContent='IDLE';}"
             "}"
@@ -509,6 +535,10 @@ static void handleSave()
     Settings.PoolAddress = webCfgServer.arg("pool");
   if (webCfgServer.hasArg("port"))
     Settings.PoolPort = webCfgServer.arg("port").toInt();
+  if (webCfgServer.hasArg("fbpool"))
+    Settings.FallbackPoolAddress = webCfgServer.arg("fbpool");
+  if (webCfgServer.hasArg("fbport"))
+    Settings.FallbackPoolPort = webCfgServer.arg("fbport").toInt();
   if (webCfgServer.hasArg("poolpass"))
     strncpy(Settings.PoolPassword, webCfgServer.arg("poolpass").c_str(), sizeof(Settings.PoolPassword) - 1);
   if (webCfgServer.hasArg("wallet"))
@@ -577,6 +607,7 @@ void setup_webConfig(void)
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);
+  webCfgServer.on("/api/reset-session", HTTP_POST, handleResetSession);
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
   webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);

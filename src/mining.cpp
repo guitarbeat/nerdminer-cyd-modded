@@ -108,11 +108,18 @@ volatile uint32_t valids; // increased if blockhash <= target
 // Track best diff
 double best_diff = 0.0;
 
+// Stratum ping latency & live network stats
+volatile uint32_t g_stratumPing = 0;
+double g_networkDifficulty = 0.0;
+bool g_usingFallback = false;
+static uint32_t s_poolFailCount = 0;
+
 // Variables to hold data from custom textboxes
 //Track mining stats in non volatile memory
 extern TSettings Settings;
 
 IPAddress serverIP(1, 1, 1, 1); //Temporally save poolIPaddres
+static String s_resolvedPoolHost = "";
 
 //Global work data 
 static WiFiClient client;
@@ -135,22 +142,48 @@ bool checkPoolConnection(void) {
   
   isMinerSuscribed = false;
 
-  Serial.println("Client not connected, trying to connect..."); 
-  
-  //Resolve first time pool DNS and save IP
-  if(serverIP == IPAddress(1,1,1,1)) {
-    WiFi.hostByName(Settings.PoolAddress.c_str(), serverIP);
-    Serial.printf("Resolved DNS and save ip (first time) got: %s\n", serverIP.toString());
+  // Select primary or fallback pool based on failure count
+  String targetPool = Settings.PoolAddress;
+  int targetPort = Settings.PoolPort;
+  if (s_poolFailCount >= 3 && Settings.FallbackPoolAddress.length() > 0) {
+    targetPool = Settings.FallbackPoolAddress;
+    targetPort = Settings.FallbackPoolPort;
+    g_usingFallback = true;
+    Serial.printf("[STRATUM] Using fallback pool %s:%d (fails: %u)\n", targetPool.c_str(), targetPort, s_poolFailCount);
+  } else {
+    g_usingFallback = false;
   }
 
-  //Try connecting pool IP
-  if (!client.connect(serverIP, Settings.PoolPort)) {
-    Serial.println("Imposible to connect to : " + Settings.PoolAddress);
-    WiFi.hostByName(Settings.PoolAddress.c_str(), serverIP);
-    Serial.printf("Resolved DNS got: %s\n", serverIP.toString());
+  Serial.printf("Client not connected, trying to connect to %s:%d...\n", targetPool.c_str(), targetPort);
+
+  // Resolve DNS if host changed or not resolved yet
+  if (s_resolvedPoolHost != targetPool || serverIP == IPAddress(1,1,1,1)) {
+    IPAddress resolved;
+    if (WiFi.hostByName(targetPool.c_str(), resolved)) {
+      serverIP = resolved;
+      s_resolvedPoolHost = targetPool;
+      Serial.printf("Resolved DNS for %s -> %s\n", targetPool.c_str(), serverIP.toString().c_str());
+    } else {
+      Serial.printf("Failed to resolve DNS for %s\n", targetPool.c_str());
+      s_poolFailCount++;
+      return false;
+    }
+  }
+
+  // Try connecting pool IP and measure initial TCP connect RTT
+  unsigned long t0 = millis();
+  if (!client.connect(serverIP, targetPort)) {
+    Serial.println("Impossible to connect to: " + targetPool);
+    s_poolFailCount++;
+    s_resolvedPoolHost = ""; // Force re-resolve on next try
     return false;
   }
 
+  uint32_t connRtt = millis() - t0;
+  if (g_stratumPing == 0) {
+    g_stratumPing = connRtt;
+  }
+  s_poolFailCount = 0;
   return true;
 }
 
@@ -258,6 +291,7 @@ struct Submition
   double diff;
   bool is32bit;
   bool isValid;
+  unsigned long submitTime;
 };
 
 static void MiningJobStop(uint32_t &job_pool, std::map<uint32_t, std::shared_ptr<Submition>> & submition_map)
@@ -416,6 +450,22 @@ void runStratumWorker(void *name) {
                                           //Increse templates readed
                                           templates++;
 
+                                          // Calculate live Bitcoin network difficulty from nBits
+                                          if (mJob.nbits.length() > 0)
+                                          {
+                                            uint32_t nbitsVal = strtoul(mJob.nbits.c_str(), NULL, 16);
+                                            uint32_t exponent = nbitsVal >> 24;
+                                            uint32_t mantissa = nbitsVal & 0x7FFFFF;
+                                            if (mantissa > 0 && exponent <= 32)
+                                            {
+                                              double diffNet = ((double)0xFFFF / (double)mantissa) * pow(256.0, (double)(29 - (int)exponent));
+                                              if (diffNet > 0.0)
+                                              {
+                                                g_networkDifficulty = diffNet;
+                                              }
+                                            }
+                                          }
+
                                           last_job_time = millis();
                                           mLastTXtoPool = last_job_time;
 
@@ -518,6 +568,11 @@ void runStratumWorker(void *name) {
                                         auto itt = s_submition_map.find(id);
                                         if (itt != s_submition_map.end())
                                         {
+                                          if (itt->second->submitTime > 0)
+                                          {
+                                            uint32_t rtt = millis() - itt->second->submitTime;
+                                            g_stratumPing = (g_stratumPing == 0) ? rtt : ((g_stratumPing * 3 + rtt) / 4);
+                                          }
                                           if (itt->second->diff > best_diff)
                                             best_diff = itt->second->diff;
                                           if (itt->second->is32bit)
@@ -536,6 +591,11 @@ void runStratumWorker(void *name) {
                                         auto itt = s_submition_map.find(id);
                                         if (itt != s_submition_map.end())
                                         {
+                                          if (itt->second->submitTime > 0)
+                                          {
+                                            uint32_t rtt = millis() - itt->second->submitTime;
+                                            g_stratumPing = (g_stratumPing == 0) ? rtt : ((g_stratumPing * 3 + rtt) / 4);
+                                          }
                                           Serial.printf("Refuse submition %d\n", id);
                                           s_submition_map.erase(itt);
                                         }
@@ -646,6 +706,7 @@ void runStratumWorker(void *name) {
         std::shared_ptr<Submition> submition = std::make_shared<Submition>();
         submition->diff = res->difficulty;
         submition->is32bit = (res->hash[29] == 0 && res->hash[28] == 0);
+        submition->submitTime = mLastTXtoPool;
         if (submition->is32bit)
         {
           submition->isValid = checkValid(res->hash, mMiner.bytearray_target);
@@ -1844,6 +1905,13 @@ void resetStat() {
     templates = hashes = Mhashes = totalKHashes = elapsedKHs = upTime = shares = valids = 0;
     best_diff = 0.0;
     saveStat();
+}
+
+void resetSessionStats() {
+    Serial.printf("[MONITOR] Resetting session stats (shares & best diff)\n");
+    shares = 0;
+    valids = 0;
+    best_diff = 0.0;
 }
 
 void runMonitor(void *name)

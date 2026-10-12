@@ -38,6 +38,9 @@
 #define JSON_KEY_INVCOLOR	"invertColors"
 #define JSON_KEY_BRIGHTNESS	"Brightness"
 
+#define DEFAULT_FALLBACK_POOL	"pool.nerdminers.org"
+#define DEFAULT_FALLBACK_PORT	3333
+
 // JSON config file SPIFFS (different for backward compatibility with existing devices)
 #define JSON_SPIFFS_KEY_POOLURL		"poolString"
 #define JSON_SPIFFS_KEY_POOLPORT	"portNumber"
@@ -51,6 +54,8 @@
 #define JSON_SPIFFS_KEY_ROTATION	"screenRotation"
 #define JSON_SPIFFS_KEY_THEME		"displayTheme"
 #define JSON_SPIFFS_KEY_CURRENCY	"currency"
+#define JSON_SPIFFS_KEY_FBPOOL		"fallbackPool"
+#define JSON_SPIFFS_KEY_FBPORT		"fallbackPort"
 
 // settings
 struct TSettings
@@ -61,6 +66,8 @@ struct TSettings
 	char BtcWallet[80]{ DEFAULT_WALLETID };
 	char PoolPassword[80]{ DEFAULT_POOLPASS };
 	int PoolPort{ DEFAULT_POOLPORT };
+	String FallbackPoolAddress{ DEFAULT_FALLBACK_POOL };
+	int FallbackPoolPort{ DEFAULT_FALLBACK_PORT };
 	int Timezone{ DEFAULT_TIMEZONE };
 	bool saveStats{ DEFAULT_SAVESTATS };
 	bool invertColors{ DEFAULT_INVERTCOLORS };

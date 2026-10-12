@@ -94,6 +94,11 @@ void minerWorkerHw(void * task_id);
 String printLocalTime(void);
 
 void resetStat();
+void resetSessionStats();
+
+extern volatile uint32_t g_stratumPing;
+extern double g_networkDifficulty;
+extern bool g_usingFallback;
 
 typedef struct{
   uint8_t bytearray_target[32];
