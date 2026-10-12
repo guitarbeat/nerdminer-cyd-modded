@@ -168,6 +168,23 @@ static void handleRoot()
             ".help{font-size:12px;color:var(--muted);margin-top:4px}"
             "input[type=text],input[type=number],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:14px;outline:none;transition:border-color .2s}"
             "input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.2)}"
+            ".cfg-story{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:20px;margin-bottom:18px}"
+            ".cfg-story-hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06)}"
+            ".cfg-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted)}"
+            ".cfg-tag{font-size:11px;font-weight:600;color:var(--muted);background:var(--input-bg);padding:2px 8px;border-radius:4px;border:1px solid var(--card-border)}"
+            ".cfg-flow{display:flex;flex-direction:column;gap:18px}"
+            ".cfg-p{font-size:14px;line-height:2.0;color:#c9d1d9}"
+            ".blank-input{display:inline-block;background:transparent;border:none;border-bottom:2px solid var(--card-border);color:var(--amber);font-size:14px;font-weight:700;padding:2px 6px;margin:0 4px;outline:none;transition:border-color .2s,background .2s;font-family:inherit;vertical-align:baseline}"
+            ".blank-input:focus{border-bottom-color:var(--amber);background:rgba(247,147,26,0.08)}"
+            ".blank-input::placeholder{color:var(--muted);font-weight:400}"
+            ".blank-select{display:inline-block;background:transparent;border:none;border-bottom:2px solid var(--card-border);color:var(--amber);font-size:14px;font-weight:700;padding:2px 6px;margin:0 4px;outline:none;cursor:pointer;transition:border-color .2s;font-family:inherit;vertical-align:baseline}"
+            ".blank-select:focus{border-bottom-color:var(--amber);background:rgba(247,147,26,0.08)}"
+            ".blank-select option{background:#151b23;color:var(--text)}"
+            ".cfg-help{font-size:12px;color:var(--muted);line-height:1.45;margin-top:6px;display:block}"
+            ".preset-pills{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px}"
+            ".preset-pill{background:#21262d;border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:600;padding:4px 10px;border-radius:12px;cursor:pointer;transition:all .2s}"
+            ".preset-pill:hover,.preset-pill.active{background:rgba(247,147,26,0.15);border-color:var(--amber);color:var(--amber)}"
+            ".preset-comment{font-size:12px;color:var(--muted);background:rgba(0,0,0,0.25);border-left:3px solid var(--amber);padding:6px 10px;border-radius:0 4px 4px 0;margin-top:6px}"
             ".presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;margin-bottom:12px}"
             ".preset-btn{background:#21262d;border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:600;padding:4px 9px;border-radius:4px;cursor:pointer;transition:all .2s}"
             ".preset-btn:hover{background:#30363d;border-color:var(--amber)}"
@@ -277,84 +294,62 @@ static void handleRoot()
   }
 
   page += F("<form method='POST' action='/save' id='cfg-form'>"
-            "<div class='card'>"
-            "<div class='card-title'>Stratum Pool Settings</div>"
-            "<div class='presets'>"
-            "<span style='font-size:11px;color:var(--muted);align-self:center;margin-right:2px;'>Low-Diff Presets:</span>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",3333,\"x\")'>Public-Pool (3333 &bull; Recommended)</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"pool.nerdminers.org\",3333,\"x\")'>NerdMiners.org (3333)</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"pool.solomining.de\",3333,\"x\")'>SoloMining.de (3333)</button>"
-            "<button type='button' class='preset-btn' onclick='setPool(\"public-pool.io\",21496,\"x\")'>Public-Pool (21496 &bull; Legacy)</button>"
+            "<div class='cfg-story'>"
+            "<div class='cfg-story-hdr'>"
+            "<span class='cfg-title'>Miner Configuration Guide</span>"
+            "<span class='cfg-tag'>Interactive Setup</span>"
             "</div>"
-            "<div class='field'><label>Pool Host / URL</label>"
-            "<input type='text' id='f-pool' name='pool' value='");
-  page += htmlEscape(Settings.PoolAddress) + F("' required></div>"
-            "<div class='field'><label>Pool Port</label>"
-            "<input type='number' id='f-port' name='port' value='");
-  page += String(Settings.PoolPort) + F("' required>"
-            "<div class='help'>Note: Always use low-difficulty solo pools (diff &lt; 1). Standard vardiff pools will not record low-diff shares.</div></div>"
-            "<div class='field'><label>Pool Password (optional)</label>"
-            "<input type='text' id='f-pass' name='poolpass' value='");
-  page += htmlEscape(String(Settings.PoolPassword)) + F("'>"
-            "<div class='help'>Default is usually 'x' or empty.</div></div>"
+            "<div class='cfg-flow'>"
+            "<!-- 1. Solo Pool & Stratum -->"
+            "<div class='cfg-p'>"
+            "Connect this CYD miner to the solo pool at <input type='text' id='f-pool' class='blank-input' style='min-width:150px' name='pool' value='");
+  page += htmlEscape(Settings.PoolAddress);
+  page += F("' required> on Stratum port <input type='number' id='f-port' class='blank-input' style='width:68px' name='port' value='");
+  page += String(Settings.PoolPort);
+  page += F("' required> using pool password <input type='text' id='f-pass' class='blank-input' style='width:50px' name='poolpass' value='");
+  page += htmlEscape(String(Settings.PoolPassword));
+  page += F("'>."
+            "<div class='preset-pills'>"
+            "<span style='font-size:11px;color:var(--muted);align-self:center;'>Quick Solo Presets:</span>"
+            "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"Public-Pool.io (port 3333) is the official recommended Stratum V1 port for ESP32 miners.\")'>Public-Pool (3333 &bull; Recommended)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"NerdMiners.org (port 3333) is an ESP32-dedicated solo pool optimized for low-hashrate devices.\")'>NerdMiners.org (3333)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"SoloMining.de (port 3333) is a low-latency European solo mining pool.\")'>SoloMining.de (3333)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Port 21496 is the legacy port; if you experience dropped connections or 0 KH/s, switch back to 3333.\")'>Public-Pool (21496 &bull; Legacy)</button>"
             "</div>"
-            "<div class='card'>"
-            "<div class='card-title'>Bitcoin Wallet &amp; Worker</div>"
-            "<div class='field'><label>Payout Bitcoin Address</label>"
-            "<input type='text' name='wallet' value='");
-  page += htmlEscape(String(Settings.BtcWallet)) + F("' required>"
-            "<div class='help'>To label this worker on Public-Pool, append <code>.worker_name</code> (e.g. <code>");
-  page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</div></div>"
+            "<div id='preset-note' class='preset-comment'>Public-Pool.io on port 3333 is the official standard for unencrypted Stratum V1, ensuring stable shares for low-hashrate hardware.</div>"
             "</div>"
-            "<div class='card'>"
-            "<div class='card-title'>Device Touch &amp; Button Guide</div>"
-            "<div style='font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr;gap:10px;'>"
-            "<div style='background:#0d1117;padding:12px;border-radius:6px;border:1px solid var(--card-border)'>"
-            "<strong style='color:var(--text);display:block;margin-bottom:6px;'>&#128070; CYD Touch Zones</strong>"
-            "<div>&bull; <strong>Tap Wordmark:</strong> Cycle accent color</div>"
-            "<div>&bull; <strong>Tap Top-Right:</strong> Toggle screen backlight ON / OFF</div>"
-            "<div>&bull; <strong>Tap Screen Center:</strong> Cycle views (MINE &rarr; MARKET &rarr; CLOCK)</div>"
+            "<!-- 2. Payout Address & Worker -->"
+            "<div class='cfg-p'>"
+            "If this miner finds a winning Bitcoin block, have the pool deposit the entire 3.125 BTC block reward directly into my on-chain Bitcoin address:"
+            "<br>"
+            "<input type='text' name='wallet' id='f-wallet' class='blank-input' style='width:100%;max-width:440px;margin-top:6px;' value='");
+  page += htmlEscape(String(Settings.BtcWallet));
+  page += F("' required>"
+            "<span class='cfg-help'>💡 <strong>Worker naming:</strong> To give your miner a friendly nickname on the pool dashboard, append <code>.worker_name</code> directly to your address (e.g. <code>");
+  page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>). Because solo mining sends payouts directly on-chain, only you hold the keys.</span>"
             "</div>"
-            "<div style='background:#0d1117;padding:12px;border-radius:6px;border:1px solid var(--card-border)'>"
-            "<strong style='color:var(--text);display:block;margin-bottom:6px;'>&#128296; Physical BOOT Button</strong>"
-            "<div>&bull; <strong>1 Click:</strong> Next screen view</div>"
-            "<div>&bull; <strong>Double Click:</strong> Rotate orientation (0&deg;, 90&deg;, 180&deg;, 270&deg;)</div>"
-            "<div>&bull; <strong>Triple Click:</strong> Toggle backlight ON / OFF</div>"
-            "<div>&bull; <strong>Hold 5s:</strong> Reset stored configuration and reboot</div>"
-            "</div>"
-            "</div>"
-            "</div>"
-            "<div class='card'>"
-            "<div class='card-title'>CYD Display &amp; Orientation</div>"
-            "<div class='field'><label>Screen Orientation</label><select name='rot'>");
-
+            "<!-- 3. Screen Orientation, Brightness & Themes -->"
+            "<div class='cfg-p'>"
+            "Display information on the CYD screen in <select name='rot' class='blank-select'>");
   int curRot = Settings.screenRotation;
   page += "<option value='0'" + String(curRot == 0 ? " selected" : "") + ">Portrait &bull; USB at bottom (Default)</option>";
   page += "<option value='1'" + String(curRot == 1 ? " selected" : "") + ">Landscape &bull; USB on right</option>";
   page += "<option value='2'" + String(curRot == 2 ? " selected" : "") + ">Portrait Inverted &bull; USB at top</option>";
   page += "<option value='3'" + String(curRot == 3 ? " selected" : "") + ">Landscape Inverted &bull; USB on left</option>";
-
-  page += F("</select><div class='help'>Can also be toggled anytime by double-clicking the physical BOOT button.</div></div>"
-            "<div class='field'><label>Screen Brightness</label>"
-            "<div class='slider-row'>"
+  page += F("</select> orientation at <span id='b-val' style='color:var(--amber);font-weight:700'>");
+  page += String(Settings.Brightness) + " (" + String((Settings.Brightness * 100) / 255) + F("%)</span> screen brightness:"
+            "<div class='slider-row' style='margin:10px 0;'>"
             "<input type='range' name='brightness' id='b-slider' min='10' max='255' value='");
   page += String(Settings.Brightness) + F("' oninput='updateBright(this.value)'>"
-            "<span class='slider-val' id='b-val'>");
-  page += String(Settings.Brightness) + " (" + String((Settings.Brightness * 100) / 255) + F("%)</span>"
-            "</div></div>"
-            "<div class='field'><label class='checkbox-label'>"
+            "<label class='checkbox-label' style='margin-left:14px;white-space:nowrap;'>"
             "<input type='checkbox' name='invert'");
   if (Settings.invertColors) page += F(" checked");
-  page += F("> Invert display colors</label>"
-            "<div class='help'>Enable if the screen colors look inverted or cyan.</div></div>"
-            "</div>");
-
-  // Display Themes Selector Card
+  page += F("> Invert colors</label></div>"
+            "<div style='margin-top:8px;'>"
+            "Style the screen with your chosen color palette (tap any card to switch instantly):"
+            "<div class='theme-grid' style='margin-top:10px;'>");
   int curTheme = Settings.displayTheme;
-  page += F("<div class='card'>"
-            "<div class='card-title'>Display Theme (Live Instant Switch)</div>"
-            "<div class='theme-grid'>"
-            "<div class='theme-card");
+  page += F("<div class='theme-card");
   if (curTheme == 0) page += F(" active");
   page += F("' id='thm-0' onclick='selectTheme(0,\"#f7931a\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f7931a'></span><span class='swatch-dot' style='background:#10141c'></span></div>"
@@ -388,13 +383,10 @@ static void handleRoot()
             "<input type='hidden' id='f-theme' name='theme' value='");
   page += String(curTheme) + F("'>"
             "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Live theme applied instantly to CYD screen!</div>"
-            "</div>");
-
-  page += F("<div class='card'>"
-            "<div class='card-title'>Regional &amp; System Preferences</div>"
-            "<div class='field'><label>Timezone (UTC Offset)</label>"
-            "<div style='display:flex;gap:10px'>"
-            "<select id='tz-select' onchange='applyTz(this.value)' style='flex:1'>"
+            "</div></div>"
+            "<!-- 4. Timezone, Currency & Stats Persistence -->"
+            "<div class='cfg-p'>"
+            "Set the on-screen clock to <select id='tz-select' onchange='applyTz(this.value)' class='blank-select'>"
             "<option value=''>Preset Timezones...</option>"
             "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
             "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
@@ -407,12 +399,8 @@ static void handleRoot()
             "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
             "<option value='9'>UTC+9 (Japan, Korea)</option>"
             "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
-            "</select>"
-            "<input type='number' name='tz' id='f-tz' style='width:90px' min='-12' max='14' value='");
-  page += String(Settings.Timezone) + F("'>"
-            "</div></div>"
-            "<div class='field'><label>BTC Price Fiat Currency</label><select name='currency'>");
-
+            "</select> (UTC offset <input type='number' name='tz' id='f-tz' class='blank-input' style='width:52px' min='-12' max='14' value='");
+  page += String(Settings.Timezone) + F("'>) and quote live Bitcoin market prices in <select name='currency' class='blank-select'>");
   for (int i = 0; i < kCurrencyCount; i++)
   {
     page += "<option value='" + String(kCurrencies[i].code) + "'";
@@ -420,14 +408,30 @@ static void handleRoot()
       page += " selected";
     page += ">" + String(kCurrencies[i].label) + "</option>";
   }
-
-  page += F("</select></div>"
-            "<div class='field'><label class='checkbox-label'>"
+  page += F("</select>."
+            "<div style='margin-top:10px;'>"
+            "<label class='checkbox-label'>"
             "<input type='checkbox' name='savestats'");
   if (Settings.saveStats) page += F(" checked");
-  page += F("> Persist mining statistics to flash</label>"
-            "<div class='help'>Retains total hashes and valid share count across reboots.</div></div>"
+  page += F("> <span><strong>Remember lifetime work:</strong> Persist total hashes and submitted share count across power cycles in ESP32 flash memory.</span>"
+            "</label></div></div>"
+            "</div></div>"
+            "<div class='card' style='background:rgba(21,27,35,0.6);border:1px solid rgba(255,255,255,0.06);'>"
+            "<div class='card-title' style='color:var(--muted);font-size:12px;'>Device Touch &amp; Physical Button Guide</div>"
+            "<div style='font-size:12px;color:var(--muted);display:grid;grid-template-columns:1fr;gap:10px;'>"
+            "<div style='background:#0d1117;padding:12px;border-radius:6px;border:1px solid var(--card-border)'>"
+            "<strong style='color:var(--text);display:block;margin-bottom:6px;'>&#128070; CYD Touch Zones</strong>"
+            "<div>&bull; <strong>Tap Wordmark:</strong> Cycle accent color</div>"
+            "<div>&bull; <strong>Tap Top-Right:</strong> Toggle screen backlight ON / OFF</div>"
+            "<div>&bull; <strong>Tap Screen Center:</strong> Cycle views (MINE &rarr; MARKET &rarr; CLOCK)</div>"
             "</div>"
+            "<div style='background:#0d1117;padding:12px;border-radius:6px;border:1px solid var(--card-border)'>"
+            "<strong style='color:var(--text);display:block;margin-bottom:6px;'>&#128296; Physical BOOT Button</strong>"
+            "<div>&bull; <strong>1 Click:</strong> Next screen view</div>"
+            "<div>&bull; <strong>Double Click:</strong> Rotate orientation (0&deg;, 90&deg;, 180&deg;, 270&deg;)</div>"
+            "<div>&bull; <strong>Triple Click:</strong> Toggle backlight ON / OFF</div>"
+            "<div>&bull; <strong>Hold 5s:</strong> Reset stored configuration and reboot</div>"
+            "</div></div></div>"
             "<div class='actions'>"
             "<button type='submit' class='btn-save'>Save &amp; Restart NerdMiner</button>"
             "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
@@ -439,7 +443,8 @@ static void handleRoot()
             "<p style='color:var(--muted);font-size:14px;max-width:320px'>Reconnecting in <span id='cd'>8</span> seconds...</p>"
             "</div>"
             "<script>"
-            "function setPool(h,p,pass){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;}"
+            "function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}"
+            "function setPool(h,p,pass){choosePreset(h,p,pass,'Switched pool to '+h+':'+p);}"
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
             "function selectTheme(id,col){"
