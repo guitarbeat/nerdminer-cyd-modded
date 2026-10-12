@@ -117,7 +117,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(15000);
+  page.reserve(20000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -140,25 +140,16 @@ static void handleRoot()
             ".dot-green{background:var(--green);box-shadow:0 0 8px var(--green)}"
             ".dot-amber{background:var(--warn);box-shadow:0 0 8px var(--warn)}"
             ".dot-gray{background:var(--muted)}"
-            ".sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}"
-            ".sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted)}"
-            ".btn-toggle{background:transparent;border:1px solid var(--card-border);color:var(--muted);font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;cursor:pointer;transition:all .2s}"
-            ".btn-toggle:hover{color:var(--text);border-color:var(--muted)}"
-            ".pow-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px}"
-            "@media(min-width:480px){.pow-grid{grid-template-columns:repeat(2,1fr)}}"
-            ".pow-card{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:14px;display:flex;flex-direction:column;transition:border-color .2s}"
-            ".pow-card:hover{border-color:rgba(255,255,255,0.18)}"
-            ".pow-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}"
-            ".pow-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}"
-            ".pow-stage{font-size:11px;color:var(--muted);font-weight:500;opacity:0.75}"
-            ".pow-val{font-size:22px;font-weight:800;color:var(--text);font-feature-settings:'tnum';line-height:1.2}"
-            ".pow-unit{font-size:12px;font-weight:600;color:var(--muted)}"
-            ".pow-sub{font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:10px}"
-            ".pow-expl{font-size:12px;color:var(--muted);line-height:1.45;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;margin-top:auto}"
-            ".pow-grid.compact .pow-expl{display:none}"
-            ".pow-grid.compact .pow-sub{margin-bottom:0}"
-            ".pow-note{background:rgba(21,27,35,0.6);border:1px solid var(--card-border);border-radius:6px;padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:16px}"
-            ".pow-note.compact{display:none}"
+            ".story-card{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:18px 20px;margin-bottom:14px}"
+            ".story-hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06)}"
+            ".story-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted)}"
+            ".story-tag{font-size:11px;font-weight:600;color:var(--muted);background:var(--input-bg);padding:2px 8px;border-radius:4px;border:1px solid var(--card-border)}"
+            ".story-flow{display:flex;flex-direction:column;gap:14px}"
+            ".story-p{display:flex;gap:12px;align-items:flex-start;font-size:13.5px;line-height:1.6;color:#c9d1d9}"
+            ".story-num{font-size:11px;font-weight:800;color:var(--muted);background:var(--input-bg);border:1px solid var(--card-border);width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}"
+            ".story-text{flex:1}"
+            ".hl-key{color:var(--amber);font-weight:700}"
+            ".hl-val{color:var(--text);font-weight:700;font-feature-settings:'tnum'}"
             ".diag-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}"
             "@media(min-width:480px){.diag-strip{grid-template-columns:repeat(4,1fr)}}"
             ".diag-item{background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:10px 12px}"
@@ -223,43 +214,43 @@ static void handleRoot()
     page += F("dot-gray'></span><span id='st-txt'>IDLE</span>");
 
   page += F("</div></header>"
-            "<div class='sec-hdr'>"
-            "<span class='sec-title'>How Your Miner Works (Proof of Work)</span>"
-            "<button type='button' class='btn-toggle' id='btn-guide' onclick='toggleGuide()'>Hide Guide</button>"
+            "<div class='story-card'>"
+            "<div class='story-hdr'>"
+            "<span class='story-title'>Live Miner Explanation</span>"
+            "<span class='story-tag'>Solo PoW Lottery</span>"
             "</div>"
-            "<div class='pow-grid' id='pow-grid'>"
-            "<div class='pow-card'>"
-            "<div class='pow-meta'><span class='pow-label'>Hashrate</span><span class='pow-stage'>Guessing Speed</span></div>"
-            "<div class='pow-val' id='st-hash'>");
-  page += d.currentHashRate.length() ? d.currentHashRate : String("0");
-  page += F(" <span class='pow-unit'>KH/s</span></div>"
-            "<div class='pow-sub'>Nearly 1,000,000 guesses every second</div>"
-            "<p class='pow-expl'>Think of mining like cracking a giant combination lock. Your chip tries nearly one million combinations every second, testing numbers non-stop to see if one unlocks a Bitcoin block.</p>"
-            "</div>"
-            "<div class='pow-card'>"
-            "<div class='pow-meta'><span class='pow-label'>Shares</span><span class='pow-stage'>Proof of Effort</span></div>"
-            "<div class='pow-val' id='st-shares'>");
-  page += d.completedShares.length() ? d.completedShares : String("0");
-  page += F("</div><div class='pow-sub'>Accepted by solo pool</div>"
-            "<p class='pow-expl'>Hitting the jackpot is rare, so the pool gives your chip easier practice targets. Every solved target gets turned in like homework to prove your miner is actively working.</p>"
-            "</div>"
-            "<div class='pow-card'>"
-            "<div class='pow-meta'><span class='pow-label'>Best Diff</span><span class='pow-stage'>Luckiest Guess</span></div>"
-            "<div class='pow-val' id='st-diff'>");
-  page += d.bestDiff.length() ? d.bestDiff : String("0.0000");
-  page += F("</div><div class='pow-sub'>Personal chip high score</div>"
-            "<p class='pow-expl'>Think of this as your personal high score. Every guess is graded on how rare it is. A score of 42 means this was your luckiest guess yet—42 times rarer than normal. The higher this number climbs, the closer you got!</p>"
-            "</div>"
-            "<div class='pow-card'>"
-            "<div class='pow-meta'><span class='pow-label'>Block Reward</span><span class='pow-stage'>The Grand Prize</span></div>"
-            "<div class='pow-val' style='color:var(--amber)'>3.125 BTC</div>"
-            "<div class='pow-sub'>~$200,000+ USD directly to your wallet</div>"
-            "<p class='pow-expl'>If your chip finds the magic combination that solves a block, there is no sharing with anyone else. The entire 3.125 Bitcoin bounty plus every transaction fee goes straight to you.</p>"
-            "</div>"
-            "</div>"
-            "<div class='pow-note' id='pow-note'>"
-            "<strong style='color:var(--text)'>Why does this exist?</strong> In 2009, Bitcoin was born on ordinary computer chips just like this. Today giant data centers do the heavy lifting, but this desk gadget runs the exact same rules and math—a real solo lottery ticket on your desk."
-            "</div>"
+            "<div class='story-flow'>"
+            "<div class='story-p'><span class='story-num'>1</span><div class='story-text'>"
+            "Your CYD is currently making about <strong class='hl-val'><span id='dyn-hps'>");
+  float hr = d.currentHashRate.toFloat();
+  unsigned long hps = (unsigned long)(hr * 1000.0f);
+  page += (hps > 0 ? String(hps) : F("0"));
+  page += F("</span> guesses every second</strong>. This guessing speed is called the <strong class='hl-key'>hashrate</strong>, and it is measured in <strong class='hl-val'>KH/s (thousands of hashes per second)</strong>. At this pace, it tests approximately <strong class='hl-val'><span id='dyn-hpd'>--</span></strong> possible solutions every day.</div></div>"
+            "<div class='story-p'><span class='story-num'>2</span><div class='story-text'>"
+            "In <strong class='hl-val'><span id='dyn-uptime'>");
+  page += (d.timeMining.length() ? d.timeMining : F("--"));
+  page += F("</span></strong> since booting, this miner has completed approximately <strong class='hl-val'><span id='dyn-totwork'>");
+  uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
+  if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
+  else page += String((unsigned long)mhashes) + F(" million");
+  page += F(" hash attempts</strong>.</div></div>"
+            "<div class='story-p'><span class='story-num'>3</span><div class='story-text'>"
+            "So far, your miner has submitted <strong class='hl-key'><span id='dyn-shares'>");
+  page += (d.completedShares.length() ? d.completedShares : F("0"));
+  page += F("</span> shares</strong> (averaging roughly one share every <strong class='hl-val'><span id='dyn-hpshare'>--</span></strong>, or about <strong class='hl-val'><span id='dyn-tpshare'>--</span></strong>). A <strong class='hl-key'>share</strong> is proof that the miner is actually doing the work: it found a result difficult enough for the pool to accept and verify, even though it was not difficult enough to solve a real Bitcoin block.</div></div>"
+            "<div class='story-p'><span class='story-num'>4</span><div class='story-text'>"
+            "Your best result so far reached a <strong class='hl-key'>difficulty of <span id='dyn-diff'>");
+  page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
+  page += F("</span></strong>. Only about 1 in every <strong class='hl-val'><span id='dyn-rarity'>--</span></strong> random hashes would be expected to score this well or better. This is a statistical measure of rarity&mdash;higher is better.</div></div>"
+            "<div class='story-p'><span class='story-num'>5</span><div class='story-text'>"
+            "A valid Bitcoin block currently requires roughly <strong class='hl-val'>100 trillion</strong> network difficulty. Your best result reached about <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of the target difficulty required to solve a block.</div></div>"
+            "<div class='story-p'><span class='story-num'>6</span><div class='story-text'>"
+            "At your current speed, the estimated chance of finding a Bitcoin block is about <strong class='hl-val'><span id='dyn-dayodds'>--</span> per day</strong> (or <strong class='hl-val'><span id='dyn-yrodds'>--</span> per year</strong>). The statistical average wait time would be roughly <strong class='hl-val'><span id='dyn-avgwait'>--</span></strong>. You could theoretically solve a block on your very next guess&mdash;or never.</div></div>"
+            "<div class='story-p'><span class='story-num'>7</span><div class='story-text'>"
+            "If your miner solves a block, there is no sharing with a pool: you claim the full current <strong class='hl-key'>block reward of 3.125 BTC</strong> plus transaction fees (worth over <strong class='hl-val'>$200,000+ USD</strong>), paid directly to your configured wallet.</div></div>"
+            "<div class='story-p'><span class='story-num'>8</span><div class='story-text'>"
+            "This CYD represents roughly <strong class='hl-val'><span id='dyn-netpow'>--</span></strong> of Bitcoin's worldwide computing power (~700 EH/s). At ~1.2 W of typical board power draw, it uses less than 1 kWh per month and costs just pennies to run.</div></div>"
+            "</div></div>"
             "<div class='diag-strip'>"
             "<div class='diag-item'><span class='diag-label'>Core Temp</span><span class='diag-val'><span id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
@@ -451,7 +442,6 @@ static void handleRoot()
             "function setPool(h,p,pass){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;}"
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
-            "function toggleGuide(){const g=document.getElementById('pow-grid'),n=document.getElementById('pow-note'),b=document.getElementById('btn-guide');const c=g.classList.toggle('compact');if(n)n.classList.toggle('compact',c);b.textContent=c?'Show Guide':'Hide Guide';}"
             "function selectTheme(id,col){"
             "document.getElementById('f-theme').value=id;"
             "document.querySelectorAll('.theme-card').forEach(c=>c.classList.remove('active'));"
@@ -468,10 +458,30 @@ static void handleRoot()
             "function checkBack(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(checkBack,1000));}"
             "document.getElementById('cfg-form').addEventListener('submit',()=>setTimeout(pollReboot,100));"
             "function rebootDevice(){if(confirm('Reboot the miner now?')){fetch('/restart',{method:'POST'}).then(pollReboot).catch(pollReboot);}}"
-            "setInterval(()=>{fetch('/api/stats').then(r=>r.json()).then(d=>{"
-            "if(d.hashrate)document.getElementById('st-hash').innerHTML=d.hashrate+\" <span class='pow-unit'>KH/s</span>\";"
-            "if(d.shares!==undefined)document.getElementById('st-shares').textContent=d.shares;"
-            "if(d.best_diff)document.getElementById('st-diff').textContent=d.best_diff;"
+            "function fmtNum(n){if(isNaN(n)||n<=0)return'0';if(n>=1e12)return(n/1e12).toFixed(2)+' trillion';if(n>=1e9)return(n/1e9).toFixed(1)+' billion';if(n>=1e6)return(n/1e6).toFixed(1)+' million';return Math.round(n).toLocaleString();}"
+            "function fmtUptime(u){if(!u)return'--';const p=u.trim().split(/\\s+/);let d=0,t=u;if(p.length===2){d=parseInt(p[0])||0;t=p[1];}const c=t.split(':');if(c.length===3){const hrs=parseInt(c[0])||0,mins=parseInt(c[1])||0;return(d>0?d+'d ':'')+(hrs>0?hrs+'h ':'')+mins+'m';}return u;}"
+            "function updateStats(d){"
+            "const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;"
+            "const mhashes=Number(d.mhashes)||0,totHashes=mhashes*1e6,shares=parseInt(d.shares)||0,diff=parseFloat(d.best_diff)||0;"
+            "const eHps=document.getElementById('dyn-hps');if(eHps)eHps.textContent=hps.toLocaleString();"
+            "const eHpd=document.getElementById('dyn-hpd');if(eHpd)eHpd.textContent=fmtNum(hpd);"
+            "const eUp=document.getElementById('dyn-uptime');if(eUp)eUp.textContent=fmtUptime(d.uptime);"
+            "const eTot=document.getElementById('dyn-totwork');if(eTot)eTot.textContent=fmtNum(totHashes);"
+            "const eSh=document.getElementById('dyn-shares');if(eSh)eSh.textContent=shares.toLocaleString();"
+            "const hPerShare=shares>0?(totHashes/shares):0;"
+            "const eHpshare=document.getElementById('dyn-hpshare');if(eHpshare)eHpshare.textContent=fmtNum(hPerShare)+' hashes';"
+            "const tPerShareSec=(hps>0&&hPerShare>0)?(hPerShare/hps):0;"
+            "const eTpshare=document.getElementById('dyn-tpshare');if(eTpshare){if(tPerShareSec>=3600)eTpshare.textContent=(tPerShareSec/3600).toFixed(1)+' hours';else if(tPerShareSec>=60)eTpshare.textContent=Math.round(tPerShareSec/60)+' minutes';else eTpshare.textContent=Math.round(tPerShareSec)+' seconds';}"
+            "const eDiff=document.getElementById('dyn-diff');if(eDiff)eDiff.textContent=diff>0?diff.toFixed(3):'0.000';"
+            "const rarity=diff*4294967296;"
+            "const eRar=document.getElementById('dyn-rarity');if(eRar)eRar.textContent=diff>0?fmtNum(rarity):'N/A';"
+            "const netDiff=100e12;"
+            "const eNetpct=document.getElementById('dyn-netpct');if(eNetpct){if(diff>0){const pct=(diff/netDiff)*100;eNetpct.textContent=pct.toExponential(2)+'% (~'+pct.toFixed(8)+'%)';}else eNetpct.textContent='0%';}"
+            "const targetHashes=netDiff*4294967296,dayOdds=hpd>0?(targetHashes/hpd):0,yrOdds=dayOdds/365.25;"
+            "const eDayOdds=document.getElementById('dyn-dayodds');if(eDayOdds)eDayOdds.textContent=dayOdds>0?('1 in '+fmtNum(dayOdds)):'--';"
+            "const eYrOdds=document.getElementById('dyn-yrodds');if(eYrOdds)eYrOdds.textContent=yrOdds>0?('1 in '+fmtNum(yrOdds)):'--';"
+            "const eAvgWait=document.getElementById('dyn-avgwait');if(eAvgWait)eAvgWait.textContent=yrOdds>0?(fmtNum(yrOdds)+' years'):'--';"
+            "const netHps=700e18,eNetpow=document.getElementById('dyn-netpow');if(eNetpow){const netSharePct=(hps/netHps)*100;eNetpow.textContent=netSharePct.toExponential(1)+'%';}"
             "if(d.temp)document.getElementById('st-temp').textContent=d.temp;"
             "if(d.uptime)document.getElementById('st-uptime').textContent=d.uptime;"
             "if(d.free_heap)document.getElementById('st-heap').textContent=Math.round(d.free_heap/1024)+' KB';"
@@ -480,7 +490,9 @@ static void handleRoot()
             "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent='HASHING';}"
             "else if(d.status==='connecting'){dot.className='dot dot-amber';txt.textContent='CONNECTING';}"
             "else{dot.className='dot dot-gray';txt.textContent='IDLE';}"
-            "}).catch(()=>{});},3000);"
+            "}"
+            "function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}"
+            "pollStats();setInterval(pollStats,3000);"
             "</script></body></html>");
 
   webCfgServer.send(200, "text/html", page);
