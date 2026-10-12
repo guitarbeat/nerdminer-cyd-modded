@@ -127,7 +127,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(20000);
+  page.reserve(26000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -150,6 +150,8 @@ static void handleRoot()
             ".dot-green{background:var(--green);box-shadow:0 0 8px var(--green)}"
             ".dot-amber{background:var(--warn);box-shadow:0 0 8px var(--warn)}"
             ".dot-gray{background:var(--muted)}"
+            ".fact-banner{background:linear-gradient(135deg,rgba(247,147,26,0.12),rgba(34,197,94,0.08));border:1px solid rgba(247,147,26,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5;color:#e6edf3}"
+            ".fact-icon{font-size:18px;line-height:1;flex-shrink:0}"
             ".story-card{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:18px 20px;margin-bottom:14px}"
             ".story-hdr{display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06)}"
             ".story-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted)}"
@@ -244,6 +246,11 @@ static void handleRoot()
     page += F("dot-gray'></span><span id='st-txt'>IDLE</span>");
 
   page += F("</div></header>"
+            "<div class='fact-banner'>"
+            "<div class='fact-icon'>💡</div>"
+            "<div class='fact-text'>"
+            "<strong>Historical Perspective:</strong> In 2009 (Satoshi era), 3 hours of CPU mining on an ordinary home computer could earn ~100 BTC (worth over <strong>$6.8M USD</strong> today) with only <strong>8 leading zeros</strong>. Today, Bitcoin requires <strong>18 leading zeros</strong> and over 800 EH/s worldwide. That is why solo mining on this ESP32 is an educational lottery ticket!"
+            "</div></div>"
             "<div class='story-card'>"
             "<div class='story-hdr'>"
             "<span class='story-title'>Live Miner Explanation</span>"
@@ -251,11 +258,11 @@ static void handleRoot()
             "</div>"
             "<div class='story-flow'>"
             "<div class='story-p'><span class='story-num'>1</span><div class='story-text'>"
-            "Your CYD is currently making about <strong class='hl-val'><span id='dyn-hps'>");
+            "Your CYD builds an 80-byte block header (previous block hash, transaction Merkle root, timestamp, and target bits). The <strong class='hl-key'>nonce (number used once)</strong> is the <em>only</em> dial it turns. It is currently making about <strong class='hl-val'><span id='dyn-hps'>");
   float hr = d.currentHashRate.toFloat();
   unsigned long hps = (unsigned long)(hr * 1000.0f);
   page += (hps > 0 ? String(hps) : F("0"));
-  page += F("</span> guesses every second</strong>. This guessing speed is called the <strong class='hl-key'>hashrate</strong>, and it is measured in <strong class='hl-val'>KH/s (thousands of hashes per second)</strong>. At this pace, it tests approximately <strong class='hl-val'><span id='dyn-hpd'>--</span></strong> possible solutions every day.</div></div>"
+  page += F("</span> guesses every second</strong> through SHA-256 (a one-way cryptographic function where every +1 totally scrambles the hash). This guessing speed is called the <strong class='hl-key'>hashrate</strong>, measured in <strong class='hl-val'>KH/s (thousands of hashes per second)</strong>. At this pace, it tests approximately <strong class='hl-val'><span id='dyn-hpd'>--</span></strong> possible solutions every day.</div></div>"
             "<div class='story-p'><span class='story-num'>2</span><div class='story-text'>"
             "In <strong class='hl-val'><span id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
@@ -273,7 +280,7 @@ static void handleRoot()
   page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
   page += F("</span></strong>. Only about 1 in every <strong class='hl-val'><span id='dyn-rarity'>--</span></strong> random hashes would be expected to score this well or better. This is a statistical measure of rarity&mdash;higher is better.</div></div>"
             "<div class='story-p'><span class='story-num'>5</span><div class='story-text'>"
-            "A valid Bitcoin block currently requires roughly <strong class='hl-val'><span id='dyn-netdiff'>100 trillion</span></strong> network difficulty. Your best result reached about <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of the target difficulty required to solve a block.</div></div>"
+            "Bitcoin's test condition is <code style='color:var(--amber);background:var(--input-bg);padding:2px 6px;border-radius:4px;'>hash &lt; target</code>. Because the target is astronomically small, winning hashes naturally begin with <strong class='hl-val'>18+ leading zeros</strong> (roughly <strong class='hl-val'><span id='dyn-netdiff'>100 trillion</span></strong> network difficulty). Your best result reached about <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of the target difficulty required to solve a block.</div></div>"
             "<div class='story-p'><span class='story-num'>6</span><div class='story-text'>"
             "At your current speed, the estimated chance of finding a Bitcoin block is about <strong class='hl-val'><span id='dyn-dayodds'>--</span> per day</strong> (or <strong class='hl-val'><span id='dyn-yrodds'>--</span> per year</strong>). The statistical average wait time would be roughly <strong class='hl-val'><span id='dyn-avgwait'>--</span></strong>. You could theoretically solve a block on your very next guess&mdash;or never.</div></div>"
             "<div class='story-p'><span class='story-num'>7</span><div class='story-text'>"
@@ -296,7 +303,39 @@ static void handleRoot()
             "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
   page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
             "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
-            "</div>");
+            "</div>"
+            "<div class='card' id='pow-sim-card'>"
+            "<div class='card-title'>"
+            "<span>⚡ Interactive Proof-of-Work Simulator</span>"
+            "<span class='story-tag' style='margin-left:auto;'>Browser SHA-256</span>"
+            "</div>"
+            "<p style='font-size:13px;color:var(--muted);margin-bottom:12px;'>"
+            "Experience the exact guess-and-check loop your CYD runs millions of times. Click below to increment the nonce and see how double-SHA256 completely randomizes the 256-bit hash:"
+            "</p>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;'>"
+            "<div style='color:var(--muted);margin-bottom:6px;'>Block Header: <span style='color:var(--text);'>PrevHash + MerkleRoot + Time + Target</span></div>"
+            "<div style='display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0;'>"
+            "<div><strong>Nonce Dial:</strong> <span id='sim-nonce' style='color:var(--amber);font-size:14px;font-weight:700;'>0</span></div>"
+            "<div style='display:flex;align-items:center;gap:6px;'>"
+            "<label style='font-size:11px;color:var(--muted);margin:0;'>Target Zeros:</label>"
+            "<select id='sim-diff' style='padding:2px 6px;font-size:11px;width:auto;'>"
+            "<option value='3'>3 Zeros (Very Easy)</option>"
+            "<option value='4' selected>4 Zeros (Easy)</option>"
+            "<option value='5'>5 Zeros (Medium)</option>"
+            "<option value='6'>6 Zeros (Hard)</option>"
+            "</select>"
+            "</div></div>"
+            "<div style='margin-top:6px;word-break:break-all;'>"
+            "<div style='color:var(--muted);font-size:11px;'>Resulting 256-Bit Hash:</div>"
+            "<div id='sim-hash' style='font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;'>Click 'Test Next Nonce' to hash</div>"
+            "</div>"
+            "<div id='sim-result' style='margin-top:8px;font-size:12px;font-weight:700;color:var(--muted);'>Status: Ready to test</div>"
+            "</div>"
+            "<div style='display:flex;gap:8px;flex-wrap:wrap;'>"
+            "<button type='button' class='preset-pill active' onclick='simStep()' style='padding:6px 14px;font-size:12px;'>Test Next Nonce (+1)</button>"
+            "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()' style='padding:6px 14px;font-size:12px;'>&#9654; Auto Mine (10 H/s)</button>"
+            "<button type='button' class='preset-pill' onclick='simReset()' style='padding:6px 10px;font-size:12px;'>Reset</button>"
+            "</div></div>");
 
   if (isPublicPool && cleanWallet.length() > 0)
   {
@@ -521,6 +560,49 @@ static void handleRoot()
             "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent=d.using_fallback?'HASHING (FALLBACK)':'HASHING';}"
             "else if(d.status==='connecting'){dot.className='dot dot-amber';txt.textContent='CONNECTING';}"
             "else{dot.className='dot dot-gray';txt.textContent='IDLE';}"
+            "let simN=0,simAutoTimer=null;"
+            "async function sha256Hex(str){"
+            "try{"
+            "const buf=new TextEncoder().encode(str);"
+            "const h1=await crypto.subtle.digest('SHA-256',buf);"
+            "const h2=await crypto.subtle.digest('SHA-256',h1);"
+            "const arr=Array.from(new Uint8Array(h2));"
+            "return arr.map(b=>b.toString(16).padStart(2,'0')).join('');"
+            "}catch(e){return'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';}"
+            "}"
+            "async function simStep(){"
+            "simN++;"
+            "const eN=document.getElementById('sim-nonce');if(eN)eN.textContent=simN;"
+            "const targetZeros=parseInt(document.getElementById('sim-diff').value)||4;"
+            "const targetPrefix='0'.repeat(targetZeros);"
+            "const hash=await sha256Hex('BlockHeader-PrevHash-Merkle-Nonce-'+simN);"
+            "const eHash=document.getElementById('sim-hash');"
+            "const eRes=document.getElementById('sim-result');"
+            "if(hash.startsWith(targetPrefix)){"
+            "if(eHash)eHash.innerHTML='<span style=\"color:var(--green);font-weight:800;\">'+hash.substring(0,targetZeros)+'</span>'+hash.substring(targetZeros);"
+            "if(eRes)eRes.innerHTML='<span style=\"color:var(--green);\">&#10003; SUCCESS! Hash is below target ('+targetZeros+' leading zeros)!</span>';"
+            "if(simAutoTimer)simToggleAuto();"
+            "}else{"
+            "if(eHash)eHash.innerHTML='<span style=\"color:var(--red);\">'+hash.substring(0,4)+'</span>'+hash.substring(4);"
+            "if(eRes)eRes.innerHTML='<span style=\"color:var(--red);\">&#10005; TOO LARGE (Needs '+targetZeros+' leading zeros)</span>';"
+            "}"
+            "}"
+            "function simToggleAuto(){"
+            "const btn=document.getElementById('sim-auto-btn');"
+            "if(simAutoTimer){"
+            "clearInterval(simAutoTimer);simAutoTimer=null;"
+            "if(btn)btn.textContent='&#9654; Auto Mine (10 H/s)';"
+            "}else{"
+            "simAutoTimer=setInterval(simStep,100);"
+            "if(btn)btn.textContent='&#9208; Pause Mining';"
+            "}"
+            "}"
+            "function simReset(){"
+            "if(simAutoTimer)simToggleAuto();"
+            "simN=0;"
+            "const eN=document.getElementById('sim-nonce');if(eN)eN.textContent='0';"
+            "const eH=document.getElementById('sim-hash');if(eH)eH.textContent='Click \"Test Next Nonce\" to hash';"
+            "const eR=document.getElementById('sim-result');if(eR)eR.textContent='Status: Ready to test';"
             "}"
             "function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}"
             "pollStats();setInterval(pollStats,3000);"

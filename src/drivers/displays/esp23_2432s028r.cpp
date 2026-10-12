@@ -944,12 +944,12 @@ static void chromeExplainer(TFT_eSPI &d)
     text(d, "< Target", 206, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
 
     panel(d, 6, 106, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TARGET TEST: MUST BE NUMERICALLY SMALLER", 12, 111, 8, C_DIM, C_PANEL);
-    text(d, "Attempt 1: 9F28B4A1...  [ TOO BIG  X ]", 12, 125, 8, C_BAD, C_PANEL);
-    text(d, "Attempt 2: 17A904C8...  [ TOO BIG  X ]", 12, 137, 8, C_BAD, C_PANEL);
+    text(d, "NONCE DIAL: GUESS & CHECK", 12, 111, 8, C_DIM, C_PANEL);
+    text(d, "Nonce 0: 9F28B4...  [ TOO BIG  X ]", 12, 125, 8, C_BAD, C_PANEL);
+    text(d, "Nonce 1: 17A904...  [ TOO BIG  X ]", 12, 137, 8, C_BAD, C_PANEL);
     d.drawFastHLine(12, 150, 216, C_EDGE);
-    text(d, "Target:    000039A2...  [ SMALLER  V ]", 12, 154, 8, C_GOOD, C_PANEL);
-    text(d, "Rule: Numbers below target start with 0s!", 12, 169, 8, C_DIM, C_PANEL);
+    text(d, "Target:  000039...  [ SMALLER  V ]", 12, 154, 8, C_GOOD, C_PANEL);
+    text(d, "2009: 8 zeros | Today: 18 zeros (132T)", 12, 169, 8, C_GOLD, C_PANEL);
 
     panel(d, 6, 196, 228, 66, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "WHAT YOUR CYD IS DOING", 12, 201, 8, C_DIM, C_PANEL);
@@ -980,27 +980,27 @@ static void chromeExplainer(TFT_eSPI &d)
     text(d, "< Target ?", 275, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
 
     panel(d, 8, 90, 304, 66, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TARGET TEST: IS HASH NUMERICALLY SMALLER THAN TARGET?", 14, 94, 8, C_DIM, C_PANEL);
+    text(d, "THE NONCE DIAL: GUESS & CHECK (SHA-256 IS 1-WAY)", 14, 94, 8, C_DIM, C_PANEL);
 
-    text(d, "Attempt 1:", 14, 107, 8, C_DIM, C_PANEL);
-    text(d, "9F28B4A18E...", 66, 107, 9, C_TEXT, C_PANEL);
+    text(d, "Nonce 0:", 14, 107, 8, C_DIM, C_PANEL);
+    text(d, "9F28B4A18E...", 64, 107, 9, C_TEXT, C_PANEL);
     text(d, "[ TOO LARGE  X ]", 146, 107, 8, C_BAD, C_PANEL);
 
-    text(d, "Attempt 2:", 14, 119, 8, C_DIM, C_PANEL);
-    text(d, "17A904C83D...", 66, 119, 9, C_TEXT, C_PANEL);
+    text(d, "Nonce 1:", 14, 119, 8, C_DIM, C_PANEL);
+    text(d, "17A904C83D...", 64, 119, 9, C_TEXT, C_PANEL);
     text(d, "[ TOO LARGE  X ]", 146, 119, 8, C_BAD, C_PANEL);
 
     d.drawFastHLine(14, 131, 206, C_EDGE);
 
     text(d, "Target:", 14, 134, 8, C_METER, C_PANEL);
-    text(d, "000039A2FF...", 66, 134, 9, C_GOOD, C_PANEL);
+    text(d, "000039A2FF...", 64, 134, 9, C_GOOD, C_PANEL);
     text(d, "[ SMALL ENOUGH V ]", 146, 134, 8, C_GOOD, C_PANEL);
 
     d.drawFastVLine(228, 94, 58, C_EDGE);
-    text(d, "NUMERIC RULE", 234, 98, 8, C_METER, C_PANEL);
-    text(d, "Not passwords!", 234, 110, 8, C_TEXT, C_PANEL);
-    text(d, "Tiny numbers", 234, 122, 8, C_DIM, C_PANEL);
-    text(d, "start with 0s.", 234, 133, 8, C_DIM, C_PANEL);
+    text(d, "LEADING ZEROS", 234, 98, 8, C_METER, C_PANEL);
+    text(d, "2009: ~8 zeros", 234, 110, 8, C_TEXT, C_PANEL);
+    text(d, "Today: 18 zeros", 234, 122, 8, C_GOLD, C_PANEL);
+    text(d, "(132T+ Target)", 234, 133, 8, C_DIM, C_PANEL);
 
     panel(d, 8, 160, 304, 32, 6, C_PANEL, C_EDGE, C_BG);
     chromeStripCells(d);
@@ -1022,7 +1022,7 @@ static void paintExplainer(const ExplainerV &e)
     {
       text(wgt, "Your CYD is testing about", 4, 2, 9, C_DIM, C_PANEL);
       text(wgt, (e.hashrateEng + " hashes / second.").c_str(), 4, 16, 11, C_TEXT, C_PANEL);
-      text(wgt, "Every attempt is a fresh independent roll.", 4, 30, 8, C_DIM, C_PANEL);
+      text(wgt, "Nonce is the only dial you can turn (+1 scrambles).", 4, 30, 8, C_DIM, C_PANEL);
     }
     else
     {
@@ -1030,7 +1030,7 @@ static void paintExplainer(const ExplainerV &e)
       int w1 = textW("CYD is trying ~", 9);
       text(wgt, e.hashrateEng.c_str(), 4 + w1, 2, 11, C_TEXT, C_PANEL);
       int w2 = textW(e.hashrateEng.c_str(), 11);
-      text(wgt, " hashes/sec. Repeatedly testing: hash < target?", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
+      text(wgt, " hashes/sec. Nonce is the only dial you turn!", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
     }
     wEnd(ex, ey);
     done(W_EXP_TEXT, k);
@@ -1074,10 +1074,10 @@ static void chromeLottery(TFT_eSPI &d)
     text(d, "* Winning requires beating the full network target.", 12, 180, 8, C_DIM, C_PANEL);
 
     panel(d, 6, 204, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE LOTTERY TRUTH", 12, 208, 8, C_DIM, C_PANEL);
-    text(d, "* Best diff is a rarity score, NOT a progress bar.", 12, 220, 8, C_DIM, C_PANEL);
-    text(d, "* Prior rolls do not make the next roll closer.", 12, 231, 8, C_DIM, C_PANEL);
-    text(d, "* Every single hash is a fresh roll of the dice.", 12, 242, 8, C_GOOD, C_PANEL);
+    text(d, "2009 VS TODAY", 12, 208, 8, C_DIM, C_PANEL);
+    text(d, "* 2009: 8 zeros (~100 BTC / 3 hrs on PC).", 12, 220, 8, C_GOLD, C_PANEL);
+    text(d, "* Today: 18 zeros (132T+ network target).", 12, 231, 8, C_TEXT, C_PANEL);
+    text(d, "* Every attempt is an independent roll.", 12, 242, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1100,9 +1100,9 @@ static void chromeLottery(TFT_eSPI &d)
     text(d, "Rarity score (not % progress)", 172, 127, 8, C_DIM, C_PANEL);
 
     panel(d, 8, 148, 304, 44, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* SHARES: Valid hashes for pool's easier test (NOT Bitcoin pieces!).", 14, 153, 8, C_TEXT, C_PANEL);
-    text(d, "* INDEPENDENT: Best diff does NOT build up progress toward winning.", 14, 164, 8, C_DIM, C_PANEL);
-    text(d, "* LOTTERY: Every single hash is a fresh roll with equal probability.", 14, 175, 8, C_GOOD, C_PANEL);
+    text(d, "* 2009: 3 hrs on home PC could earn 100 BTC (only ~8 leading 0s).", 14, 153, 8, C_GOLD, C_PANEL);
+    text(d, "* TODAY: 18 leading zeros requires 800+ EH/s. CYD is a pure lottery!", 14, 164, 8, C_TEXT, C_PANEL);
+    text(d, "* SHARES: Valid hashes for pool's easier test (NOT Bitcoin pieces!).", 14, 175, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
