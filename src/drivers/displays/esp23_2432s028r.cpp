@@ -124,6 +124,7 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_EXPLAINER 3
 #define SCR_LOTTERY 4
 #define SCR_DIAG 5
+#define SCR_HEADER 6
 
 extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
@@ -209,6 +210,7 @@ enum WidgetId
   W_DIAG_TEMP,
   W_DIAG_RAM,
   W_DIAG_UPTIME,
+  W_HDR_LIVE,
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -935,7 +937,7 @@ static void chromeExplainer(TFT_eSPI &d)
     text(d, ">", 119, 64, 10, C_METER, C_PANEL);
 
     panel(d, 126, 49, 46, 48, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "SHA256", 149, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "SHA256d", 149, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
     text(d, "Double", 149, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
     text(d, ">", 175, 64, 10, C_METER, C_PANEL);
 
@@ -971,7 +973,7 @@ static void chromeExplainer(TFT_eSPI &d)
     text(d, ">", 155, 56, 11, C_METER, C_PANEL);
 
     panel(d, 166, 46, 64, 34, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "SHA-256 x2", 198, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "SHA256d", 198, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
     text(d, "Double Hash", 198, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
     text(d, ">", 233, 56, 11, C_METER, C_PANEL);
 
@@ -980,7 +982,7 @@ static void chromeExplainer(TFT_eSPI &d)
     text(d, "< Target ?", 275, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
 
     panel(d, 8, 90, 304, 66, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE NONCE DIAL: GUESS & CHECK (SHA-256 IS 1-WAY)", 14, 94, 8, C_DIM, C_PANEL);
+    text(d, "THE NONCE DIAL: GUESS & CHECK (AVALANCHE EFFECT)", 14, 94, 8, C_DIM, C_PANEL);
 
     text(d, "Nonce 0:", 14, 107, 8, C_DIM, C_PANEL);
     text(d, "9F28B4A18E...", 64, 107, 9, C_TEXT, C_PANEL);
@@ -1022,7 +1024,7 @@ static void paintExplainer(const ExplainerV &e)
     {
       text(wgt, "Your CYD is testing about", 4, 2, 9, C_DIM, C_PANEL);
       text(wgt, (e.hashrateEng + " hashes / second.").c_str(), 4, 16, 11, C_TEXT, C_PANEL);
-      text(wgt, "Nonce is the only dial you can turn (+1 scrambles).", 4, 30, 8, C_DIM, C_PANEL);
+      text(wgt, "Nonce is dial (+1 scrambles: no getting warmer).", 4, 30, 8, C_DIM, C_PANEL);
     }
     else
     {
@@ -1030,7 +1032,7 @@ static void paintExplainer(const ExplainerV &e)
       int w1 = textW("CYD is trying ~", 9);
       text(wgt, e.hashrateEng.c_str(), 4 + w1, 2, 11, C_TEXT, C_PANEL);
       int w2 = textW(e.hashrateEng.c_str(), 11);
-      text(wgt, " hashes/sec. Nonce is the only dial you turn!", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
+      text(wgt, " hashes/sec. Nonce dial spins (no getting warmer)!", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
     }
     wEnd(ex, ey);
     done(W_EXP_TEXT, k);
@@ -1102,7 +1104,7 @@ static void chromeLottery(TFT_eSPI &d)
     panel(d, 8, 148, 304, 44, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "* 2009: 3 hrs on home PC could earn 100 BTC (only ~8 leading 0s).", 14, 153, 8, C_GOLD, C_PANEL);
     text(d, "* TODAY: 18 leading zeros requires 800+ EH/s. CYD is a pure lottery!", 14, 164, 8, C_TEXT, C_PANEL);
-    text(d, "* SHARES: Valid hashes for pool's easier test (NOT Bitcoin pieces!).", 14, 175, 8, C_DIM, C_PANEL);
+    text(d, "* FINISH LINE: 256-bit die roll. Win if full hash < target!", 14, 175, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1281,6 +1283,114 @@ static void paintDiag(const DiagV &dg)
   drawStrip(dg.strip);
 }
 
+// ==================================================== BLOCK HEADER screen ==
+
+struct BlockHeaderV
+{
+  HdrV hdr;
+  String hashrateEng;
+  StripV strip;
+};
+
+static void chromeBlockHeader(TFT_eSPI &d)
+{
+  if (isPortrait())
+  {
+    panel(d, 6, 30, 228, 148, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "THE 80 BYTES YOU'RE HASHING", 12, 34, 8, C_DIM, C_PANEL);
+
+    // Column 1 (x=10, w=106)
+    panel(d, 10, 47, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VERSION  4B", 14, 50, 8, C_METER, C_TRACK);
+    text(d, "Consensus rules", 14, 61, 7, C_DIM, C_TRACK);
+
+    panel(d, 10, 76, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH  32B", 14, 79, 8, C_METER, C_TRACK);
+    text(d, "Chains past block", 14, 90, 7, C_DIM, C_TRACK);
+
+    panel(d, 10, 105, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE  32B", 14, 108, 8, C_METER, C_TRACK);
+    text(d, "All txs fingerprint", 14, 119, 7, C_DIM, C_TRACK);
+
+    // Column 2 (x=120, w=106)
+    panel(d, 120, 47, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME  4B", 124, 50, 8, C_METER, C_TRACK);
+    text(d, "Block timestamp", 124, 61, 7, C_DIM, C_TRACK);
+
+    panel(d, 120, 76, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS  4B", 124, 79, 8, C_METER, C_TRACK);
+    text(d, "Compact target", 124, 90, 7, C_DIM, C_TRACK);
+
+    panel(d, 120, 105, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE  4B [DIAL]", 124, 108, 8, C_GOLD, C_TRACK);
+    text(d, "The knob you turn!", 124, 119, 7, C_DIM, C_TRACK);
+
+    d.drawFastHLine(10, 134, 216, C_EDGE);
+    text(d, "4 + 32 + 32 + 4 + 4 + 4 = 80 BYTES", 14, 138, 8, C_METER, C_PANEL);
+    text(d, "76B fixed; Nonce is dial CYD spins", 14, 150, 7, C_DIM, C_PANEL);
+
+    panel(d, 6, 182, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "SHA256d & THE AVALANCHE", 12, 186, 8, C_DIM, C_PANEL);
+    text(d, "* SHA256d: Hashed twice in a row.", 12, 199, 8, C_GOLD, C_PANEL);
+    text(d, "* Prevents length extension attacks.", 12, 211, 8, C_TEXT, C_PANEL);
+    text(d, "* Avalanche: No 'getting warmer.'", 12, 223, 8, C_TEXT, C_PANEL);
+    text(d, "* Target is finish line (256-bit die roll).", 12, 235, 8, C_GOOD, C_PANEL);
+    text(d, "* Must fall numerically below target.", 12, 247, 8, C_DIM, C_PANEL);
+
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 28, 304, 126, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "THE 80 BYTES YOU'RE HASHING (6 HEADER FIELDS)", 14, 32, 8, C_DIM, C_PANEL);
+
+    // Row 1
+    panel(d, 14, 45, 94, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VERSION  4B", 18, 48, 8, C_METER, C_TRACK);
+    text(d, "Consensus rules", 18, 59, 7, C_DIM, C_TRACK);
+
+    panel(d, 112, 45, 98, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH  32B", 116, 48, 8, C_METER, C_TRACK);
+    text(d, "Chains past block", 116, 59, 7, C_DIM, C_TRACK);
+
+    panel(d, 214, 45, 92, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE  32B", 218, 48, 8, C_METER, C_TRACK);
+    text(d, "All txs fingerprint", 218, 59, 7, C_DIM, C_TRACK);
+
+    // Row 2
+    panel(d, 14, 74, 94, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME  4B", 18, 77, 8, C_METER, C_TRACK);
+    text(d, "Creation timestamp", 18, 88, 7, C_DIM, C_TRACK);
+
+    panel(d, 112, 74, 98, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS  4B", 116, 77, 8, C_METER, C_TRACK);
+    text(d, "Compact target", 116, 88, 7, C_DIM, C_TRACK);
+
+    panel(d, 214, 74, 92, 25, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE  4B [DIAL]", 218, 77, 8, C_GOLD, C_TRACK);
+    text(d, "Knob miner spins!", 218, 88, 7, C_DIM, C_TRACK);
+
+    // Formula line
+    d.drawFastHLine(14, 103, 292, C_EDGE);
+    text(d, "Header Formula: 4 + 32 + 32 + 4 + 4 + 4 = 80 BYTES TOTAL", 14, 107, 8, C_TEXT, C_PANEL);
+    text(d, "76 bytes are fixed by network; Nonce is the only dial CYD spins!", 14, 118, 8, C_DIM, C_PANEL);
+
+    // Panel 2
+    panel(d, 8, 158, 304, 36, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "* SHA256d: Hashed TWICE in a row (prevents length extension).", 14, 162, 8, C_GOLD, C_PANEL);
+    text(d, "* Avalanche: 1 bit change scrambles entire 256-bit hash (no getting warmer).", 14, 173, 8, C_TEXT, C_PANEL);
+    text(d, "* Finish line: Every attempt is a 256-bit die roll (< Target ?)", 14, 184, 8, C_GOOD, C_PANEL);
+
+    chromeStripCells(d);
+  }
+}
+
+static void paintBlockHeader(const BlockHeaderV &bh)
+{
+  drawHeader(bh.hdr);
+  drawStrip(bh.strip);
+}
+
 // ------------------------------------------------------ boot / setup pages --
 
 static void paintLoading(TFT_eSPI &d)
@@ -1354,6 +1464,9 @@ static void paintChrome(TFT_eSPI &d, int scr)
   case SCR_DIAG:
     chromeDiag(d);
     break;
+  case SCR_HEADER:
+    chromeBlockHeader(d);
+    break;
   default:
     chromeClock(d);
     break;
@@ -1387,8 +1500,10 @@ static ClockV lastClock;
 static ExplainerV lastExplainer;
 static LotteryV lastLottery;
 static DiagV lastDiag;
+static BlockHeaderV lastHeader;
 static bool haveMine = false, haveMarket = false, haveClock = false;
 static bool haveExplainer = false, haveLottery = false, haveDiag = false;
+static bool haveHeader = false;
 
 static void repaintCached(int scr)
 {
@@ -1404,6 +1519,8 @@ static void repaintCached(int scr)
     paintLottery(lastLottery);
   else if (scr == SCR_DIAG && haveDiag)
     paintDiag(lastDiag);
+  else if (scr == SCR_HEADER && haveHeader)
+    paintBlockHeader(lastHeader);
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -1732,6 +1849,34 @@ void esp32_2432S028R_DiagScreen(unsigned long mElapsed)
   lastDiag = dg;
   haveDiag = true;
   paintDiag(dg);
+
+  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
+}
+
+void esp32_2432S028R_HeaderScreen(unsigned long mElapsed)
+{
+  mining_data data = getMiningData(mElapsed);
+  refreshPool();
+  uiLive = true;
+  ensureChrome(SCR_HEADER);
+  float kh = data.currentHashRate.toFloat();
+  noteHashrate(kh);
+
+  BlockHeaderV bh;
+  bh.hdr = liveHeader(data.currentTime);
+  long hps = (long)(kh * 1000.0f);
+  bh.hashrateEng = commas(String(hps));
+  bh.strip.l[0] = "TOTAL";
+  bh.strip.v[0] = "80 BYTES";
+  bh.strip.l[1] = "FIELDS";
+  bh.strip.v[1] = "6 PARTS";
+  bh.strip.l[2] = "DIAL";
+  bh.strip.v[2] = "NONCE 4B";
+  bh.strip.l[3] = "ALGO";
+  bh.strip.v[3] = "SHA256d";
+  lastHeader = bh;
+  haveHeader = true;
+  paintBlockHeader(bh);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -2104,7 +2249,8 @@ CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_ClockScreen,
     esp32_2432S028R_ExplainerScreen,
     esp32_2432S028R_LotteryScreen,
-    esp32_2432S028R_DiagScreen};
+    esp32_2432S028R_DiagScreen,
+    esp32_2432S028R_HeaderScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
