@@ -1319,7 +1319,7 @@ static void chromeBlockHeader(TFT_eSPI &d)
 
     panel(d, 120, 76, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "BITS  4B", 124, 79, 8, C_METER, C_TRACK);
-    text(d, "Compact target", 124, 90, 7, C_DIM, C_TRACK);
+    text(d, "Tgt=M*256^(E-3)", 124, 90, 7, C_DIM, C_TRACK);
 
     panel(d, 120, 105, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "NONCE  4B [DIAL]", 124, 108, 8, C_GOLD, C_TRACK);
@@ -1330,12 +1330,12 @@ static void chromeBlockHeader(TFT_eSPI &d)
     text(d, "76B fixed; Nonce is dial CYD spins", 14, 150, 7, C_DIM, C_PANEL);
 
     panel(d, 6, 182, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHA256d & THE AVALANCHE", 12, 186, 8, C_DIM, C_PANEL);
-    text(d, "* SHA256d: Hashed twice in a row.", 12, 199, 8, C_GOLD, C_PANEL);
-    text(d, "* Prevents length extension attacks.", 12, 211, 8, C_TEXT, C_PANEL);
-    text(d, "* Avalanche: No 'getting warmer.'", 12, 223, 8, C_TEXT, C_PANEL);
-    text(d, "* Target is finish line (256-bit die roll).", 12, 235, 8, C_GOOD, C_PANEL);
-    text(d, "* Must fall numerically below target.", 12, 247, 8, C_DIM, C_PANEL);
+    text(d, "SHA256d & PROOF-OF-WORK", 12, 186, 8, C_DIM, C_PANEL);
+    text(d, "* Bits: 1B Exp + 3B Mantissa.", 12, 199, 8, C_GOLD, C_PANEL);
+    text(d, "* Target = Mantissa * 256^(Exp-3).", 12, 211, 8, C_TEXT, C_PANEL);
+    text(d, "* Little-endian; byte-reversed hash.", 12, 223, 8, C_TEXT, C_PANEL);
+    text(d, "* Test: Double-SHA256 < Target.", 12, 235, 8, C_GOOD, C_PANEL);
+    text(d, "* Avalanche: 1 bit flip = new roll.", 12, 247, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1364,7 +1364,7 @@ static void chromeBlockHeader(TFT_eSPI &d)
 
     panel(d, 112, 74, 98, 25, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "BITS  4B", 116, 77, 8, C_METER, C_TRACK);
-    text(d, "Compact target", 116, 88, 7, C_DIM, C_TRACK);
+    text(d, "Tgt=M*256^(E-3)", 116, 88, 7, C_DIM, C_TRACK);
 
     panel(d, 214, 74, 92, 25, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "NONCE  4B [DIAL]", 218, 77, 8, C_GOLD, C_TRACK);
@@ -1376,10 +1376,10 @@ static void chromeBlockHeader(TFT_eSPI &d)
     text(d, "76 bytes are fixed by network; Nonce is the only dial CYD spins!", 14, 118, 8, C_DIM, C_PANEL);
 
     // Panel 2
-    panel(d, 8, 158, 304, 36, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* SHA256d: Hashed TWICE in a row (prevents length extension).", 14, 162, 8, C_GOLD, C_PANEL);
-    text(d, "* Avalanche: 1 bit change scrambles entire 256-bit hash (no getting warmer).", 14, 173, 8, C_TEXT, C_PANEL);
-    text(d, "* Finish line: Every attempt is a 256-bit die roll (< Target ?)", 14, 184, 8, C_GOOD, C_PANEL);
+    panel(d, 8, 154, 304, 40, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "* Bits unpacks: Target = Mantissa * 256^(Exp - 3) [4-byte compact target].", 14, 158, 8, C_GOLD, C_PANEL);
+    text(d, "* Header is little-endian; computed hashes are byte-reversed to display zeros.", 14, 169, 8, C_TEXT, C_PANEL);
+    text(d, "* Proof-of-Work condition: Double-SHA256(80B header) < Target. Independent rolls!", 14, 180, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
