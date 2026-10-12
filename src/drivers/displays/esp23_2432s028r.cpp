@@ -30,6 +30,7 @@
 #include "drivers/storage/nvMemory.h"
 #include "drivers/storage/storage.h"
 #include "currency.h"
+#include "mining.h"
 
 #define WIDTH 130
 #define HEIGHT 170
@@ -347,6 +348,59 @@ static String fmtUptime(const String &s)
   return String(b);
 }
 
+static String fmtUptimeWords(const String &s)
+{
+  int d = 0, h = 0, m = 0, sec = 0;
+  sscanf(s.c_str(), "%d %d:%d:%d", &d, &h, &m, &sec);
+  char b[24];
+  if (d > 0)
+    snprintf(b, sizeof(b), "%dd %dh", d, h);
+  else if (h > 0)
+    snprintf(b, sizeof(b), "%dh %02dm", h, m);
+  else
+    snprintf(b, sizeof(b), "%dm %02ds", m, sec);
+  return String(b);
+}
+
+static String fmtHps(float kh)
+{
+  if (kh <= 0)
+    return "0";
+  unsigned long hps = (unsigned long)(kh * 1000.0f + 0.5f);
+  return commas(String(hps));
+}
+
+static String fmtTotalHashes(const String &mhashesStr)
+{
+  double mh = mhashesStr.toDouble();
+  char b[32];
+  if (mh >= 1000000.0)
+    snprintf(b, sizeof(b), "%.1f trillion", mh / 1000000.0);
+  else if (mh >= 1000.0)
+    snprintf(b, sizeof(b), "%.1f billion", mh / 1000.0);
+  else if (mh > 0.0)
+    snprintf(b, sizeof(b), "%.1f million", mh);
+  else
+    return "<1 million";
+  return String(b);
+}
+
+static String fmtNetDiff(double diff)
+{
+  if (diff <= 0.0)
+    return "~132.7T";
+  char b[32];
+  if (diff >= 1e12)
+    snprintf(b, sizeof(b), "%.2fT", diff / 1e12);
+  else if (diff >= 1e9)
+    snprintf(b, sizeof(b), "%.2fB", diff / 1e9);
+  else if (diff >= 1e6)
+    snprintf(b, sizeof(b), "%.2fM", diff / 1e6);
+  else
+    snprintf(b, sizeof(b), "%.0f", diff);
+  return String(b);
+}
+
 static String fmtDate(const String &s)
 {
   static const char *mon[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
@@ -564,77 +618,259 @@ static void drawTile(int id, int x, int y, int w, int h, const char *label, cons
 struct MineV
 {
   HdrV hdr;
-  String hash, shares, best, tmpl, blocks, total;
+  String hash;
+  String hps;
+  String shares;
+  String best;
+  String netDiff;
+  String uptime;
+  String totalHashes;
+  String blocks;
   float kh;
   bool flash;
-  StripV strip;
 };
-
-static const int TILE_Y[4] = {32, 72, 112, 152};
 
 static void chromeMine(TFT_eSPI &d)
 {
-  memset(segLvl, 0xFF, sizeof(segLvl));
-  gaugeDraw(d, gaugeShown);
-  chromeStripCells(d);
+  if (isPortrait())
+  {
+    // Card 1: How Mining Works & Target Visual (Y = 28, H = 82)
+    panel(d, 6, 28, 228, 82, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "HOW MINING WORKS: THE TARGET TEST", 12, 32, 9, C_METER, C_PANEL);
+    text(d, "CYD repeatedly hashes next block header (txs, nonce).", 12, 44, 8, C_TEXT, C_PANEL);
+
+    // Target visual box
+    d.fillRect(10, 56, 220, 32, C_BG);
+    d.drawRect(10, 56, 220, 32, C_EDGE);
+    text(d, "TOO LARGE:  F82A91...", 14, 58, 8, C_DIM, C_BG);
+    text(d, "X", 224, 58, 8, C_BAD, C_BG, Align::TopRight);
+    d.drawFastHLine(14, 70, 212, C_EDGE);
+    text(d, "TARGET (Must be numerically smaller)", 120, 66, 8, C_WARN, C_BG, Align::TopCenter);
+    text(d, "WINNER:     000039...", 14, 73, 8, C_GOOD, C_BG);
+    text(d, "OK", 224, 73, 8, C_GOOD, C_BG, Align::TopRight);
+    text(d, "Winning hashes begin with 0s because they are tiny numbers.", 12, 91, 8, C_DIM, C_PANEL);
+
+    // Card 2 Frame (Speed & Work, Y = 112, H = 48)
+    panel(d, 6, 112, 228, 48, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 3 Frame (Shares, Y = 162, H = 44)
+    panel(d, 6, 162, 228, 44, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 4 Frame (Best Try vs Target, Y = 208, H = 48)
+    panel(d, 6, 208, 228, 48, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 5 Frame (Blockchain & Prize Banner, Y = 258, H = 58)
+    panel(d, 6, 258, 228, 58, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "[B100] -> [B101] -> [NEXT]", 120, 261, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "Prev hash links chain. Old change breaks all.", 12, 273, 8, C_DIM, C_PANEL);
+    text(d, "LOTTERY: Next hash could win--or never!", 12, 285, 8, C_TEXT, C_PANEL);
+    text(d, "Solve block = 3.125 BTC reward + tx fees!", 12, 297, 8, C_GOLD, C_PANEL);
+  }
+  else
+  {
+    // Landscape (320x240)
+    // Left Column: How Mining Works & Target Visual (X = 6, Y = 28, W = 150, H = 176)
+    panel(d, 6, 28, 150, 176, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "HOW MINING WORKS", 12, 33, 9, C_METER, C_PANEL);
+    text(d, "CYD repeatedly hashes next", 12, 45, 8, C_TEXT, C_PANEL);
+    text(d, "block header (txs, nonce).", 12, 55, 8, C_DIM, C_PANEL);
+    text(d, "Test: Is hash < target?", 12, 66, 8, C_TEXT, C_PANEL);
+
+    // Target visual box
+    d.fillRect(10, 78, 142, 36, C_BG);
+    d.drawRect(10, 78, 142, 36, C_EDGE);
+    text(d, "TOO LARGE", 14, 80, 8, C_DIM, C_BG);
+    text(d, "F82A91...", 68, 80, 8, C_TEXT, C_BG);
+    text(d, "X", 146, 80, 8, C_BAD, C_BG, Align::TopRight);
+    d.drawFastHLine(14, 94, 134, C_EDGE);
+    text(d, "TARGET", 81, 90, 8, C_WARN, C_BG, Align::TopCenter);
+    text(d, "WINNER", 14, 100, 8, C_GOOD, C_BG);
+    text(d, "000039...", 68, 100, 8, C_GOOD, C_BG);
+    text(d, "OK", 148, 100, 8, C_GOOD, C_BG, Align::TopRight);
+
+    // Rule explanation
+    text(d, "Rule: Full 256-bit hash must", 12, 117, 8, C_TEXT, C_PANEL);
+    text(d, "be numerically < target.", 12, 127, 8, C_TEXT, C_PANEL);
+    text(d, "(Why winners start with 0s)", 12, 137, 8, C_DIM, C_PANEL);
+
+    // Divider
+    d.drawFastHLine(12, 149, 138, C_EDGE);
+
+    // Blockchain diagram
+    text(d, "[B100] -> [B101] -> [NEXT]", 81, 153, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "Blocks chain by previous hash.", 12, 166, 8, C_TEXT, C_PANEL);
+    text(d, "Old change breaks all hashes.", 12, 176, 8, C_DIM, C_PANEL);
+
+    // Right Column Panel Frame (X = 162, Y = 28, W = 152, H = 176)
+    panel(d, 162, 28, 152, 176, 0, C_PANEL, C_EDGE, C_BG);
+    d.drawFastHLine(166, 90, 144, C_EDGE);
+    d.drawFastHLine(166, 138, 144, C_EDGE);
+
+    // Bottom Banner Frame (X = 6, Y = 208, W = 308, H = 28)
+    panel(d, 6, 208, 308, 28, 0, C_PANEL, C_EDGE, C_BG);
+  }
 }
 
 static void paintMine(const MineV &m)
 {
   drawHeader(m.hdr);
 
-  int cx = G_CX;
-  int cy = G_CY;
-
-  // hero readout inside the ring
-  String k = m.hash + "|" + (isPortrait() ? "P" : "L");
-  if (need(W_HERO, k))
-  {
-    if (wBegin(104, 74, C_BG))
-    {
-      text(wgt, "HASHRATE", 52, 4, 9, C_DIM, C_BG, Align::TopCenter);
-      unsigned sz = m.hash.length() <= 5 ? 36 : (m.hash.length() == 6 ? 30 : 26);
-      text(wgt, m.hash.c_str(), 52, 15, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", 52, 56, 11, C_DIM, C_BG, Align::TopCenter);
-      wEnd(cx - 52, cy - 38);
-      done(W_HERO, k);
-    }
-  }
-
-  // lifetime hashes, in the gap at the bottom of the ring
-  k = m.total + "|" + (isPortrait() ? "P" : "L");
-  if (need(W_TOTAL, k))
-  {
-    if (wBegin(120, 16, C_BG))
-    {
-      textPair(wgt, 60, 1, commas(m.total).c_str(), "MH TOTAL", 11, C_TEXT, C_DIM, C_BG);
-      wEnd(cx - 60, isPortrait() ? 156 : 171);
-      done(W_TOTAL, k);
-    }
-  }
-
-  bool found = m.blocks.toInt() > 0;
   uint16_t sharesCol = m.flash ? C_GOOD : C_TEXT;
-  uint16_t blocksCol = found ? C_GOLD : C_TEXT;
 
   if (isPortrait())
   {
-    const int tw = 112, th = 36;
-    drawTile(W_T0, 6, 180, tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
-    drawTile(W_T1, 122, 180, tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T2, 6, 222, tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T3, 122, 222, tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
+    // Sub-card 1: Speed & Work (X = 8, Y = 114, W = 224, H = 44)
+    String k1 = m.hps + "|" + m.hash + "|" + m.uptime + "|" + m.totalHashes + "|" + accentIdx + "|P";
+    if (need(W_T0, k1) && wBegin(224, 44, C_PANEL))
+    {
+      text(wgt, "SPEED & TOTAL WORK", 4, 2, 9, C_METER, C_PANEL);
+      text(wgt, "Trying ~", 4, 14, 8, C_DIM, C_PANEL);
+      int w1 = textW("Trying ~", 8);
+      text(wgt, m.hps.c_str(), 4 + w1, 14, 8, C_METER, C_PANEL);
+      int w2 = textW(m.hps.c_str(), 8);
+      text(wgt, " /s (hashrate: ", 4 + w1 + w2, 14, 8, C_DIM, C_PANEL);
+      int w3 = textW(" /s (hashrate: ", 8);
+      text(wgt, m.hash.c_str(), 4 + w1 + w2 + w3, 14, 8, C_TEXT, C_PANEL);
+      int w4 = textW(m.hash.c_str(), 8);
+      text(wgt, " KH/s)", 4 + w1 + w2 + w3 + w4, 14, 8, C_DIM, C_PANEL);
+      text(wgt, "(KH/s = thousands of guesses per second)", 4, 24, 8, C_DIM, C_PANEL);
+      text(wgt, "In ", 4, 34, 8, C_DIM, C_PANEL);
+      int w5 = textW("In ", 8);
+      text(wgt, m.uptime.c_str(), 4 + w5, 34, 8, C_TEXT, C_PANEL);
+      int w6 = textW(m.uptime.c_str(), 8);
+      text(wgt, ": tried ~", 4 + w5 + w6, 34, 8, C_DIM, C_PANEL);
+      int w7 = textW(": tried ~", 8);
+      text(wgt, m.totalHashes.c_str(), 4 + w5 + w6 + w7, 34, 8, C_METER, C_PANEL);
+      int w8 = textW(m.totalHashes.c_str(), 8);
+      text(wgt, " hashes", 4 + w5 + w6 + w7 + w8, 34, 8, C_DIM, C_PANEL);
+      wEnd(8, 114);
+      done(W_T0, k1);
+    }
+
+    // Sub-card 2: Shares (X = 8, Y = 164, W = 224, H = 40)
+    String k2 = m.shares + "|" + (m.flash ? "1" : "0") + "|" + accentIdx + "|P";
+    if (need(W_T1, k2) && wBegin(224, 40, C_PANEL))
+    {
+      text(wgt, m.shares.c_str(), 4, 2, 9, sharesCol, C_PANEL);
+      int ws1 = textW(m.shares.c_str(), 9);
+      text(wgt, " POOL SHARES ACCEPTED", 4 + ws1 + 4, 2, 9, sharesCol, C_PANEL);
+      text(wgt, "Passed pool's easier test proving CYD does work.", 4, 14, 8, C_TEXT, C_PANEL);
+      text(wgt, "They are NOT pieces of a Bitcoin!", 4, 24, 8, C_WARN, C_PANEL);
+      wEnd(8, 164);
+      done(W_T1, k2);
+    }
+
+    // Sub-card 3: Best Try vs Target (X = 8, Y = 210, W = 224, H = 44)
+    String k3 = m.best + "|" + m.netDiff + "|" + accentIdx + "|P";
+    if (need(W_T2, k3) && wBegin(224, 44, C_PANEL))
+    {
+      text(wgt, "BEST TRY vs NETWORK TARGET", 4, 2, 9, C_METER, C_PANEL);
+      text(wgt, "Best: diff ", 4, 14, 8, C_DIM, C_PANEL);
+      int wb1 = textW("Best: diff ", 8);
+      text(wgt, m.best.c_str(), 4 + wb1, 14, 8, C_METER, C_PANEL);
+      int wb2 = textW(m.best.c_str(), 8);
+      text(wgt, " (rarest attempt; higher is rarer)", 4 + wb1 + wb2, 14, 8, C_DIM, C_PANEL);
+      text(wgt, "Real Bitcoin target: ", 4, 24, 8, C_DIM, C_PANEL);
+      int wb3 = textW("Real Bitcoin target: ", 8);
+      text(wgt, m.netDiff.c_str(), 4 + wb3, 24, 8, C_TEXT, C_PANEL);
+      int wb4 = textW(m.netDiff.c_str(), 8);
+      text(wgt, " (independent odds)", 4 + wb3 + wb4, 24, 8, C_DIM, C_PANEL);
+      text(wgt, "Each hash is fresh random chance (not 'closer').", 4, 34, 8, C_DIM, C_PANEL);
+      wEnd(8, 210);
+      done(W_T2, k3);
+    }
   }
   else
   {
-    const int tx = 184, tw = 128, th = 36;
-    drawTile(W_T0, tx, TILE_Y[0], tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
-    drawTile(W_T1, tx, TILE_Y[1], tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T2, tx, TILE_Y[2], tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T3, tx, TILE_Y[3], tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
-  }
+    // Landscape (320x240)
+    // Sub-card 1: Speed & Work (X = 164, Y = 30, W = 148, H = 58)
+    String k1 = m.hps + "|" + m.hash + "|" + m.uptime + "|" + m.totalHashes + "|" + accentIdx + "|L";
+    if (need(W_T0, k1) && wBegin(148, 58, C_PANEL))
+    {
+      text(wgt, "SPEED & TOTAL WORK", 4, 2, 9, C_METER, C_PANEL);
+      text(wgt, "Trying ~", 4, 14, 8, C_DIM, C_PANEL);
+      int w1 = textW("Trying ~", 8);
+      text(wgt, m.hps.c_str(), 4 + w1, 14, 8, C_METER, C_PANEL);
+      int w2 = textW(m.hps.c_str(), 8);
+      text(wgt, " /s", 4 + w1 + w2, 14, 8, C_DIM, C_PANEL);
 
-  drawStrip(m.strip);
+      text(wgt, "Speed = hashrate: ", 4, 25, 8, C_DIM, C_PANEL);
+      int w3 = textW("Speed = hashrate: ", 8);
+      text(wgt, m.hash.c_str(), 4 + w3, 25, 8, C_TEXT, C_PANEL);
+      int w4 = textW(m.hash.c_str(), 8);
+      text(wgt, " KH/s", 4 + w3 + w4, 25, 8, C_DIM, C_PANEL);
+
+      text(wgt, "(KH/s = 1,000s guesses/sec)", 4, 36, 8, C_DIM, C_PANEL);
+
+      text(wgt, "In ", 4, 47, 8, C_DIM, C_PANEL);
+      int w5 = textW("In ", 8);
+      text(wgt, m.uptime.c_str(), 4 + w5, 47, 8, C_TEXT, C_PANEL);
+      int w6 = textW(m.uptime.c_str(), 8);
+      text(wgt, ": ~", 4 + w5 + w6, 47, 8, C_DIM, C_PANEL);
+      int w7 = textW(": ~", 8);
+      text(wgt, m.totalHashes.c_str(), 4 + w5 + w6 + w7, 47, 8, C_METER, C_PANEL);
+
+      wEnd(164, 30);
+      done(W_T0, k1);
+    }
+
+    // Sub-card 2: Shares (X = 164, Y = 92, W = 148, H = 44)
+    String k2 = m.shares + "|" + (m.flash ? "1" : "0") + "|" + accentIdx + "|L";
+    if (need(W_T1, k2) && wBegin(148, 44, C_PANEL))
+    {
+      text(wgt, m.shares.c_str(), 4, 2, 9, sharesCol, C_PANEL);
+      int ws1 = textW(m.shares.c_str(), 9);
+      text(wgt, " POOL SHARES", 4 + ws1 + 4, 2, 9, sharesCol, C_PANEL);
+
+      text(wgt, "Passed pool's easier test", 4, 14, 8, C_TEXT, C_PANEL);
+      text(wgt, "proving CYD does work.", 4, 24, 8, C_DIM, C_PANEL);
+      text(wgt, "NOT pieces of a Bitcoin!", 4, 34, 8, C_WARN, C_PANEL);
+
+      wEnd(164, 92);
+      done(W_T1, k2);
+    }
+
+    // Sub-card 3: Best Try vs Target (X = 164, Y = 140, W = 148, H = 58)
+    String k3 = m.best + "|" + m.netDiff + "|" + accentIdx + "|L";
+    if (need(W_T2, k3) && wBegin(148, 58, C_PANEL))
+    {
+      text(wgt, "BEST TRY vs NETWORK", 4, 2, 9, C_METER, C_PANEL);
+
+      text(wgt, "Best: diff ", 4, 14, 8, C_DIM, C_PANEL);
+      int wb1 = textW("Best: diff ", 8);
+      text(wgt, m.best.c_str(), 4 + wb1, 14, 8, C_METER, C_PANEL);
+      int wb2 = textW(m.best.c_str(), 8);
+      text(wgt, " (rarest)", 4 + wb1 + wb2, 14, 8, C_DIM, C_PANEL);
+
+      text(wgt, "Target needs: ", 4, 25, 8, C_DIM, C_PANEL);
+      int wb3 = textW("Target needs: ", 8);
+      text(wgt, m.netDiff.c_str(), 4 + wb3, 25, 8, C_TEXT, C_PANEL);
+
+      text(wgt, "Each try is independent.", 4, 36, 8, C_DIM, C_PANEL);
+      text(wgt, "Higher is rarer, not 'closer'.", 4, 47, 8, C_DIM, C_PANEL);
+
+      wEnd(164, 140);
+      done(W_T2, k3);
+    }
+
+    // Bottom Banner (X = 8, Y = 210, W = 304, H = 24)
+    String k4 = m.blocks + "|" + accentIdx + "|L";
+    if (need(W_T3, k4) && wBegin(304, 24, C_PANEL))
+    {
+      if (m.blocks.toInt() > 0)
+      {
+        text(wgt, "*** BLOCK SOLVED! 3.125 BTC WON! ***", 152, 2, 9, C_GOLD, C_PANEL, Align::TopCenter);
+        text(wgt, "Valid Bitcoin block solved and submitted to the network!", 152, 14, 8, C_GOOD, C_PANEL, Align::TopCenter);
+      }
+      else
+      {
+        text(wgt, "LOTTERY: Every try is independent. Next hash could win--or never.", 4, 2, 8, C_TEXT, C_PANEL);
+        text(wgt, "Solve block = 3.125 BTC (~$200k+) reward + tx fees to your wallet!", 4, 13, 8, C_GOLD, C_PANEL);
+      }
+      wEnd(8, 210);
+      done(W_T3, k4);
+    }
+  }
 }
 
 // ========================================================== MARKET screen ==
@@ -1103,21 +1339,15 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   MineV m;
   m.hdr = liveHeader(data.currentTime);
   m.hash = data.currentHashRate;
+  m.hps = fmtHps(kh);
   m.shares = commas(data.completedShares);
   m.best = data.bestDiff;
-  m.tmpl = commas(data.templates);
+  m.netDiff = fmtNetDiff(g_networkDifficulty);
+  m.uptime = fmtUptimeWords(data.timeMining);
+  m.totalHashes = fmtTotalHashes(data.totalMHashes);
   m.blocks = data.valids;
-  m.total = data.totalMHashes;
   m.kh = kh;
   m.flash = millis() < shareFlashUntil;
-  m.strip.l[0] = "WORKERS";
-  m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[1] = "POOL RATE";
-  m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = "POOL BEST";
-  m.strip.v[2] = pData.bestDifficulty;
-  m.strip.l[3] = "UPTIME";
-  m.strip.v[3] = fmtUptime(data.timeMining);
   lastMine = m;
   haveMine = true;
   paintMine(m);
@@ -1316,11 +1546,6 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
   if (!uiLive || uiScreen < 0)
     return;
   drawPulse(frame);
-  if (uiScreen == SCR_MINE && fabsf(gaugeTarget - gaugeShown) > 0.002f)
-  {
-    gaugeShown += (gaugeTarget - gaugeShown) * 0.3f; // ease toward the measured rate
-    gaugeDraw(out(), gaugeShown);
-  }
 }
 
 unsigned long previousMillis = 0;
@@ -1481,21 +1706,15 @@ void cydDumpScreens(void)
     MineV m;
     m.hdr = h;
     m.hash = "672.4";
+    m.hps = "672,400";
     m.shares = "1,284";
     m.best = "8.73M";
-    m.tmpl = "412";
+    m.netDiff = "146.72T";
+    m.uptime = "3d 07h";
+    m.totalHashes = "58.2 billion";
     m.blocks = "0";
-    m.total = "58213";
     m.kh = 672.4f;
     m.flash = acc == 1;
-    m.strip.l[0] = "WORKERS";
-    m.strip.v[0] = "3";
-    m.strip.l[1] = "POOL RATE";
-    m.strip.v[1] = "1.92M";
-    m.strip.l[2] = "POOL BEST";
-    m.strip.v[2] = "412.6M";
-    m.strip.l[3] = "UPTIME";
-    m.strip.v[3] = "3d 07h";
     paintMine(m);
     dumpShot(acc == 0 ? "mine" : "mine_alt");
     if (acc == 1)
@@ -1513,7 +1732,12 @@ void cydDumpScreens(void)
     k.net = "912 EH/s";
     k.pct = 47;
     k.remaining = "111,655";
-    k.strip = m.strip;
+    k.strip.l[0] = "WORKERS";
+    k.strip.v[0] = "3";
+    k.strip.l[1] = "POOL RATE";
+    k.strip.v[1] = "1.92M";
+    k.strip.l[2] = "POOL BEST";
+    k.strip.v[2] = "412.6M";
     k.strip.l[3] = "SHARES";
     k.strip.v[3] = "1,284";
     paintMarket(k);
