@@ -127,7 +127,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(60000);
+  page.reserve(64000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -341,7 +341,7 @@ static void handleRoot()
             "<div class='field-box'><div class='field-name'><span>5. Bits</span><span class='field-bytes'>4 Bytes</span></div><div class='field-desc'>Compact scientific notation for the target number (the finish line) without sending all 32 bytes.</div></div>"
             "<div class='field-box'><div class='field-name'><span>6. Nonce (Dial)</span><span class='field-bytes'>4 Bytes</span></div><div class='field-desc'>The knob to turn! A 4-byte counter (0 to 4.29 billion). This is the <em>only</em> field your CYD increments!</div></div>"
             "</div>"
-            "<div class='field-sum'>Header Formula: 4 + 32 + 32 + 4 + 4 + 4 = <strong>80 Bytes Total</strong> (76 bytes fixed, Nonce dial turns)</div>"
+            "<div class='field-sum'>Header Formula: 4 + 32 + 32 + 4 + 4 + 4 = <strong>80 Bytes Total</strong> (Satoshi Whitepaper Sec 7: 80B &times; 52,596 blks/yr = <strong>4.2 MB/year</strong> for SPV light verification!)</div>"
             "</div></div>"
             "<div class='learn-sec'>"
             "<div class='learn-h3'>The target: your finish line</div>"
@@ -368,6 +368,13 @@ static void handleRoot()
             "<br><strong>What happens when coins are lost?</strong> When private keys are lost, those bitcoins are gone forever from circulation. As Satoshi Nakamoto explained: <em>&quot;Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.&quot;</em> "
             "<br><strong>Why deflation does not break Bitcoin:</strong> Bitcoin is infinitely divisible! 1 Bitcoin = <strong>100,000,000 Satoshis</strong> (0.00000001 BTC). Internally, Bitcoin Core stores all balances and values as 64-bit integer Satoshis (<code>int64_t</code>), never fractional BTC. Even if 99% of coins are lost, transactions scale into smaller units (millibitcoins, bits, or Lightning millisatoshis). "
             "<br><strong>After Year 2140:</strong> Blocks are still mined every 10 minutes forever! Miners will be incentivized 100% by user transaction fees rather than new coin issuance."
+            "</div>"
+            "<div style='margin-top:8px;font-size:12px;background:rgba(0,0,0,0.25);border-left:3px solid var(--amber);padding:6px 10px;border-radius:0 4px 4px 0;'>"
+            "<strong>Satoshi's 2008 Whitepaper &amp; The 6-Confirmation Rule:</strong> "
+            "In <em>&quot;Bitcoin: A Peer-to-Peer Electronic Cash System&quot;</em> (Oct 31, 2008), Satoshi defined an electronic coin as a <strong>chain of digital signatures</strong> and introduced proof-of-work as a distributed timestamp server to eliminate banks. "
+            "<br><strong>The Gold Mining Analogy &amp; Game Theory:</strong> Section 6 notes: <em>&quot;The steady addition of a constant amount of new coins is analogous to gold miners expending resources to add gold to circulation. In our case, it is CPU time and electricity that is expended.&quot;</em> "
+            "Satoshi proved an attacker with majority power finds it strictly more profitable to play by the rules (earning new coins and fees) than to undermine the system and invalidate their own wealth. "
+            "<br><strong>The Gambler's Ruin Math (Why 6 Confirmations?):</strong> Modeling the race as a Poisson / Binomial Random Walk (Section 11), Satoshi demonstrated that against an attacker with 10% network hashpower (<code>q = 0.1</code>), after <strong>z = 6 confirmations (~1 hour)</strong>, the catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>! This established 6 confirmations as the universal benchmark for settlement finality."
             "</div>"
             "</div></div></div>"
             "<div class='card' id='pow-sim-card'>"
@@ -456,6 +463,7 @@ static void handleRoot()
             "</div>"
             "<div style='font-size:11px;color:var(--muted);line-height:1.5;'>"
             "&bull; <strong>Protocol Representation:</strong> <code>1 Satoshi = 10<sup>-8</sup> BTC</code>. Internally, Bitcoin Core never uses floats&mdash;all balances are 64-bit integer Satoshis.<br>"
+            "&bull; <strong>The 2140 Subsidy Schedule:</strong> 33 Halving Epochs (50 BTC &rarr; 1 satoshi at Block 6.72M &rarr; 0 at Block #6,929,999). $6,930,000 \times 10\text{m} \approx 131.8\text{ years}$ ($2009 + 131.8 = \text{Year 2140}$). Integer truncation of odd satoshis leaves exactly <strong>20,999,999.9769 BTC</strong> total.<br>"
             "&bull; <strong>Satoshi's Rule on Lost Coins:</strong> <em>&quot;Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.&quot;</em>"
             "</div></div>");
 

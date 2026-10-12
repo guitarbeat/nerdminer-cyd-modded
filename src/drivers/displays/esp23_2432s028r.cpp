@@ -1336,7 +1336,7 @@ static void chromeBlockHeader(TFT_eSPI &d)
     text(d, "* Nonce 4.29B rolls; then ExtraNonce.", 12, 211, 8, C_TEXT, C_PANEL);
     text(d, "* Little-endian; byte-reversed hash.", 12, 223, 8, C_TEXT, C_PANEL);
     text(d, "* Test: Double-SHA256 < Target.", 12, 235, 8, C_GOOD, C_PANEL);
-    text(d, "* Coinbase commits pool: cannot steal.", 12, 247, 8, C_DIM, C_PANEL);
+    text(d, "* 80B = 4.2MB/yr (Satoshi Sec 7 SPV).", 12, 247, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1380,7 +1380,7 @@ static void chromeBlockHeader(TFT_eSPI &d)
     panel(d, 8, 154, 304, 40, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "* Bits unpacks: Target = Mantissa * 256^(Exp - 3). Nonce 4.29B rolls + ExtraNonce.", 14, 158, 8, C_GOLD, C_PANEL);
     text(d, "* Header is little-endian; computed hashes are byte-reversed to display zeros.", 14, 169, 8, C_TEXT, C_PANEL);
-    text(d, "* Double-SHA256 < Target. Pool coinbase in Merkle root prevents stolen blocks!", 14, 180, 8, C_GOOD, C_PANEL);
+    text(d, "* 80B * 52k blks = 4.2MB/yr (Whitepaper Sec 7)! Enables SPV light nodes.", 14, 180, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1412,7 +1412,7 @@ static void chromeSupply(TFT_eSPI &d)
     text(d, "MAX SUPPLY: 20,999,999.9769 BTC", 12, 49, 9, C_GOLD, C_PANEL);
     text(d, "* 1 BTC = 100,000,000 Satoshis (sats).", 12, 62, 8, C_TEXT, C_PANEL);
     text(d, "* 1 mBTC = 100k sats | 1 Bit = 100 sats.", 12, 73, 8, C_DIM, C_PANEL);
-    text(d, "* Final coin mined ~2140 at Block #6.93M.", 12, 84, 8, C_METER, C_PANEL);
+    text(d, "* 33 Halvings: 50 BTC -> 0 sats in yr 2140.", 12, 84, 8, C_METER, C_PANEL);
 
     panel(d, 6, 106, 228, 76, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "WHAT HAPPENS WHEN COINS ARE LOST?", 12, 110, 8, C_DIM, C_PANEL);
@@ -1426,9 +1426,9 @@ static void chromeSupply(TFT_eSPI &d)
     text(d, "INFINITE DIVISIBILITY & YEAR 2140", 12, 192, 8, C_DIM, C_PANEL);
     text(d, "* Divisibility prevents deflation crises:", 12, 204, 8, C_TEXT, C_PANEL);
     text(d, "  Even with 1 BTC left, world trade functions!", 12, 215, 8, C_GOOD, C_PANEL);
-    text(d, "* Balances stored as 64-bit integer Satoshis.", 12, 226, 8, C_DIM, C_PANEL);
-    text(d, "* After 2140: Blocks mined every 10m forever;", 12, 237, 8, C_METER, C_PANEL);
-    text(d, "  100% of miner rewards come from TX fees!", 12, 248, 8, C_METER, C_PANEL);
+    text(d, "* Balances: 64-bit integer sats (int64_t).", 12, 226, 8, C_DIM, C_PANEL);
+    text(d, "* Whitepaper Sec 6: CPU & energy like gold.", 12, 237, 8, C_METER, C_PANEL);
+    text(d, "* Post-2140: 100% miner revenue from TX fees!", 12, 248, 8, C_METER, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1448,18 +1448,18 @@ static void chromeSupply(TFT_eSPI &d)
     text(d, "64-bit int64_t sats", 116, 69, 7, C_DIM, C_TRACK);
 
     panel(d, 212, 46, 94, 40, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BLOCK REWARD", 216, 49, 8, C_GOOD, C_TRACK);
-    text(d, "50 -> 3.125 -> 0 BTC", 216, 59, 7, C_TEXT, C_TRACK);
-    text(d, "Bitwise >> 1 decay", 216, 69, 7, C_DIM, C_TRACK);
+    text(d, "33 HALVINGS", 216, 49, 8, C_GOOD, C_TRACK);
+    text(d, "50 BTC -> 0 sats", 216, 59, 7, C_TEXT, C_TRACK);
+    text(d, "Yr 2140 (Blk 6.93M)", 216, 69, 7, C_DIM, C_TRACK);
 
     panel(d, 8, 98, 304, 92, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WHAT HAPPENS WHEN COINS ARE LOST? (DEFLATIONARY MODEL)", 14, 102, 8, C_DIM, C_PANEL);
+    text(d, "WHAT HAPPENS WHEN COINS ARE LOST? (DEFLATION & YEAR 2140)", 14, 102, 8, C_DIM, C_PANEL);
     text(d, "* Lost keys = coins gone forever. Supply shrinks over time (deflationary).", 14, 115, 8, C_TEXT, C_PANEL);
     text(d, "* Satoshi: 'Lost coins make everyone else's coins worth slightly more.'", 14, 126, 8, C_GOLD, C_PANEL);
-    text(d, "* Infinite divisibility: Even if 99% of coins were lost, Bitcoin still works!", 14, 137, 8, C_GOOD, C_PANEL);
-    text(d, "* Transactions denominate into sats, bits (100 sats), or Lightning millisats.", 14, 148, 8, C_DIM, C_PANEL);
-    text(d, "* After year 2140: Blocks mined every 10 min forever; fees fund 100% of mining!", 14, 159, 8, C_METER, C_PANEL);
-    text(d, "* Reward rounds down to 0 via bitwise right shift; transactions secure network.", 14, 170, 8, C_TEXT, C_PANEL);
+    text(d, "* Whitepaper Sec 6: CPU & electricity expended like gold miners mining gold.", 14, 137, 8, C_GOOD, C_PANEL);
+    text(d, "* Infinite divisibility: Even with 1 BTC left, economy works via sats/bits.", 14, 148, 8, C_DIM, C_PANEL);
+    text(d, "* 6.93M blks * 10m = 131.8 yrs -> Year 2140: 100% of mining funded by TX fees!", 14, 159, 8, C_METER, C_PANEL);
+    text(d, "* Integer >> 1 truncates odd sats: 20,999,999.9769 BTC total (0.0231 unissued).", 14, 170, 8, C_TEXT, C_PANEL);
 
     chromeStripCells(d);
   }
