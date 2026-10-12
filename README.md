@@ -78,27 +78,25 @@ If your CYD board has a MicroSD slot on the back, you can configure your miner h
 
 ---
 
-## 🖥️ 8-Screen Carousel System
+## 🖥️ 6-Screen Carousel System
 
-The display firmware features a seamlessly rotating carousel of **8 distinct views**, combining real-time telemetry, market analytics, and beginner-accessible educational breakdowns:
+The display firmware features a seamlessly rotating carousel of **6 consolidated, high-density views**—keeping the classic instrument, market, and desk clock screens at indices 0, 1, and 2, while uniting the educational architecture and economics into tightly packed, intentional screens:
 
 | Index | Screen Name | Layout & Key Information |
 |:---:|:---|:---|
 | **0** | **MINE (Pulse Dashboard)** | Sleek instrument gauge ring (0 to 1200 KH/s), 4 hero stat tiles (**Shares**, **Best Diff**, **Templates**, **Blocks Found**), and a 4-cell pool telemetry strip (**Workers**, **Pool Hashrate**, **Pool Best**, **Uptime**). |
 | **1** | **MARKET (Market & Halving)** | Real-time Bitcoin price in your configured fiat currency, current block height, mempool fee rates (half-hour), network difficulty, global hashrate, and a live halving countdown with visual progress bar. |
 | **2** | **CLOCK (Desk Clock & Bar Chart)** | Digital clock with blinking colon, full date, market mini-tiles, and a rolling **48-slot hashrate history bar chart** (8 minutes of history at 10s per slot). |
-| **3** | **EXPLAINER (Pipeline & Nonce Dial)** | 4-card causal block header pipeline (`[Block Data]` &rarr; `[80B Header]` &rarr; `[SHA256d]` &rarr; `[256-Bit Test]`), guess-and-check comparator log, leading zeros historical context (2009: 8 zeros vs Today: 18 zeros), and live plain-English speed explanation. |
-| **4** | **LOTTERY (Solo Lottery Analytics)** | Current block reward jackpot (3.125 BTC + fees &approx; $300k+), total hashes tested since boot, best difficulty rarity score (clarifying it is a score, not % progress), mathematical difficulty formula ($\text{Difficulty} = \text{Target}_1 / \text{Current Target}$), expected hashes calculation ($\text{Diff} \times 2^{32} \approx \text{Diff} \times 4.295\text{B}$), distinction between **bdiff** (truncated Satoshi target) and **pdiff** (pool target), block time equation ($\text{Time} = \text{Diff} \times 2^{32} / \text{Hashrate}$), and the **256-bit die roll finish line**. |
-| **5** | **DIAGNOSTICS (System Telemetry)** | Stratum pool connection (host, port, live ping in milliseconds, primary vs. fallback failover route), Wi-Fi metrics (SSID, RSSI in dBm, quality bars, local IP), ESP32 hardware health (core temperature in °C/°F, free heap RAM, max alloc block, system uptime). |
-| **6** | **HEADER (80-Byte Block Header)** | Complete educational breakdown of the 6 fields of the candidate block header (**Version 4B**, **Prev Hash 32B**, **Merkle Root 32B**, **Time 4B**, **Bits 4B**, **Nonce 4B**). Demonstrates that 76 bytes are fixed by the network and the Nonce is the only dial the CYD turns. Teaches target unpacking from Bits ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), little-endian serialization, ExtraNonce rollover, pool coinbase commitment preventing stolen blocks, double-hash (**SHA256d**), and the **avalanche effect**. |
-| **7** | **SUPPLY (21M Cap, Lost Coins & Satoshis)** | Educational breakdown of Bitcoin economics based on the **Bitcoin Wiki FAQ**: strict **20,999,999.9769 BTC** hard cap, halving subsidy decay via bitwise shift `>> 1` reaching zero at block #6,929,999 (~year 2140). Explains what happens when Bitcoins are lost (permanent out-of-circulation loss, gentle deflation, Satoshi's *"donation to everyone"* principle), how **infinite divisibility** prevents deflation crises (1 BTC = 100M Satoshis, 64-bit integer `int64_t` protocol storage, bits, and Lightning msats), and explains why blocks continue every 10 minutes forever sustained 100% by transaction fees. |
+| **3** | **ARCHITECTURE (80-Byte Header & Pipeline)** | **Unified Architecture view**: combines the 6 candidate block header fields (`[Ver 4B]` `[Prev 32B]` `[Merkle 32B]` `[Time 4B]` `[Bits 4B]` `[Nonce 4B]`), mathematical formula ($4+32+32+4+4+4 = 80\text{B}$, showing 76B are fixed and Nonce is the only dial), Satoshi Whitepaper Section 7 SPV formula ($80\text{B} \times 52,596 = 4.2\text{ MB/year}$), and the Double-SHA256 guess-and-check comparator (`hash < target`, avalanche effect, little-endian digest byte-reversal). |
+| **4** | **ECONOMICS (Lottery Odds & Supply)** | **Unified Mining Economics view**: Solo block jackpot (3.125 BTC + fees &approx; $300k+), total hashes tested, best difficulty rarity score, mathematical difficulty formula ($\text{Difficulty} = \text{Target}_1 / \text{Target}$, $2^{32} \approx 4.295\text{B}$ hashes/diff), 21M hard cap ($20,999,999.9769\text{ BTC}$, 33 halvings until year 2140), Satoshi FAQ on lost coins (*"donation to everyone"*), infinite divisibility ($1\text{ BTC} = 100\text{M sats}$ in `int64_t`), and Whitepaper Section 11 Poisson 6-confirmation rule ($P < 0.024\%$). |
+| **5** | **DIAGNOSTICS (System & Network Telemetry)** | Stratum pool connection (host, port, live ping in milliseconds, primary vs. fallback failover route), Wi-Fi metrics (SSID, RSSI in dBm, quality bars, local IP), ESP32 hardware health (core temperature in °C/°F, free heap RAM, max alloc block, system uptime). |
 
 ---
 
 ### 👆 Touchscreen & Physical Controls
 
 #### Touch Zones (Resistive & Capacitive CYD)
-- **Tap Right Half**: Cycle forward to next screen (`0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 0`)
+- **Tap Right Half**: Cycle forward to next screen (`0 → 1 → 2 → 3 → 4 → 5 → 0`)
 - **Tap Left Half**: Cycle backward to previous screen
 - **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
 - **NVS Memory**: Automatically saves your active screen index to flash and restores it across reboots!

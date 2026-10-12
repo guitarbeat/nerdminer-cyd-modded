@@ -121,11 +121,9 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_MINE 0
 #define SCR_MARKET 1
 #define SCR_CLOCK 2
-#define SCR_EXPLAINER 3
-#define SCR_LOTTERY 4
+#define SCR_ARCH 3
+#define SCR_ECONOMICS 4
 #define SCR_DIAG 5
-#define SCR_HEADER 6
-#define SCR_SUPPLY 7
 
 extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
@@ -911,140 +909,143 @@ static void paintClock(const ClockV &c)
   drawChart();
 }
 
-// ======================================================== EXPLAINER screen ==
+// =================================================== ARCHITECTURE screen ==
+// Unifies the 80-byte header structure and the Double-SHA256 guess-and-check pipeline.
 
-struct ExplainerV
+struct ArchitectureV
 {
   HdrV hdr;
-  String hash;
   String hashrateEng;
   StripV strip;
 };
 
-static void chromeExplainer(TFT_eSPI &d)
+static void chromeArchitecture(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    panel(d, 6, 32, 228, 70, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "HOW IT WORKS: 80B HEADER PIPELINE", 12, 37, 8, C_DIM, C_PANEL);
-    panel(d, 10, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BLOCK", 34, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
-    text(d, "Prev+Tx", 34, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 61, 64, 10, C_METER, C_PANEL);
+    panel(d, 6, 30, 228, 114, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE HEADER", 12, 34, 8, C_DIM, C_PANEL);
 
-    panel(d, 68, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "HEADER", 92, 54, 8, C_METER, C_TRACK, Align::TopCenter);
-    text(d, "+Nonce", 92, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 119, 64, 10, C_METER, C_PANEL);
+    // Row 1
+    panel(d, 10, 46, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VER 4B", 14, 49, 8, C_METER, C_TRACK);
+    text(d, "Consensus rules", 14, 58, 6, C_DIM, C_TRACK);
 
-    panel(d, 126, 49, 46, 48, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "SHA256d", 149, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
-    text(d, "Double", 149, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 175, 64, 10, C_METER, C_PANEL);
+    panel(d, 120, 46, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH 32B", 124, 49, 8, C_METER, C_TRACK);
+    text(d, "Chains past block", 124, 58, 6, C_DIM, C_TRACK);
 
-    panel(d, 182, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TEST", 206, 54, 8, C_GOOD, C_TRACK, Align::TopCenter);
-    text(d, "< Target", 206, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
+    // Row 2
+    panel(d, 10, 71, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 14, 74, 8, C_METER, C_TRACK);
+    text(d, "All txs summary", 14, 83, 6, C_DIM, C_TRACK);
 
-    panel(d, 6, 106, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "NONCE DIAL: GUESS & CHECK", 12, 111, 8, C_DIM, C_PANEL);
-    text(d, "Nonce 0: 9F28B4...  [ TOO BIG  X ]", 12, 125, 8, C_BAD, C_PANEL);
-    text(d, "Nonce 1: 17A904...  [ TOO BIG  X ]", 12, 137, 8, C_BAD, C_PANEL);
-    d.drawFastHLine(12, 150, 216, C_EDGE);
-    text(d, "Target:  000039...  [ SMALLER  V ]", 12, 154, 8, C_GOOD, C_PANEL);
-    text(d, "2009: 8 zeros | Today: 18 zeros (132T)", 12, 169, 8, C_GOLD, C_PANEL);
+    panel(d, 120, 71, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME 4B", 124, 74, 8, C_METER, C_TRACK);
+    text(d, "Block timestamp", 124, 83, 6, C_DIM, C_TRACK);
 
-    panel(d, 6, 196, 228, 66, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WHAT YOUR CYD IS DOING", 12, 201, 8, C_DIM, C_PANEL);
+    // Row 3
+    panel(d, 10, 96, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 14, 99, 8, C_METER, C_TRACK);
+    text(d, "Target exponent", 14, 108, 6, C_DIM, C_TRACK);
+
+    panel(d, 120, 96, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE 4B [DIAL]", 124, 99, 8, C_GOLD, C_TRACK);
+    text(d, "Knob CYD turns!", 124, 108, 6, C_DIM, C_TRACK);
+
+    d.drawFastHLine(10, 121, 216, C_EDGE);
+    text(d, "4+32+32+4+4+4 = 80B (76B Fixed + 4B Dial)", 14, 124, 7, C_DIM, C_PANEL);
+    text(d, "Satoshi Sec 7: 80B * 52.6k = 4.2 MB/yr SPV!", 14, 133, 7, C_GOOD, C_PANEL);
+
+    // Pipeline Box
+    panel(d, 6, 148, 228, 114, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "DOUBLE-SHA256 GUESS & CHECK", 12, 152, 8, C_DIM, C_PANEL);
+    text(d, "Nonce 0: 9F28B4...  [ TOO BIG  X ]", 12, 164, 8, C_BAD, C_PANEL);
+    text(d, "Nonce 1: 17A904...  [ TOO BIG  X ]", 12, 175, 8, C_BAD, C_PANEL);
+    d.drawFastHLine(12, 187, 216, C_EDGE);
+    text(d, "Target:  000039...  [ SMALLER  V ]", 12, 191, 8, C_GOOD, C_PANEL);
+    text(d, "* 18+ Zeros needed (132T+ network diff).", 12, 203, 8, C_GOLD, C_PANEL);
+    text(d, "* Bits: Target = Mantissa * 256^(Exp - 3).", 12, 215, 8, C_TEXT, C_PANEL);
+    text(d, "* Byte-reversed digest; no getting warmer!", 12, 227, 8, C_DIM, C_PANEL);
+
     chromeStripCells(d);
   }
   else
   {
-    panel(d, 8, 30, 304, 56, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "HOW IT WORKS: 80-BYTE BLOCK HEADER PIPELINE", 14, 34, 8, C_DIM, C_PANEL);
+    // Landscape 320x240
+    panel(d, 8, 28, 304, 84, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "THE 80 BYTES YOU'RE HASHING (6 HEADER FIELDS)", 14, 32, 8, C_DIM, C_PANEL);
 
-    panel(d, 14, 46, 60, 34, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BLOCK DATA", 44, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
-    text(d, "Prev + Txs", 44, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 77, 56, 11, C_METER, C_PANEL);
+    // Row 1
+    panel(d, 14, 44, 94, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VER 4B", 18, 46, 8, C_METER, C_TRACK);
+    text(d, "Consensus rules", 18, 56, 6, C_DIM, C_TRACK);
 
-    panel(d, 88, 46, 64, 34, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "80B HEADER", 120, 49, 8, C_METER, C_TRACK, Align::TopCenter);
-    text(d, "+ Nonce", 120, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 155, 56, 11, C_METER, C_PANEL);
+    panel(d, 112, 44, 98, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH 32B", 116, 46, 8, C_METER, C_TRACK);
+    text(d, "Chains past blk", 116, 56, 6, C_DIM, C_TRACK);
 
-    panel(d, 166, 46, 64, 34, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "SHA256d", 198, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
-    text(d, "Double Hash", 198, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
-    text(d, ">", 233, 56, 11, C_METER, C_PANEL);
+    panel(d, 214, 44, 92, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 218, 46, 8, C_METER, C_TRACK);
+    text(d, "All txs summary", 218, 56, 6, C_DIM, C_TRACK);
 
-    panel(d, 244, 46, 62, 34, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "256-BIT TEST", 275, 49, 8, C_GOOD, C_TRACK, Align::TopCenter);
-    text(d, "< Target ?", 275, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
+    // Row 2
+    panel(d, 14, 70, 94, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME 4B", 18, 72, 8, C_METER, C_TRACK);
+    text(d, "Block timestamp", 18, 82, 6, C_DIM, C_TRACK);
 
-    panel(d, 8, 90, 304, 66, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE NONCE DIAL: GUESS & CHECK (AVALANCHE EFFECT)", 14, 94, 8, C_DIM, C_PANEL);
+    panel(d, 112, 70, 98, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 116, 72, 8, C_METER, C_TRACK);
+    text(d, "Target exponent", 116, 82, 6, C_DIM, C_TRACK);
 
-    text(d, "Nonce 0:", 14, 107, 8, C_DIM, C_PANEL);
-    text(d, "9F28B4A18E...", 64, 107, 9, C_TEXT, C_PANEL);
-    text(d, "[ TOO LARGE  X ]", 146, 107, 8, C_BAD, C_PANEL);
+    panel(d, 214, 70, 92, 23, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE 4B [DIAL]", 218, 72, 8, C_GOLD, C_TRACK);
+    text(d, "Knob CYD turns!", 218, 82, 6, C_DIM, C_TRACK);
 
-    text(d, "Nonce 1:", 14, 119, 8, C_DIM, C_PANEL);
-    text(d, "17A904C83D...", 64, 119, 9, C_TEXT, C_PANEL);
-    text(d, "[ TOO LARGE  X ]", 146, 119, 8, C_BAD, C_PANEL);
+    d.drawFastHLine(14, 96, 292, C_EDGE);
+    text(d, "Formula: 4+32+32+4+4+4 = 80B Total (76B Fixed; Nonce is the only dial!)", 14, 99, 7, C_DIM, C_PANEL);
 
-    d.drawFastHLine(14, 131, 206, C_EDGE);
+    // Pipeline Box
+    panel(d, 8, 116, 304, 78, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "DOUBLE-SHA256 PIPELINE (AVALANCHE EFFECT & SPV PROOF)", 14, 120, 8, C_DIM, C_PANEL);
 
-    text(d, "Target:", 14, 134, 8, C_METER, C_PANEL);
-    text(d, "000039A2FF...", 64, 134, 9, C_GOOD, C_PANEL);
-    text(d, "[ SMALL ENOUGH V ]", 146, 134, 8, C_GOOD, C_PANEL);
+    text(d, "Nonce 0:", 14, 132, 8, C_DIM, C_PANEL);
+    text(d, "9F28B4A18E...", 58, 132, 8, C_TEXT, C_PANEL);
+    text(d, "[ TOO LARGE X ]", 130, 132, 8, C_BAD, C_PANEL);
 
-    d.drawFastVLine(228, 94, 58, C_EDGE);
-    text(d, "LEADING ZEROS", 234, 98, 8, C_METER, C_PANEL);
-    text(d, "2009: ~8 zeros", 234, 110, 8, C_TEXT, C_PANEL);
-    text(d, "Today: 18 zeros", 234, 122, 8, C_GOLD, C_PANEL);
-    text(d, "(132T+ Target)", 234, 133, 8, C_DIM, C_PANEL);
+    text(d, "Nonce 1:", 14, 143, 8, C_DIM, C_PANEL);
+    text(d, "17A904C83D...", 58, 143, 8, C_TEXT, C_PANEL);
+    text(d, "[ TOO LARGE X ]", 130, 143, 8, C_BAD, C_PANEL);
 
-    panel(d, 8, 160, 304, 32, 6, C_PANEL, C_EDGE, C_BG);
+    d.drawFastHLine(14, 153, 196, C_EDGE);
+
+    text(d, "Target:", 14, 156, 8, C_METER, C_PANEL);
+    text(d, "000039A2FF...", 58, 156, 8, C_GOOD, C_PANEL);
+    text(d, "[ SMALL ENOUGH V ]", 130, 156, 8, C_GOOD, C_PANEL);
+
+    d.drawFastVLine(218, 120, 70, C_EDGE);
+    text(d, "TARGET & SPV", 224, 122, 8, C_GOLD, C_PANEL);
+    text(d, "18+ Leading zeros", 224, 133, 7, C_TEXT, C_PANEL);
+    text(d, "Target = M*256^(E-3)", 224, 144, 7, C_METER, C_PANEL);
+    text(d, "Sec 7: 4.2 MB/yr SPV", 224, 155, 7, C_GOOD, C_PANEL);
+    text(d, "Byte-reversed hash", 224, 166, 7, C_DIM, C_PANEL);
+
+    text(d, "* Test: Double-SHA256 < Target. Nonce 4.29B rolls before ExtraNonce roll.", 14, 172, 7, C_DIM, C_PANEL);
+
     chromeStripCells(d);
   }
 }
 
-static void paintExplainer(const ExplainerV &e)
+static void paintArchitecture(const ArchitectureV &av)
 {
-  drawHeader(e.hdr);
-
-  String k = e.hashrateEng + "|" + (isPortrait() ? "P" : "L");
-  int ew = isPortrait() ? 216 : 292;
-  int eh = isPortrait() ? 44 : 22;
-  int ex = isPortrait() ? 12 : 14;
-  int ey = isPortrait() ? 214 : 165;
-  if (need(W_EXP_TEXT, k) && wBegin(ew, eh, C_PANEL))
-  {
-    if (isPortrait())
-    {
-      text(wgt, "Your CYD is testing about", 4, 2, 9, C_DIM, C_PANEL);
-      text(wgt, (e.hashrateEng + " hashes / second.").c_str(), 4, 16, 11, C_TEXT, C_PANEL);
-      text(wgt, "Nonce is dial (+1 scrambles: no getting warmer).", 4, 30, 8, C_DIM, C_PANEL);
-    }
-    else
-    {
-      text(wgt, "CYD is trying ~", 4, 3, 9, C_DIM, C_PANEL);
-      int w1 = textW("CYD is trying ~", 9);
-      text(wgt, e.hashrateEng.c_str(), 4 + w1, 2, 11, C_TEXT, C_PANEL);
-      int w2 = textW(e.hashrateEng.c_str(), 11);
-      text(wgt, " hashes/sec. Nonce dial spins (no getting warmer)!", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
-    }
-    wEnd(ex, ey);
-    done(W_EXP_TEXT, k);
-  }
-
-  drawStrip(e.strip);
+  drawHeader(av.hdr);
+  drawStrip(av.strip);
 }
 
-// ========================================================== LOTTERY screen ==
+// =============================================== ECONOMICS & ODDS screen ==
+// Unifies Solo Jackpot, Difficulty Formula, 21M Cap, Deflation, and Whitepaper Math.
 
-struct LotteryV
+struct EconomicsV
 {
   HdrV hdr;
   String netDiff;
@@ -1053,101 +1054,106 @@ struct LotteryV
   StripV strip;
 };
 
-static void chromeLottery(TFT_eSPI &d)
+static void chromeEconomics(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    panel(d, 6, 32, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK JACKPOT", 12, 36, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 12, 47, 16, C_GOLD, C_PANEL);
-    text(d, "+fees (~$300k+)", 84, 52, 8, C_DIM, C_PANEL);
-    d.drawFastVLine(148, 36, 44, C_EDGE);
-    text(d, "NET TARGET", 154, 36, 8, C_DIM, C_PANEL);
+    panel(d, 6, 30, 228, 52, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "SOLO JACKPOT", 12, 34, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 12, 45, 15, C_GOLD, C_PANEL);
+    text(d, "+fees (~$300k+)", 84, 50, 8, C_DIM, C_PANEL);
+    d.drawFastVLine(148, 34, 42, C_EDGE);
+    text(d, "NET TARGET", 154, 34, 8, C_DIM, C_PANEL);
 
-    panel(d, 6, 90, 112, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TOTAL HASHES", 12, 94, 8, C_DIM, C_PANEL);
+    panel(d, 6, 86, 112, 44, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TOTAL HASHES", 12, 90, 8, C_DIM, C_PANEL);
 
-    panel(d, 122, 90, 112, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BEST DIFFICULTY", 128, 94, 8, C_DIM, C_PANEL);
+    panel(d, 122, 86, 112, 44, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BEST DIFFICULTY", 128, 90, 8, C_DIM, C_PANEL);
 
-    panel(d, 6, 142, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "DIFFICULTY FORMULA & SHARES", 12, 146, 8, C_DIM, C_PANEL);
-    text(d, "* Diff = Target_1 / Target (1 Diff = 2^32 rolls).", 12, 158, 8, C_GOLD, C_PANEL);
-    text(d, "* Expected hashes = Diff * 4.295 Billion.", 12, 169, 8, C_TEXT, C_PANEL);
-    text(d, "* SHARES prove pool work; NOT pieces of BTC!", 12, 180, 8, C_METER, C_PANEL);
+    panel(d, 6, 134, 228, 62, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "DIFFICULTY & PROOF-OF-WORK", 12, 138, 8, C_DIM, C_PANEL);
+    text(d, "* Diff = Target_1 / Target (1 Diff = 2^32 rolls).", 12, 149, 8, C_GOLD, C_PANEL);
+    text(d, "* Expected hashes = Diff * 4.295 Billion.", 12, 160, 8, C_TEXT, C_PANEL);
+    text(d, "* Whitepaper Sec 11: 6 confs -> P < 0.024%!", 12, 171, 8, C_GOOD, C_PANEL);
+    text(d, "* SHARES prove pool work; NOT pieces of BTC!", 12, 182, 8, C_METER, C_PANEL);
 
-    panel(d, 6, 204, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "2009 VS TODAY", 12, 208, 8, C_DIM, C_PANEL);
-    text(d, "* 2009: 8 zeros (~100 BTC / 3 hrs on PC).", 12, 220, 8, C_GOLD, C_PANEL);
-    text(d, "* Today: 18 zeros (132T+ network target).", 12, 231, 8, C_TEXT, C_PANEL);
-    text(d, "* Finish line: 256-bit roll < Target.", 12, 242, 8, C_GOOD, C_PANEL);
+    panel(d, 6, 200, 228, 62, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "21M HARD CAP & YEAR 2140", 12, 204, 8, C_DIM, C_PANEL);
+    text(d, "* Max supply: 20,999,999.9769 BTC (int64_t sats).", 12, 215, 8, C_TEXT, C_PANEL);
+    text(d, "* 1 BTC = 100M sats | Satoshi: Lost coins = donation!", 12, 226, 8, C_GOLD, C_PANEL);
+    text(d, "* Sec 6: CPU like gold; Yr 2140 = 100% tx fees.", 12, 237, 8, C_METER, C_PANEL);
+    text(d, "* Deflation proof: Infinite divisibility scales.", 12, 248, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
   else
   {
-    panel(d, 8, 30, 304, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 16, 35, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 16, 46, 18, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300,000+)", 105, 52, 9, C_DIM, C_PANEL);
-    d.drawFastVLine(190, 34, 46, C_EDGE);
-    text(d, "NETWORK TARGET", 198, 35, 8, C_DIM, C_PANEL);
-    text(d, "Global Difficulty Target", 198, 66, 8, C_DIM, C_PANEL);
+    // Landscape 320x240
+    panel(d, 8, 28, 304, 50, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 16, 32, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 16, 42, 17, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300k+ USD)", 105, 48, 9, C_DIM, C_PANEL);
+    d.drawFastVLine(190, 31, 42, C_EDGE);
+    text(d, "NETWORK TARGET", 198, 32, 8, C_DIM, C_PANEL);
+    text(d, "Global Difficulty Target", 198, 59, 7, C_DIM, C_PANEL);
 
-    panel(d, 8, 88, 148, 56, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TOTAL HASHES TESTED", 16, 93, 8, C_DIM, C_PANEL);
-    text(d, "Independent trials since boot", 16, 127, 8, C_DIM, C_PANEL);
+    panel(d, 8, 82, 148, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TOTAL HASHES TESTED", 16, 86, 8, C_DIM, C_PANEL);
+    text(d, "Independent trials since boot", 16, 116, 7, C_DIM, C_PANEL);
 
-    panel(d, 164, 88, 148, 56, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BEST HASH DIFFICULTY", 172, 93, 8, C_DIM, C_PANEL);
-    text(d, "Rarity score (not % progress)", 172, 127, 8, C_DIM, C_PANEL);
+    panel(d, 164, 82, 148, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BEST HASH DIFFICULTY", 172, 86, 8, C_DIM, C_PANEL);
+    text(d, "Rarity score (not % progress)", 172, 116, 7, C_DIM, C_PANEL);
 
-    panel(d, 8, 148, 304, 44, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* Diff = Target_1 / Target. Expected Hashes = Diff * 2^32 (~4.295 Billion per Diff).", 14, 153, 8, C_GOLD, C_PANEL);
-    text(d, "* bdiff (0x00000000FFFF0000...) vs pdiff (non-truncated 32 leading zero bits).", 14, 164, 8, C_TEXT, C_PANEL);
-    text(d, "* Time = Diff * 2^32 / Hashrate. Win condition: 256-bit hash < Network Target!", 14, 175, 8, C_GOOD, C_PANEL);
+    panel(d, 8, 134, 304, 60, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "* Diff = Target_1 / Target. Expected Hashes = Diff * 2^32 (~4.295B per Diff).", 14, 138, 8, C_GOLD, C_PANEL);
+    text(d, "* 21M Cap (20,999,999.9769 BTC). 1 BTC = 100M sats. Balances are 64-bit int64_t.", 14, 149, 8, C_TEXT, C_PANEL);
+    text(d, "* Satoshi: Lost coins are a permanent donation to everyone; deflation rises value.", 14, 160, 8, C_GOLD, C_PANEL);
+    text(d, "* Whitepaper Sec 11: 6 confirmations reduce catch-up probability to P < 0.024%!", 14, 171, 8, C_GOOD, C_PANEL);
+    text(d, "* Year 2140 (Blk 6.93M): Subsidy shifts 100% to transaction fees (Sec 6 gold analogy).", 14, 182, 8, C_METER, C_PANEL);
 
     chromeStripCells(d);
   }
 }
 
-static void paintLottery(const LotteryV &l)
+static void paintEconomics(const EconomicsV &ev)
 {
-  drawHeader(l.hdr);
+  drawHeader(ev.hdr);
 
-  String k = l.netDiff + "|" + (isPortrait() ? "P" : "L");
+  String k = ev.netDiff + "|" + (isPortrait() ? "P" : "L");
   int dw = isPortrait() ? 70 : 100;
   int dx = isPortrait() ? 154 : 198;
-  int dy = isPortrait() ? 47 : 46;
+  int dy = isPortrait() ? 44 : 42;
   if (need(W_LOT_JACKPOT, k) && wBegin(dw, 20, C_PANEL))
   {
-    text(wgt, l.netDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
+    text(wgt, ev.netDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
     wEnd(dx, dy);
     done(W_LOT_JACKPOT, k);
   }
 
-  k = l.totalHashes + "|" + (isPortrait() ? "P" : "L");
+  k = ev.totalHashes + "|" + (isPortrait() ? "P" : "L");
   int tw = isPortrait() ? 96 : 132;
   int tx = isPortrait() ? 12 : 16;
-  int ty = isPortrait() ? 107 : 105;
+  int ty = isPortrait() ? 101 : 97;
   if (need(W_LOT_WORK, k) && wBegin(tw, 20, C_PANEL))
   {
-    text(wgt, l.totalHashes.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
+    text(wgt, ev.totalHashes.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
     wEnd(tx, ty);
     done(W_LOT_WORK, k);
   }
 
-  k = l.bestDiff + "|" + (isPortrait() ? "P" : "L");
+  k = ev.bestDiff + "|" + (isPortrait() ? "P" : "L");
   int bx = isPortrait() ? 128 : 172;
-  int by = isPortrait() ? 107 : 105;
+  int by = isPortrait() ? 101 : 97;
   if (need(W_LOT_DIFF, k) && wBegin(tw, 20, C_PANEL))
   {
-    text(wgt, l.bestDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_METER, C_PANEL);
+    text(wgt, ev.bestDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_METER, C_PANEL);
     wEnd(bx, by);
     done(W_LOT_DIFF, k);
   }
 
-  drawStrip(l.strip);
+  drawStrip(ev.strip);
 }
 
 // ===================================================== DIAGNOSTICS screen ==
@@ -1284,193 +1290,6 @@ static void paintDiag(const DiagV &dg)
   drawStrip(dg.strip);
 }
 
-// ==================================================== BLOCK HEADER screen ==
-
-struct BlockHeaderV
-{
-  HdrV hdr;
-  String hashrateEng;
-  StripV strip;
-};
-
-static void chromeBlockHeader(TFT_eSPI &d)
-{
-  if (isPortrait())
-  {
-    panel(d, 6, 30, 228, 148, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE 80 BYTES YOU'RE HASHING", 12, 34, 8, C_DIM, C_PANEL);
-
-    // Column 1 (x=10, w=106)
-    panel(d, 10, 47, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VERSION  4B", 14, 50, 8, C_METER, C_TRACK);
-    text(d, "Consensus rules", 14, 61, 7, C_DIM, C_TRACK);
-
-    panel(d, 10, 76, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH  32B", 14, 79, 8, C_METER, C_TRACK);
-    text(d, "Chains past block", 14, 90, 7, C_DIM, C_TRACK);
-
-    panel(d, 10, 105, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE  32B", 14, 108, 8, C_METER, C_TRACK);
-    text(d, "All txs fingerprint", 14, 119, 7, C_DIM, C_TRACK);
-
-    // Column 2 (x=120, w=106)
-    panel(d, 120, 47, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME  4B", 124, 50, 8, C_METER, C_TRACK);
-    text(d, "Block timestamp", 124, 61, 7, C_DIM, C_TRACK);
-
-    panel(d, 120, 76, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS  4B", 124, 79, 8, C_METER, C_TRACK);
-    text(d, "Tgt=M*256^(E-3)", 124, 90, 7, C_DIM, C_TRACK);
-
-    panel(d, 120, 105, 106, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE  4B [DIAL]", 124, 108, 8, C_GOLD, C_TRACK);
-    text(d, "The knob you turn!", 124, 119, 7, C_DIM, C_TRACK);
-
-    d.drawFastHLine(10, 134, 216, C_EDGE);
-    text(d, "4 + 32 + 32 + 4 + 4 + 4 = 80 BYTES", 14, 138, 8, C_METER, C_PANEL);
-    text(d, "76B fixed; Nonce is dial CYD spins", 14, 150, 7, C_DIM, C_PANEL);
-
-    panel(d, 6, 182, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHA256d & PROOF-OF-WORK", 12, 186, 8, C_DIM, C_PANEL);
-    text(d, "* Bits: 1B Exp + 3B Mantissa -> Target.", 12, 199, 8, C_GOLD, C_PANEL);
-    text(d, "* Nonce 4.29B rolls; then ExtraNonce.", 12, 211, 8, C_TEXT, C_PANEL);
-    text(d, "* Little-endian; byte-reversed hash.", 12, 223, 8, C_TEXT, C_PANEL);
-    text(d, "* Test: Double-SHA256 < Target.", 12, 235, 8, C_GOOD, C_PANEL);
-    text(d, "* 80B = 4.2MB/yr (Satoshi Sec 7 SPV).", 12, 247, 8, C_GOOD, C_PANEL);
-
-    chromeStripCells(d);
-  }
-  else
-  {
-    panel(d, 8, 28, 304, 126, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE 80 BYTES YOU'RE HASHING (6 HEADER FIELDS)", 14, 32, 8, C_DIM, C_PANEL);
-
-    // Row 1
-    panel(d, 14, 45, 94, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VERSION  4B", 18, 48, 8, C_METER, C_TRACK);
-    text(d, "Consensus rules", 18, 59, 7, C_DIM, C_TRACK);
-
-    panel(d, 112, 45, 98, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH  32B", 116, 48, 8, C_METER, C_TRACK);
-    text(d, "Chains past block", 116, 59, 7, C_DIM, C_TRACK);
-
-    panel(d, 214, 45, 92, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE  32B", 218, 48, 8, C_METER, C_TRACK);
-    text(d, "All txs fingerprint", 218, 59, 7, C_DIM, C_TRACK);
-
-    // Row 2
-    panel(d, 14, 74, 94, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME  4B", 18, 77, 8, C_METER, C_TRACK);
-    text(d, "Creation timestamp", 18, 88, 7, C_DIM, C_TRACK);
-
-    panel(d, 112, 74, 98, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS  4B", 116, 77, 8, C_METER, C_TRACK);
-    text(d, "Tgt=M*256^(E-3)", 116, 88, 7, C_DIM, C_TRACK);
-
-    panel(d, 214, 74, 92, 25, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE  4B [DIAL]", 218, 77, 8, C_GOLD, C_TRACK);
-    text(d, "Knob miner spins!", 218, 88, 7, C_DIM, C_TRACK);
-
-    // Formula line
-    d.drawFastHLine(14, 103, 292, C_EDGE);
-    text(d, "Header Formula: 4 + 32 + 32 + 4 + 4 + 4 = 80 BYTES TOTAL", 14, 107, 8, C_TEXT, C_PANEL);
-    text(d, "76 bytes are fixed by network; Nonce is the only dial CYD spins!", 14, 118, 8, C_DIM, C_PANEL);
-
-    // Panel 2
-    panel(d, 8, 154, 304, 40, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* Bits unpacks: Target = Mantissa * 256^(Exp - 3). Nonce 4.29B rolls + ExtraNonce.", 14, 158, 8, C_GOLD, C_PANEL);
-    text(d, "* Header is little-endian; computed hashes are byte-reversed to display zeros.", 14, 169, 8, C_TEXT, C_PANEL);
-    text(d, "* 80B * 52k blks = 4.2MB/yr (Whitepaper Sec 7)! Enables SPV light nodes.", 14, 180, 8, C_GOOD, C_PANEL);
-
-    chromeStripCells(d);
-  }
-}
-
-static void paintBlockHeader(const BlockHeaderV &bh)
-{
-  drawHeader(bh.hdr);
-  drawStrip(bh.strip);
-}
-
-// ============================================================ SUPPLY screen ==
-
-struct SupplyV
-{
-  HdrV hdr;
-  StripV strip;
-};
-
-static SupplyV lastSupply;
-static bool haveSupply = false;
-
-static void chromeSupply(TFT_eSPI &d)
-{
-  if (isPortrait())
-  {
-    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "21M HARD CAP & BITCOIN UNITS", 12, 36, 8, C_DIM, C_PANEL);
-    text(d, "MAX SUPPLY: 20,999,999.9769 BTC", 12, 49, 9, C_GOLD, C_PANEL);
-    text(d, "* 1 BTC = 100,000,000 Satoshis (sats).", 12, 62, 8, C_TEXT, C_PANEL);
-    text(d, "* 1 mBTC = 100k sats | 1 Bit = 100 sats.", 12, 73, 8, C_DIM, C_PANEL);
-    text(d, "* 33 Halvings: 50 BTC -> 0 sats in yr 2140.", 12, 84, 8, C_METER, C_PANEL);
-
-    panel(d, 6, 106, 228, 76, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WHAT HAPPENS WHEN COINS ARE LOST?", 12, 110, 8, C_DIM, C_PANEL);
-    text(d, "* Lost private keys = gone forever from supply.", 12, 122, 8, C_BAD, C_PANEL);
-    text(d, "* Deflationary model: supply continually shrinks.", 12, 134, 8, C_TEXT, C_PANEL);
-    text(d, "* Satoshi: 'Lost coins make all other coins", 12, 146, 8, C_GOLD, C_PANEL);
-    text(d, "  worth slightly more. A donation to everyone!'", 12, 157, 8, C_GOLD, C_PANEL);
-    text(d, "* Purchasing power rises as supply decreases.", 12, 168, 8, C_GOOD, C_PANEL);
-
-    panel(d, 6, 188, 228, 72, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "INFINITE DIVISIBILITY & YEAR 2140", 12, 192, 8, C_DIM, C_PANEL);
-    text(d, "* Divisibility prevents deflation crises:", 12, 204, 8, C_TEXT, C_PANEL);
-    text(d, "  Even with 1 BTC left, world trade functions!", 12, 215, 8, C_GOOD, C_PANEL);
-    text(d, "* Balances: 64-bit integer sats (int64_t).", 12, 226, 8, C_DIM, C_PANEL);
-    text(d, "* Whitepaper Sec 6: CPU & energy like gold.", 12, 237, 8, C_METER, C_PANEL);
-    text(d, "* Post-2140: 100% miner revenue from TX fees!", 12, 248, 8, C_METER, C_PANEL);
-
-    chromeStripCells(d);
-  }
-  else
-  {
-    panel(d, 8, 30, 304, 62, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "21M HARD CAP & SATOSHI DIVISIBILITY", 14, 34, 8, C_DIM, C_PANEL);
-
-    panel(d, 14, 46, 92, 40, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "21M HARD CAP", 18, 49, 8, C_GOLD, C_TRACK);
-    text(d, "20,999,999.9769 BTC", 18, 59, 7, C_TEXT, C_TRACK);
-    text(d, "Last coin ~yr 2140", 18, 69, 7, C_DIM, C_TRACK);
-
-    panel(d, 112, 46, 94, 40, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "1 SATOSHI", 116, 49, 8, C_METER, C_TRACK);
-    text(d, "10^-8 BTC (100M/coin)", 116, 59, 7, C_TEXT, C_TRACK);
-    text(d, "64-bit int64_t sats", 116, 69, 7, C_DIM, C_TRACK);
-
-    panel(d, 212, 46, 94, 40, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "33 HALVINGS", 216, 49, 8, C_GOOD, C_TRACK);
-    text(d, "50 BTC -> 0 sats", 216, 59, 7, C_TEXT, C_TRACK);
-    text(d, "Yr 2140 (Blk 6.93M)", 216, 69, 7, C_DIM, C_TRACK);
-
-    panel(d, 8, 98, 304, 92, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WHAT HAPPENS WHEN COINS ARE LOST? (DEFLATION & YEAR 2140)", 14, 102, 8, C_DIM, C_PANEL);
-    text(d, "* Lost keys = coins gone forever. Supply shrinks over time (deflationary).", 14, 115, 8, C_TEXT, C_PANEL);
-    text(d, "* Satoshi: 'Lost coins make everyone else's coins worth slightly more.'", 14, 126, 8, C_GOLD, C_PANEL);
-    text(d, "* Whitepaper Sec 6: CPU & electricity expended like gold miners mining gold.", 14, 137, 8, C_GOOD, C_PANEL);
-    text(d, "* Infinite divisibility: Even with 1 BTC left, economy works via sats/bits.", 14, 148, 8, C_DIM, C_PANEL);
-    text(d, "* 6.93M blks * 10m = 131.8 yrs -> Year 2140: 100% of mining funded by TX fees!", 14, 159, 8, C_METER, C_PANEL);
-    text(d, "* Integer >> 1 truncates odd sats: 20,999,999.9769 BTC total (0.0231 unissued).", 14, 170, 8, C_TEXT, C_PANEL);
-
-    chromeStripCells(d);
-  }
-}
-
-static void paintSupply(const SupplyV &sv)
-{
-  drawHeader(sv.hdr);
-  drawStrip(sv.strip);
-}
-
 // ------------------------------------------------------ boot / setup pages --
 
 static void paintLoading(TFT_eSPI &d)
@@ -1535,20 +1354,14 @@ static void paintChrome(TFT_eSPI &d, int scr)
   case SCR_CLOCK:
     chromeClock(d);
     break;
-  case SCR_EXPLAINER:
-    chromeExplainer(d);
+  case SCR_ARCH:
+    chromeArchitecture(d);
     break;
-  case SCR_LOTTERY:
-    chromeLottery(d);
+  case SCR_ECONOMICS:
+    chromeEconomics(d);
     break;
   case SCR_DIAG:
     chromeDiag(d);
-    break;
-  case SCR_HEADER:
-    chromeBlockHeader(d);
-    break;
-  case SCR_SUPPLY:
-    chromeSupply(d);
     break;
   default:
     chromeClock(d);
@@ -1580,13 +1393,11 @@ static void setAccent(int idx)
 static MineV lastMine;
 static MarketV lastMarket;
 static ClockV lastClock;
-static ExplainerV lastExplainer;
-static LotteryV lastLottery;
+static ArchitectureV lastArch;
+static EconomicsV lastEcon;
 static DiagV lastDiag;
-static BlockHeaderV lastHeader;
 static bool haveMine = false, haveMarket = false, haveClock = false;
-static bool haveExplainer = false, haveLottery = false, haveDiag = false;
-static bool haveHeader = false;
+static bool haveArch = false, haveEcon = false, haveDiag = false;
 
 static void repaintCached(int scr)
 {
@@ -1596,16 +1407,12 @@ static void repaintCached(int scr)
     paintMarket(lastMarket);
   else if (scr == SCR_CLOCK && haveClock)
     paintClock(lastClock);
-  else if (scr == SCR_EXPLAINER && haveExplainer)
-    paintExplainer(lastExplainer);
-  else if (scr == SCR_LOTTERY && haveLottery)
-    paintLottery(lastLottery);
+  else if (scr == SCR_ARCH && haveArch)
+    paintArchitecture(lastArch);
+  else if (scr == SCR_ECONOMICS && haveEcon)
+    paintEconomics(lastEcon);
   else if (scr == SCR_DIAG && haveDiag)
     paintDiag(lastDiag);
-  else if (scr == SCR_HEADER && haveHeader)
-    paintBlockHeader(lastHeader);
-  else if (scr == SCR_SUPPLY && haveSupply)
-    paintSupply(lastSupply);
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -1822,68 +1629,67 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
 
-void esp32_2432S028R_ExplainerScreen(unsigned long mElapsed)
+void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 {
   mining_data data = getMiningData(mElapsed);
   refreshPool();
   uiLive = true;
-  ensureChrome(SCR_EXPLAINER);
+  ensureChrome(SCR_ARCH);
   float kh = data.currentHashRate.toFloat();
   noteHashrate(kh);
 
-  ExplainerV e;
-  e.hdr = liveHeader(data.currentTime);
-  e.hash = data.currentHashRate;
+  ArchitectureV av;
+  av.hdr = liveHeader(data.currentTime);
   long hps = (long)(kh * 1000.0f);
-  e.hashrateEng = commas(String(hps));
-  e.strip.l[0] = "SPEED";
-  e.strip.v[0] = data.currentHashRate + "K";
-  e.strip.l[1] = "UNIT";
-  e.strip.v[1] = "1K H/s";
-  e.strip.l[2] = "HEADER";
-  e.strip.v[2] = "80 BYTES";
-  e.strip.l[3] = "RULE";
-  e.strip.v[3] = "HASH<TARG";
-  lastExplainer = e;
-  haveExplainer = true;
-  paintExplainer(e);
+  av.hashrateEng = commas(String(hps));
+  av.strip.l[0] = "HEADER";
+  av.strip.v[0] = "80 BYTES";
+  av.strip.l[1] = "DIAL";
+  av.strip.v[1] = "NONCE 4B";
+  av.strip.l[2] = "ALGO";
+  av.strip.v[2] = "SHA256d";
+  av.strip.l[3] = "SPV";
+  av.strip.v[3] = "4.2MB/YR";
+  lastArch = av;
+  haveArch = true;
+  paintArchitecture(av);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
 
-void esp32_2432S028R_LotteryScreen(unsigned long mElapsed)
+void esp32_2432S028R_EconomicsScreen(unsigned long mElapsed)
 {
   mining_data data = getMiningData(mElapsed);
   refreshPool();
   uiLive = true;
-  ensureChrome(SCR_LOTTERY);
+  ensureChrome(SCR_ECONOMICS);
   noteHashrate(data.currentHashRate.toFloat());
 
-  LotteryV l;
-  l.hdr = liveHeader(data.currentTime);
+  EconomicsV ev;
+  ev.hdr = liveHeader(data.currentTime);
   if (g_networkDifficulty > 0.0)
   {
     char b[32];
     snprintf(b, sizeof(b), "%.2f T", g_networkDifficulty / 1e12);
-    l.netDiff = String(b);
+    ev.netDiff = String(b);
   }
   else
   {
-    l.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
+    ev.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
   }
-  l.totalHashes = fmtTotalHashes(data.totalMHashes);
-  l.bestDiff = data.bestDiff;
-  l.strip.l[0] = "SHARES";
-  l.strip.v[0] = commas(data.completedShares);
-  l.strip.l[1] = "POOL DIFF";
-  l.strip.v[1] = "EASIER";
-  l.strip.l[2] = "NET DIFF";
-  l.strip.v[2] = l.netDiff;
-  l.strip.l[3] = "BLOCKS";
-  l.strip.v[3] = data.valids;
-  lastLottery = l;
-  haveLottery = true;
-  paintLottery(l);
+  ev.totalHashes = fmtTotalHashes(data.totalMHashes);
+  ev.bestDiff = data.bestDiff;
+  ev.strip.l[0] = "JACKPOT";
+  ev.strip.v[0] = "3.125 BTC";
+  ev.strip.l[1] = "HARD CAP";
+  ev.strip.v[1] = "21M BTC";
+  ev.strip.l[2] = "1 SATOSHI";
+  ev.strip.v[2] = "10^-8 BTC";
+  ev.strip.l[3] = "YEAR 2140";
+  ev.strip.v[3] = "100% FEES";
+  lastEcon = ev;
+  haveEcon = true;
+  paintEconomics(ev);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -1934,60 +1740,6 @@ void esp32_2432S028R_DiagScreen(unsigned long mElapsed)
   lastDiag = dg;
   haveDiag = true;
   paintDiag(dg);
-
-  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
-}
-
-void esp32_2432S028R_HeaderScreen(unsigned long mElapsed)
-{
-  mining_data data = getMiningData(mElapsed);
-  refreshPool();
-  uiLive = true;
-  ensureChrome(SCR_HEADER);
-  float kh = data.currentHashRate.toFloat();
-  noteHashrate(kh);
-
-  BlockHeaderV bh;
-  bh.hdr = liveHeader(data.currentTime);
-  long hps = (long)(kh * 1000.0f);
-  bh.hashrateEng = commas(String(hps));
-  bh.strip.l[0] = "TOTAL";
-  bh.strip.v[0] = "80 BYTES";
-  bh.strip.l[1] = "FIELDS";
-  bh.strip.v[1] = "6 PARTS";
-  bh.strip.l[2] = "DIAL";
-  bh.strip.v[2] = "NONCE 4B";
-  bh.strip.l[3] = "ALGO";
-  bh.strip.v[3] = "SHA256d";
-  lastHeader = bh;
-  haveHeader = true;
-  paintBlockHeader(bh);
-
-  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
-}
-
-void esp32_2432S028R_SupplyScreen(unsigned long mElapsed)
-{
-  mining_data data = getMiningData(mElapsed);
-  refreshPool();
-  uiLive = true;
-  ensureChrome(SCR_SUPPLY);
-  float kh = data.currentHashRate.toFloat();
-  noteHashrate(kh);
-
-  SupplyV sv;
-  sv.hdr = liveHeader(data.currentTime);
-  sv.strip.l[0] = "HARD CAP";
-  sv.strip.v[0] = "21M BTC";
-  sv.strip.l[1] = "1 SATOSHI";
-  sv.strip.v[1] = "10^-8 BTC";
-  sv.strip.l[2] = "END YEAR";
-  sv.strip.v[2] = "YR 2140";
-  sv.strip.l[3] = "POST-2140";
-  sv.strip.v[3] = "100% FEES";
-  lastSupply = sv;
-  haveSupply = true;
-  paintSupply(sv);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -2358,11 +2110,9 @@ CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_MinerScreen,
     esp32_2432S028R_MarketScreen,
     esp32_2432S028R_ClockScreen,
-    esp32_2432S028R_ExplainerScreen,
-    esp32_2432S028R_LotteryScreen,
-    esp32_2432S028R_DiagScreen,
-    esp32_2432S028R_HeaderScreen,
-    esp32_2432S028R_SupplyScreen};
+    esp32_2432S028R_ArchitectureScreen,
+    esp32_2432S028R_EconomicsScreen,
+    esp32_2432S028R_DiagScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
