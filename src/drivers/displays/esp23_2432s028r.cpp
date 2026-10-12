@@ -910,7 +910,7 @@ static void paintClock(const ClockV &c)
 }
 
 // =================================================== ARCHITECTURE screen ==
-// Unifies the 80-byte header structure and the Double-SHA256 guess-and-check pipeline.
+// Professional hardware instrument view of the 80-byte header structure and PoW loop.
 
 struct ArchitectureV
 {
@@ -923,114 +923,116 @@ static void chromeArchitecture(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    panel(d, 6, 30, 228, 114, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 12, 34, 8, C_DIM, C_PANEL);
+    // Candidate Header Container
+    panel(d, 6, 30, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE HEADER", 14, 35, 8, C_DIM, C_PANEL);
 
     // Row 1
-    panel(d, 10, 46, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 14, 49, 8, C_METER, C_TRACK);
-    text(d, "Consensus rules", 14, 58, 6, C_DIM, C_TRACK);
+    panel(d, 10, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VERSION 4B", 14, 51, 8, C_METER, C_TRACK);
+    text(d, "Consensus", 78, 51, 7, C_DIM, C_TRACK);
 
-    panel(d, 120, 46, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 124, 49, 8, C_METER, C_TRACK);
-    text(d, "Chains past block", 124, 58, 6, C_DIM, C_TRACK);
+    panel(d, 120, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH 32B", 124, 51, 8, C_METER, C_TRACK);
+    text(d, "Chain", 192, 51, 7, C_DIM, C_TRACK);
 
     // Row 2
-    panel(d, 10, 71, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 14, 74, 8, C_METER, C_TRACK);
-    text(d, "All txs summary", 14, 83, 6, C_DIM, C_TRACK);
+    panel(d, 10, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 14, 73, 8, C_METER, C_TRACK);
+    text(d, "Txs Tree", 76, 73, 7, C_DIM, C_TRACK);
 
-    panel(d, 120, 71, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 124, 74, 8, C_METER, C_TRACK);
-    text(d, "Block timestamp", 124, 83, 6, C_DIM, C_TRACK);
+    panel(d, 120, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME 4B", 124, 73, 8, C_METER, C_TRACK);
+    text(d, "Epoch", 190, 73, 7, C_DIM, C_TRACK);
 
     // Row 3
-    panel(d, 10, 96, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 14, 99, 8, C_METER, C_TRACK);
-    text(d, "Target exponent", 14, 108, 6, C_DIM, C_TRACK);
+    panel(d, 10, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 14, 95, 8, C_METER, C_TRACK);
+    text(d, "Target", 84, 95, 7, C_DIM, C_TRACK);
 
-    panel(d, 120, 96, 106, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B [DIAL]", 124, 99, 8, C_GOLD, C_TRACK);
-    text(d, "Knob CYD turns!", 124, 108, 6, C_DIM, C_TRACK);
+    panel(d, 120, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE 4B [DIAL]", 124, 95, 8, C_GOLD, C_TRACK);
+    text(d, "Miner", 190, 95, 7, C_DIM, C_TRACK);
 
-    d.drawFastHLine(10, 121, 216, C_EDGE);
-    text(d, "4+32+32+4+4+4 = 80B (76B Fixed + 4B Dial)", 14, 124, 7, C_DIM, C_PANEL);
-    text(d, "Satoshi Sec 7: 80B * 52.6k = 4.2 MB/yr SPV!", 14, 133, 7, C_GOOD, C_PANEL);
+    // 4 Pipeline Stage Badges
+    const int py = 126;
+    panel(d, 6, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "HEADER", 32, py + 4, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 32, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
 
-    // Pipeline Box
-    panel(d, 6, 148, 228, 114, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "DOUBLE-SHA256 GUESS & CHECK", 12, 152, 8, C_DIM, C_PANEL);
-    text(d, "Nonce 0: 9F28B4...  [ TOO BIG  X ]", 12, 164, 8, C_BAD, C_PANEL);
-    text(d, "Nonce 1: 17A904...  [ TOO BIG  X ]", 12, 175, 8, C_BAD, C_PANEL);
-    d.drawFastHLine(12, 187, 216, C_EDGE);
-    text(d, "Target:  000039...  [ SMALLER  V ]", 12, 191, 8, C_GOOD, C_PANEL);
-    text(d, "* 18+ Zeros needed (132T+ network diff).", 12, 203, 8, C_GOLD, C_PANEL);
-    text(d, "* Bits: Target = Mantissa * 256^(Exp - 3).", 12, 215, 8, C_TEXT, C_PANEL);
-    text(d, "* Byte-reversed digest; no getting warmer!", 12, 227, 8, C_DIM, C_PANEL);
+    panel(d, 64, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "SHA256d", 90, py + 4, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "2x Hash", 90, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
+
+    panel(d, 122, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "TARGET", 148, py + 4, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 148, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
+
+    panel(d, 180, py, 54, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "TEST", 207, py + 4, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "H < Tgt", 207, py + 14, 7, C_GOOD, C_PANEL, Align::TopCenter);
+
+    // Two Info Tiles
+    drawTile(W_EXP_STREAM, 6, 160, 112, 44, "76B FIXED + 4B DIAL", "SPV 4.2 MB/Y", C_METER, C_EDGE);
+    drawTile(W_EXP_TEXT, 122, 160, 112, 44, "AVALANCHE EFFECT", "NO GET WARM", C_TEXT, C_EDGE);
 
     chromeStripCells(d);
   }
   else
   {
     // Landscape 320x240
-    panel(d, 8, 28, 304, 84, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "THE 80 BYTES YOU'RE HASHING (6 HEADER FIELDS)", 14, 32, 8, C_DIM, C_PANEL);
+    panel(d, 8, 30, 304, 72, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE BLOCK HEADER", 16, 35, 8, C_DIM, C_PANEL);
 
     // Row 1
-    panel(d, 14, 44, 94, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 18, 46, 8, C_METER, C_TRACK);
-    text(d, "Consensus rules", 18, 56, 6, C_DIM, C_TRACK);
+    panel(d, 14, 48, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VER 4B", 18, 51, 8, C_METER, C_TRACK);
+    text(d, "Consensus", 60, 51, 7, C_DIM, C_TRACK);
 
-    panel(d, 112, 44, 98, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 116, 46, 8, C_METER, C_TRACK);
-    text(d, "Chains past blk", 116, 56, 6, C_DIM, C_TRACK);
+    panel(d, 112, 48, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "PREV HASH 32B", 116, 51, 8, C_METER, C_TRACK);
+    text(d, "Chain", 182, 51, 7, C_DIM, C_TRACK);
 
-    panel(d, 214, 44, 92, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 218, 46, 8, C_METER, C_TRACK);
-    text(d, "All txs summary", 218, 56, 6, C_DIM, C_TRACK);
+    panel(d, 214, 48, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 218, 51, 8, C_METER, C_TRACK);
+    text(d, "Txs", 286, 51, 7, C_DIM, C_TRACK);
 
     // Row 2
-    panel(d, 14, 70, 94, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 18, 72, 8, C_METER, C_TRACK);
-    text(d, "Block timestamp", 18, 82, 6, C_DIM, C_TRACK);
+    panel(d, 14, 72, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TIME 4B", 18, 75, 8, C_METER, C_TRACK);
+    text(d, "Timestamp", 60, 75, 7, C_DIM, C_TRACK);
 
-    panel(d, 112, 70, 98, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 116, 72, 8, C_METER, C_TRACK);
-    text(d, "Target exponent", 116, 82, 6, C_DIM, C_TRACK);
+    panel(d, 112, 72, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 116, 75, 8, C_METER, C_TRACK);
+    text(d, "Target", 178, 75, 7, C_DIM, C_TRACK);
 
-    panel(d, 214, 70, 92, 23, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B [DIAL]", 218, 72, 8, C_GOLD, C_TRACK);
-    text(d, "Knob CYD turns!", 218, 82, 6, C_DIM, C_TRACK);
+    panel(d, 214, 72, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE 4B [DIAL]", 218, 75, 8, C_GOLD, C_TRACK);
+    text(d, "Miner", 280, 75, 7, C_DIM, C_TRACK);
 
-    d.drawFastHLine(14, 96, 292, C_EDGE);
-    text(d, "Formula: 4+32+32+4+4+4 = 80B Total (76B Fixed; Nonce is the only dial!)", 14, 99, 7, C_DIM, C_PANEL);
+    // Pipeline Flow Row (4 badges)
+    const int py = 108;
+    panel(d, 8, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "1. HEADER", 44, py + 6, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 44, py + 20, 8, C_TEXT, C_PANEL, Align::TopCenter);
 
-    // Pipeline Box
-    panel(d, 8, 116, 304, 78, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "DOUBLE-SHA256 PIPELINE (AVALANCHE EFFECT & SPV PROOF)", 14, 120, 8, C_DIM, C_PANEL);
+    panel(d, 84, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "2. SHA256d", 120, py + 6, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "Double Hash", 120, py + 20, 8, C_DIM, C_PANEL, Align::TopCenter);
 
-    text(d, "Nonce 0:", 14, 132, 8, C_DIM, C_PANEL);
-    text(d, "9F28B4A18E...", 58, 132, 8, C_TEXT, C_PANEL);
-    text(d, "[ TOO LARGE X ]", 130, 132, 8, C_BAD, C_PANEL);
+    panel(d, 160, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "3. TARGET", 196, py + 6, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 196, py + 20, 8, C_GOLD, C_PANEL, Align::TopCenter);
 
-    text(d, "Nonce 1:", 14, 143, 8, C_DIM, C_PANEL);
-    text(d, "17A904C83D...", 58, 143, 8, C_TEXT, C_PANEL);
-    text(d, "[ TOO LARGE X ]", 130, 143, 8, C_BAD, C_PANEL);
+    panel(d, 236, py, 76, 40, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "4. 256-BIT TEST", 274, py + 6, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "Hash < Target", 274, py + 20, 8, C_GOOD, C_PANEL, Align::TopCenter);
 
-    d.drawFastHLine(14, 153, 196, C_EDGE);
-
-    text(d, "Target:", 14, 156, 8, C_METER, C_PANEL);
-    text(d, "000039A2FF...", 58, 156, 8, C_GOOD, C_PANEL);
-    text(d, "[ SMALL ENOUGH V ]", 130, 156, 8, C_GOOD, C_PANEL);
-
-    d.drawFastVLine(218, 120, 70, C_EDGE);
-    text(d, "TARGET & SPV", 224, 122, 8, C_GOLD, C_PANEL);
-    text(d, "18+ Leading zeros", 224, 133, 7, C_TEXT, C_PANEL);
-    text(d, "Target = M*256^(E-3)", 224, 144, 7, C_METER, C_PANEL);
-    text(d, "Sec 7: 4.2 MB/yr SPV", 224, 155, 7, C_GOOD, C_PANEL);
-    text(d, "Byte-reversed hash", 224, 166, 7, C_DIM, C_PANEL);
-
-    text(d, "* Test: Double-SHA256 < Target. Nonce 4.29B rolls before ExtraNonce roll.", 14, 172, 7, C_DIM, C_PANEL);
+    // 3 Bottom Metric Tiles
+    const int ty = 152;
+    drawTile(W_EXP_STREAM, 8, ty, 98, 40, "FIXED / DIAL", "76B / 4B", C_METER, C_EDGE);
+    drawTile(W_EXP_TEXT, 111, ty, 98, 40, "SATOSHI SEC 7", "4.2 MB/YR", C_TEXT, C_EDGE);
+    drawTile(W_LOT_DIFF, 214, ty, 98, 40, "AVALANCHE", "INDEPENDENT", C_GOLD, C_EDGE);
 
     chromeStripCells(d);
   }
@@ -1043,7 +1045,7 @@ static void paintArchitecture(const ArchitectureV &av)
 }
 
 // =============================================== ECONOMICS & ODDS screen ==
-// Unifies Solo Jackpot, Difficulty Formula, 21M Cap, Deflation, and Whitepaper Math.
+// Structured widget dashboard for solo jackpot, difficulty formula, 21M supply, and finality.
 
 struct EconomicsV
 {
@@ -1058,60 +1060,49 @@ static void chromeEconomics(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    panel(d, 6, 30, 228, 52, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "SOLO JACKPOT", 12, 34, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 12, 45, 15, C_GOLD, C_PANEL);
-    text(d, "+fees (~$300k+)", 84, 50, 8, C_DIM, C_PANEL);
-    d.drawFastVLine(148, 34, 42, C_EDGE);
-    text(d, "NET TARGET", 154, 34, 8, C_DIM, C_PANEL);
+    // Hero Solo Jackpot Card
+    panel(d, 6, 30, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 14, 34, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 14, 45, 17, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300k+ USD)", 100, 52, 8, C_DIM, C_PANEL);
 
-    panel(d, 6, 86, 112, 44, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TOTAL HASHES", 12, 90, 8, C_DIM, C_PANEL);
+    // Four Clean Metric Tiles
+    drawTile(W_LOT_JACKPOT, 6, 82, 112, 38, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 122, 82, 112, 38, "HARD CAP SUPPLY", "20,999,999", C_GOLD, C_EDGE);
+    drawTile(W_LOT_DIFF, 6, 124, 112, 38, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
+    drawTile(W_C0, 122, 124, 112, 38, "CONFIRMATIONS", "6 (P < 0.024%)", C_GOOD, C_EDGE);
 
-    panel(d, 122, 86, 112, 44, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BEST DIFFICULTY", 128, 90, 8, C_DIM, C_PANEL);
-
-    panel(d, 6, 134, 228, 62, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "DIFFICULTY & PROOF-OF-WORK", 12, 138, 8, C_DIM, C_PANEL);
-    text(d, "* Diff = Target_1 / Target (1 Diff = 2^32 rolls).", 12, 149, 8, C_GOLD, C_PANEL);
-    text(d, "* Expected hashes = Diff * 4.295 Billion.", 12, 160, 8, C_TEXT, C_PANEL);
-    text(d, "* Whitepaper Sec 11: 6 confs -> P < 0.024%!", 12, 171, 8, C_GOOD, C_PANEL);
-    text(d, "* SHARES prove pool work; NOT pieces of BTC!", 12, 182, 8, C_METER, C_PANEL);
-
-    panel(d, 6, 200, 228, 62, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "21M HARD CAP & YEAR 2140", 12, 204, 8, C_DIM, C_PANEL);
-    text(d, "* Max supply: 20,999,999.9769 BTC (int64_t sats).", 12, 215, 8, C_TEXT, C_PANEL);
-    text(d, "* 1 BTC = 100M sats | Satoshi: Lost coins = donation!", 12, 226, 8, C_GOLD, C_PANEL);
-    text(d, "* Sec 6: CPU like gold; Yr 2140 = 100% tx fees.", 12, 237, 8, C_METER, C_PANEL);
-    text(d, "* Deflation proof: Infinite divisibility scales.", 12, 248, 8, C_GOOD, C_PANEL);
+    // Bottom Summary Banner
+    panel(d, 6, 166, 228, 38, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 12, 171, 7, C_GOLD, C_PANEL);
+    text(d, "Satoshi: Lost coins = donation | Yr 2140 = 100% fees", 12, 183, 7, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
   else
   {
     // Landscape 320x240
-    panel(d, 8, 28, 304, 50, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 16, 32, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 16, 42, 17, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300k+ USD)", 105, 48, 9, C_DIM, C_PANEL);
-    d.drawFastVLine(190, 31, 42, C_EDGE);
-    text(d, "NETWORK TARGET", 198, 32, 8, C_DIM, C_PANEL);
-    text(d, "Global Difficulty Target", 198, 59, 7, C_DIM, C_PANEL);
+    // Hero Solo Jackpot Card
+    panel(d, 8, 30, 304, 52, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 18, 35, 9, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 18, 47, 22, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300,000+ USD)", 126, 55, 10, C_DIM, C_PANEL);
+    d.drawFastVLine(230, 34, 44, C_EDGE);
+    text(d, "SOLO ODDS", 236, 36, 8, C_DIM, C_PANEL);
+    text(d, "100% TO YOU", 236, 50, 10, C_GOOD, C_PANEL);
 
-    panel(d, 8, 82, 148, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "TOTAL HASHES TESTED", 16, 86, 8, C_DIM, C_PANEL);
-    text(d, "Independent trials since boot", 16, 116, 7, C_DIM, C_PANEL);
+    // 4 Crisp Stat Tiles (matching screens 0 & 1 layout)
+    const int y1 = 86, w = 148, h = 38;
+    drawTile(W_LOT_JACKPOT, 8, y1, w, h, "NETWORK TARGET", "132.72 T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 164, y1, w, h, "HARD CAP SUPPLY", "20,999,999.9769 BTC", C_GOLD, C_EDGE);
 
-    panel(d, 164, 82, 148, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BEST HASH DIFFICULTY", 172, 86, 8, C_DIM, C_PANEL);
-    text(d, "Rarity score (not % progress)", 172, 116, 7, C_DIM, C_PANEL);
+    const int y2 = 128;
+    drawTile(W_LOT_DIFF, 8, y2, w, h, "1 BITCOIN UNITS", "100,000,000 SATS", C_METER, C_EDGE);
+    drawTile(W_C0, 164, y2, w, h, "WHITE PAPER FINALITY", "6 CONFS (P < 0.024%)", C_GOOD, C_EDGE);
 
-    panel(d, 8, 134, 304, 60, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* Diff = Target_1 / Target. Expected Hashes = Diff * 2^32 (~4.295B per Diff).", 14, 138, 8, C_GOLD, C_PANEL);
-    text(d, "* 21M Cap (20,999,999.9769 BTC). 1 BTC = 100M sats. Balances are 64-bit int64_t.", 14, 149, 8, C_TEXT, C_PANEL);
-    text(d, "* Satoshi: Lost coins are a permanent donation to everyone; deflation rises value.", 14, 160, 8, C_GOLD, C_PANEL);
-    text(d, "* Whitepaper Sec 11: 6 confirmations reduce catch-up probability to P < 0.024%!", 14, 171, 8, C_GOOD, C_PANEL);
-    text(d, "* Year 2140 (Blk 6.93M): Subsidy shifts 100% to transaction fees (Sec 6 gold analogy).", 14, 182, 8, C_METER, C_PANEL);
+    // Compact Formula Pill
+    panel(d, 8, 170, 304, 24, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "Diff = Tgt_1 / Tgt (2^32 rolls)  |  Satoshi: Lost coins = donation  |  Yr 2140: 100% fees", 14, 175, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1122,35 +1113,13 @@ static void paintEconomics(const EconomicsV &ev)
   drawHeader(ev.hdr);
 
   String k = ev.netDiff + "|" + (isPortrait() ? "P" : "L");
-  int dw = isPortrait() ? 70 : 100;
-  int dx = isPortrait() ? 154 : 198;
-  int dy = isPortrait() ? 44 : 42;
-  if (need(W_LOT_JACKPOT, k) && wBegin(dw, 20, C_PANEL))
+  if (isPortrait())
   {
-    text(wgt, ev.netDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
-    wEnd(dx, dy);
-    done(W_LOT_JACKPOT, k);
+    drawTile(W_LOT_JACKPOT, 6, 82, 112, 38, "GLOBAL TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
   }
-
-  k = ev.totalHashes + "|" + (isPortrait() ? "P" : "L");
-  int tw = isPortrait() ? 96 : 132;
-  int tx = isPortrait() ? 12 : 16;
-  int ty = isPortrait() ? 101 : 97;
-  if (need(W_LOT_WORK, k) && wBegin(tw, 20, C_PANEL))
+  else
   {
-    text(wgt, ev.totalHashes.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
-    wEnd(tx, ty);
-    done(W_LOT_WORK, k);
-  }
-
-  k = ev.bestDiff + "|" + (isPortrait() ? "P" : "L");
-  int bx = isPortrait() ? 128 : 172;
-  int by = isPortrait() ? 101 : 97;
-  if (need(W_LOT_DIFF, k) && wBegin(tw, 20, C_PANEL))
-  {
-    text(wgt, ev.bestDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_METER, C_PANEL);
-    wEnd(bx, by);
-    done(W_LOT_DIFF, k);
+    drawTile(W_LOT_JACKPOT, 8, 86, 148, 38, "NETWORK TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
   }
 
   drawStrip(ev.strip);
