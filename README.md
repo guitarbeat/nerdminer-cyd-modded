@@ -90,7 +90,7 @@ The display firmware features a seamlessly rotating carousel of **7 distinct vie
 | **3** | **EXPLAINER (Pipeline & Nonce Dial)** | 4-card causal block header pipeline (`[Block Data]` &rarr; `[80B Header]` &rarr; `[SHA256d]` &rarr; `[256-Bit Test]`), guess-and-check comparator log, leading zeros historical context (2009: 8 zeros vs Today: 18 zeros), and live plain-English speed explanation. |
 | **4** | **LOTTERY (Solo Lottery Analytics)** | Current block reward jackpot (3.125 BTC + fees &approx; $300k+), total hashes tested since boot, best difficulty rarity score (clarifying it is a score, not % progress), and the **256-bit die roll finish line**. |
 | **5** | **DIAGNOSTICS (System Telemetry)** | Stratum pool connection (host, port, live ping in milliseconds, primary vs. fallback failover route), Wi-Fi metrics (SSID, RSSI in dBm, quality bars, local IP), ESP32 hardware health (core temperature in °C/°F, free heap RAM, max alloc block, system uptime). |
-| **6** | **HEADER (80-Byte Block Header)** | Complete educational breakdown of the 6 fields of the candidate block header (**Version 4B**, **Prev Hash 32B**, **Merkle Root 32B**, **Time 4B**, **Bits 4B**, **Nonce 4B**). Demonstrates that 76 bytes are fixed by the network and the Nonce is the only dial the CYD turns. Teaches target unpacking from Bits ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), little-endian serialization, double-hash (**SHA256d**), and the **avalanche effect**. |
+| **6** | **HEADER (80-Byte Block Header)** | Complete educational breakdown of the 6 fields of the candidate block header (**Version 4B**, **Prev Hash 32B**, **Merkle Root 32B**, **Time 4B**, **Bits 4B**, **Nonce 4B**). Demonstrates that 76 bytes are fixed by the network and the Nonce is the only dial the CYD turns. Teaches target unpacking from Bits ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), little-endian serialization, ExtraNonce rollover, pool coinbase commitment preventing stolen blocks, double-hash (**SHA256d**), and the **avalanche effect**. |
 
 ---
 
@@ -121,14 +121,17 @@ Once connected to your home network, the miner serves a full web dashboard and c
 #### ✨ Web Dashboard Features:
 1. **Interactive Proof-of-Work Simulator (Browser SHA256d)**:
    - Experience the exact double-SHA256 loop running in real-time in your browser via the native Web Crypto API.
-   - **Preset 1 — Historical Block #286,819 Solver**: Inspired by Carlos Guerrero's `guerrerocarlos/bitcoin-miner`, solves real historical Block #286,819 (Feb 20, 2014) by constructing the genuine 80-byte binary header with little-endian fields, unpacking the 256-bit target from Bits `19015f53` ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), testing starting Nonce `856,192,320`, and solving the block at winning Nonce `856,192,328` where `hash < target` evaluates to true!
+   - **Preset 1 — Historical Block #286,819 Solver**: Inspired by Ken Shirriff's blog and Carlos Guerrero's miner, solves real historical Block #286,819 (Feb 20, 2014) by constructing the genuine 80-byte binary header with little-endian fields, unpacking the 256-bit target from Bits `19015f53` ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), testing starting Nonce `856,192,320`, and solving the block at winning Nonce `856,192,328` where `hash < target` evaluates to true!
+   - **Ken Shirriff Nonce Stepping Stones**: Quick-jump buttons for key nonces from Ken's famous table (Nonce 0 [0 zeros], Nonce 39 [1 zero], Nonce 990 [3 zeros], Nonce 52,117 [4 zeros], Nonce 856,192,320 [Countdown], and Nonce 856,192,328 [WINNER!]).
    - **Preset 2 — Sandbox Mode**: Test custom candidate block headers with adjustable target leading zeros (3, 4, 5, or 6 leading zeros) to explore why attempts fail and why each trial is independent.
    - Inspect the candidate **80-byte block header** payload with live color-coded fields:
      `[Ver 4B]` `[Prev 32B]` `[Merkle 32B]` `[Time 4B]` `[Bits 4B]` `[Nonce 4B]`
    - Manually click **Test Next Nonce (+1)** or run **Auto Mine (10 H/s)**.
 2. **📖 LEARN.TXT — How Bitcoin Mining Actually Works**:
-   - Inspired by **Click Miner** and **guerrerocarlos/bitcoin-miner**: explains what a hash is (256-bit fingerprint, avalanche effect with no "getting warmer", one-way function).
+   - Inspired by **Ken Shirriff's "Bitcoin Mining the Hard Way"**, **Click Miner**, and **guerrerocarlos/bitcoin-miner**: explains what a hash is (256-bit fingerprint, avalanche effect with no "getting warmer", one-way function).
    - Detailed interactive breakdown of the **80 bytes you're actually hashing**, how `Bits` unpacks into the 256-bit target number, why headers use little-endian byte ordering, and why previous block hashes make the blockchain immutable.
+   - **ExtraNonce & Merkle Trees**: Explains what happens when the 4.29B Nonce dial exhausts (incrementing ExtraNonce in the coinbase transaction generates a new Merkle Root, resetting the search space).
+   - **Pool Payout Security**: Explains why miners cannot steal blocks (the pool payout address is committed into the coinbase and bound by the Merkle root; altering it scrambles the block hash and invalidates the proof-of-work).
    - Explains the target as the finish line: an independent roll of a 256-bit die where you win if `hash < target`.
 3. **Conversational Plain-English Story**:
    - Translates raw metrics into normal English sentences: hashrate in hashes/sec, total hashes since boot, share submissions, best difficulty rarity, statistical wait time, and power consumption (~1.2 W).
@@ -221,6 +224,7 @@ Build and flash for your specific target environment:
 
 This project merges and builds upon the fantastic work of the open-source community:
 
+- **[Ken Shirriff's "Bitcoin Mining the Hard Way"](https://www.righto.com/2014/02/bitcoin-mining-hard-way-algorithms.html)**: Groundbreaking breakdown of Bitcoin mining down to the raw bytes, the Block #286,819 Python mining test vector, nonce progression table, ExtraNonce Merkle tree propagation, and Stratum V1 JSON-RPC wire protocol.
 - **[Click Miner](https://github.com/owencoles/click-miner)**: Inspiration for the educational block header mental model, `LEARN.TXT` structure, and the 80-byte header component breakdown.
 - **[guerrerocarlos/bitcoin-miner](https://github.com/guerrerocarlos/bitcoin-miner)**: Educational test vectors and first-principles implementation for target unpacking from compact bits ($\text{Target} = \text{Mantissa} \times 256^{\text{Exp}-3}$), little-endian binary header serialization, and byte-reversed hash comparison.
 - **[Bitcoin Mining Simulator](https://github.com/mertokuyaz/bitcoinminingsimulator)**: Inspiration for the interactive browser-side Proof-of-Work guess-and-check simulator and historical context.

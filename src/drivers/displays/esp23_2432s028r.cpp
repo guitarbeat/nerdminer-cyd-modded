@@ -1331,11 +1331,11 @@ static void chromeBlockHeader(TFT_eSPI &d)
 
     panel(d, 6, 182, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "SHA256d & PROOF-OF-WORK", 12, 186, 8, C_DIM, C_PANEL);
-    text(d, "* Bits: 1B Exp + 3B Mantissa.", 12, 199, 8, C_GOLD, C_PANEL);
-    text(d, "* Target = Mantissa * 256^(Exp-3).", 12, 211, 8, C_TEXT, C_PANEL);
+    text(d, "* Bits: 1B Exp + 3B Mantissa -> Target.", 12, 199, 8, C_GOLD, C_PANEL);
+    text(d, "* Nonce 4.29B rolls; then ExtraNonce.", 12, 211, 8, C_TEXT, C_PANEL);
     text(d, "* Little-endian; byte-reversed hash.", 12, 223, 8, C_TEXT, C_PANEL);
     text(d, "* Test: Double-SHA256 < Target.", 12, 235, 8, C_GOOD, C_PANEL);
-    text(d, "* Avalanche: 1 bit flip = new roll.", 12, 247, 8, C_DIM, C_PANEL);
+    text(d, "* Coinbase commits pool: cannot steal.", 12, 247, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1377,9 +1377,9 @@ static void chromeBlockHeader(TFT_eSPI &d)
 
     // Panel 2
     panel(d, 8, 154, 304, 40, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* Bits unpacks: Target = Mantissa * 256^(Exp - 3) [4-byte compact target].", 14, 158, 8, C_GOLD, C_PANEL);
+    text(d, "* Bits unpacks: Target = Mantissa * 256^(Exp - 3). Nonce 4.29B rolls + ExtraNonce.", 14, 158, 8, C_GOLD, C_PANEL);
     text(d, "* Header is little-endian; computed hashes are byte-reversed to display zeros.", 14, 169, 8, C_TEXT, C_PANEL);
-    text(d, "* Proof-of-Work condition: Double-SHA256(80B header) < Target. Independent rolls!", 14, 180, 8, C_GOOD, C_PANEL);
+    text(d, "* Double-SHA256 < Target. Pool coinbase in Merkle root prevents stolen blocks!", 14, 180, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
