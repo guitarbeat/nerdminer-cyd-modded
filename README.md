@@ -78,41 +78,75 @@ If your CYD board has a MicroSD slot on the back, you can configure your miner h
 
 ---
 
+## 🖥️ 7-Screen Carousel System
+
+The display firmware features a seamlessly rotating carousel of **7 distinct views**, combining real-time telemetry, market analytics, and beginner-accessible educational breakdowns:
+
+| Index | Screen Name | Layout & Key Information |
+|:---:|:---|:---|
+| **0** | **MINE (Pulse Dashboard)** | Sleek instrument gauge ring (0 to 1200 KH/s), 4 hero stat tiles (**Shares**, **Best Diff**, **Templates**, **Blocks Found**), and a 4-cell pool telemetry strip (**Workers**, **Pool Hashrate**, **Pool Best**, **Uptime**). |
+| **1** | **MARKET (Market & Halving)** | Real-time Bitcoin price in your configured fiat currency, current block height, mempool fee rates (half-hour), network difficulty, global hashrate, and a live halving countdown with visual progress bar. |
+| **2** | **CLOCK (Desk Clock & Bar Chart)** | Digital clock with blinking colon, full date, market mini-tiles, and a rolling **48-slot hashrate history bar chart** (8 minutes of history at 10s per slot). |
+| **3** | **EXPLAINER (Pipeline & Nonce Dial)** | 4-card causal block header pipeline (`[Block Data]` &rarr; `[80B Header]` &rarr; `[SHA256d]` &rarr; `[256-Bit Test]`), guess-and-check comparator log, leading zeros historical context (2009: 8 zeros vs Today: 18 zeros), and live plain-English speed explanation. |
+| **4** | **LOTTERY (Solo Lottery Analytics)** | Current block reward jackpot (3.125 BTC + fees &approx; $300k+), total hashes tested since boot, best difficulty rarity score (clarifying it is a score, not % progress), and the **256-bit die roll finish line**. |
+| **5** | **DIAGNOSTICS (System Telemetry)** | Stratum pool connection (host, port, live ping in milliseconds, primary vs. fallback failover route), Wi-Fi metrics (SSID, RSSI in dBm, quality bars, local IP), ESP32 hardware health (core temperature in °C/°F, free heap RAM, max alloc block, system uptime). |
+| **6** | **HEADER (80-Byte Block Header)** | Complete educational breakdown of the 6 fields of the candidate block header (**Version 4B**, **Prev Hash 32B**, **Merkle Root 32B**, **Time 4B**, **Bits 4B**, **Nonce 4B**). Demonstrates that 76 bytes are fixed by the network and the Nonce is the only dial the CYD turns. Explains double-hash (**SHA256d**) and the **avalanche effect**. |
+
+---
+
+### 👆 Touchscreen & Physical Controls
+
+#### Touch Zones (Resistive & Capacitive CYD)
+- **Tap Right Half**: Cycle forward to next screen (`0 → 1 → 2 → 3 → 4 → 5 → 6 → 0`)
+- **Tap Left Half**: Cycle backward to previous screen
+- **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
+- **NVS Memory**: Automatically saves your active screen index to flash and restores it across reboots!
+
+#### Physical BOOT Button
+- **1 Click**: Cycle to the next screen view
+- **Double Click**: Rotate display orientation (0° Portrait, 90° Landscape, 180° Inverted Portrait, 270° Inverted Landscape)
+- **Triple Click**: Toggle LCD backlight ON / OFF
+- **Hold 5 Seconds**: Factory reset flash configuration and reboot into setup AP mode
+
+---
+
 ### 🌐 On-Device Web Settings Portal (`http://<miner-ip>/`)
 
-Once connected to your home network, the miner runs a local dashboard and settings server accessible from any browser:
+Once connected to your home network, the miner serves a full web dashboard and configuration portal:
 
 - **URL**: `http://<miner-ip>` (e.g. `http://192.168.0.27`)
 - **Username**: `admin`
 - **Password**: `MineYourCoins`
 
 #### ✨ Web Dashboard Features:
-1. **AxeOS-Style Live Theme Switcher**: Hot-swap between **6 visual palettes** with one click. The screen updates in `<30ms` without dropping pool connections or rebooting the ESP32!
-   - **Instrument Amber** *(Default)*: Matte black precision instrument with warm amber telemetry
-   - **Matrix Green**: Retro phosphor terminal CRT aesthetic
-   - **Cyber Amber**: Vintage 1980s monochrome orange CRT terminal
-   - **Arcade Neon**: Electric cyan and magenta retro mod
-   - **Ice Blue**: Deep midnight slate with arctic blue accents
-   - **Monochrome**: High-contrast black and paper-white minimalist e-ink style
-2. **Proof of Work Anatomy Breakdown**: Interactive guide explaining Hashrate & Nonces, Shares Submitted, Best Difficulty, and Target Block Reward (3.125 BTC subsidy + fees).
-3. **Live Metrics & Tooltips**: Real-time stats with hover explanations for shares, best diff, core temperature, WiFi signal (dBm), and free heap.
-4. **Instant Low-Diff Pool Presets**: 1-click presets for Public-Pool, NerdMiners.org, and SoloMining.de.
-5. **REST API**: Switch themes remotely via HTTP: `POST /api/theme?id=1` or query current theme via `GET /api/theme`.
-
----
-
-### 👆 Touchscreen & Physical Button Controls
-
-#### CYD Resistive Touch Zones
-- **Tap Wordmark (`NERDMINER`)**: Cycle active accent color
-- **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
-- **Tap Screen Center**: Cycle views (**MINE** &rarr; **MARKET** &rarr; **CLOCK**)
-
-#### Physical BOOT Button
-- **1 Click**: Cycle screen view
-- **Double Click**: Rotate display orientation (0°, 90°, 180°, 270°)
-- **Triple Click**: Toggle LCD backlight ON / OFF
-- **Hold 5 Seconds**: Factory reset flash configuration and reboot into AP mode
+1. **Interactive Proof-of-Work Simulator (Browser SHA256d)**:
+   - Experience the exact double-SHA256 loop running in real-time in your browser via the native Web Crypto API.
+   - Inspect the candidate **80-byte block header** payload with live color-coded fields:
+     `[Ver 4B]` `[Prev 32B]` `[Merkle 32B]` `[Time 4B]` `[Bits 4B]` `[Nonce 4B]`
+   - Manually click **Test Next Nonce (+1)** or run **Auto Mine (10 H/s)**.
+   - Choose target difficulty (3, 4, 5, or 6 leading zeros) to see firsthand how quickly attempts fail and why each trial is independent.
+2. **📖 LEARN.TXT — How Bitcoin Mining Actually Works**:
+   - Inspired by **Click Miner**: explains what a hash is (256-bit fingerprint, avalanche effect with no "getting warmer", one-way function).
+   - Detailed interactive breakdown of the **80 bytes you're actually hashing** and why previous block hashes make the blockchain immutable.
+   - Explains the target as the finish line: an independent roll of a 256-bit die where you win if `hash < target`.
+3. **Conversational Plain-English Story**:
+   - Translates raw metrics into normal English sentences: hashrate in hashes/sec, total hashes since boot, share submissions, best difficulty rarity, statistical wait time, and power consumption (~1.2 W).
+4. **Historical Perspective Banner**:
+   - Contrasts the 2009 Satoshi CPU era (~100 BTC in 3 hours with 8 zeros) with modern reality (18+ zeros, 800+ EH/s worldwide).
+5. **AxeOS-Style Live Theme Switcher**:
+   - Hot-swap between **6 visual palettes** with one click in `<30ms` without rebooting or dropping mining connections:
+     - **Instrument Amber** *(Default)*
+     - **Matrix Green**
+     - **Cyber Amber**
+     - **Arcade Neon**
+     - **Ice Blue**
+     - **Monochrome**
+6. **Hardware Diagnostics & Quick Controls**:
+   - Live telemetry for core temperature, Stratum ping latency, Wi-Fi RSSI signal quality, free heap RAM, and a 1-click **Session Reset** button (resets current session shares/best diff while preserving lifetime flash counters).
+7. **Conversational Setup Guide**:
+   - Inline blanks with 1-click solo pool presets (Public-Pool port 3333, NerdMiners.org, SoloMining.de), wallet & worker configuration, and screen rotation/brightness adjustments.
+8. **REST API**:
+   - Query live JSON statistics at `GET /api/stats`, switch themes at `POST /api/theme?id=X`, or reset session stats at `POST /api/reset-session`.
 
 ---
 
@@ -122,7 +156,7 @@ Once connected to your home network, the miner runs a local dashboard and settin
 
 | Pool URL | Port | Web Dashboard | Notes |
 |:---|:---:|:---|:---|
-| **public-pool.io** | `21496` or `3333` | [web.public-pool.io](https://web.public-pool.io/) | Open-source solo Bitcoin pool (Default) |
+| **public-pool.io** | `3333` or `21496` | [web.public-pool.io](https://web.public-pool.io/) | Open-source solo Bitcoin pool (Port 3333 Recommended) |
 | **pool.nerdminers.org** | `3333` | [nerdminers.org](https://nerdminers.org/) | Official community NerdMiner pool |
 | **pool.nerdminer.io** | `3333` | [nerdminer.io](https://nerdminer.io/) | Maintained by CHMEX |
 | **pool.solomining.de** | `3333` | [solomining.de](https://pool.solomining.de/) | German low-diff solo pool |
@@ -186,6 +220,8 @@ Build and flash for your specific target environment:
 
 This project merges and builds upon the fantastic work of the open-source community:
 
+- **[Click Miner](https://github.com/owencoles/click-miner)**: Inspiration for the educational block header mental model, `LEARN.TXT` structure, and the 80-byte header component breakdown.
+- **[Bitcoin Mining Simulator](https://github.com/mertokuyaz/bitcoinminingsimulator)**: Inspiration for the interactive browser-side Proof-of-Work guess-and-check simulator and historical context.
 - **[HenrysCat/NerdMiner-Modded](https://github.com/HenrysCat/NerdMiner-Modded)**: Source for the performance-tuned firmware achieving ~990 KH/s, custom UI themes, and expanded board platform definitions.
 - **[jpduhen/NerdMiner_v2-Cheap-Yellow-Display-2.4-and-2.8-single-and-double-USB](https://github.com/jpduhen/NerdMiner_v2-Cheap-Yellow-Display-2.4-and-2.8-single-and-double-USB)**: Webflasher interface and 2.4"/2.8" CYD single and dual USB hardware specifications.
 - **[Fr4nkFletcher/NerdMiner_v2-Cheap-Yellow-Display](https://github.com/Fr4nkFletcher/NerdMiner_v2-Cheap-Yellow-Display)**: Original Cheap Yellow Display port and webflasher integration.
