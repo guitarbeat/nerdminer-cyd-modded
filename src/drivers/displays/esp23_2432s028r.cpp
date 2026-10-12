@@ -121,6 +121,14 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_MINE 0
 #define SCR_MARKET 1
 #define SCR_CLOCK 2
+#define SCR_EXPLAINER 3
+#define SCR_LOTTERY 4
+#define SCR_DIAG 5
+
+extern volatile uint32_t g_stratumPing;
+extern double g_networkDifficulty;
+extern bool g_usingFallback;
+extern global_data gData;
 
 static inline bool isPortrait()
 {
@@ -191,6 +199,16 @@ enum WidgetId
   W_C1,
   W_C2,
   W_CHART,
+  W_EXP_STREAM,
+  W_EXP_TEXT,
+  W_LOT_JACKPOT,
+  W_LOT_WORK,
+  W_LOT_DIFF,
+  W_DIAG_NET,
+  W_DIAG_WIFI,
+  W_DIAG_TEMP,
+  W_DIAG_RAM,
+  W_DIAG_UPTIME,
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -360,6 +378,32 @@ static String fmtDate(const String &s)
   char b[32];
   snprintf(b, sizeof(b), "%s  %d %s %d", wd[dow], d, mon[m - 1], y);
   return String(b);
+}
+
+static String fmtTotalHashes(const String &mhashes)
+{
+  double m = mhashes.toDouble();
+  if (m >= 1000.0)
+  {
+    char b[32];
+    snprintf(b, sizeof(b), "%.2f Billion", m / 1000.0);
+    return String(b);
+  }
+  else if (m > 0.0)
+  {
+    char b[32];
+    snprintf(b, sizeof(b), "%.1f Million", m);
+    return String(b);
+  }
+  return "0 Hashes";
+}
+
+static const char *wifiSignalLabel(int rssi)
+{
+  if (rssi > -55) return "Excellent";
+  if (rssi > -67) return "Good";
+  if (rssi > -80) return "Fair";
+  return "Weak";
 }
 
 static int wifiBars()
@@ -864,6 +908,379 @@ static void paintClock(const ClockV &c)
   drawChart();
 }
 
+// ======================================================== EXPLAINER screen ==
+
+struct ExplainerV
+{
+  HdrV hdr;
+  String hash;
+  String hashrateEng;
+  StripV strip;
+};
+
+static void chromeExplainer(TFT_eSPI &d)
+{
+  if (isPortrait())
+  {
+    panel(d, 6, 32, 228, 70, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "HOW IT WORKS: 80B HEADER PIPELINE", 12, 37, 8, C_DIM, C_PANEL);
+    panel(d, 10, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BLOCK", 34, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "Prev+Tx", 34, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 61, 64, 10, C_METER, C_PANEL);
+
+    panel(d, 68, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "HEADER", 92, 54, 8, C_METER, C_TRACK, Align::TopCenter);
+    text(d, "+Nonce", 92, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 119, 64, 10, C_METER, C_PANEL);
+
+    panel(d, 126, 49, 46, 48, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "SHA256", 149, 54, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "Double", 149, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 175, 64, 10, C_METER, C_PANEL);
+
+    panel(d, 182, 49, 48, 48, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "TEST", 206, 54, 8, C_GOOD, C_TRACK, Align::TopCenter);
+    text(d, "< Target", 206, 68, 8, C_DIM, C_TRACK, Align::TopCenter);
+
+    panel(d, 6, 106, 228, 86, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TARGET TEST: MUST BE NUMERICALLY SMALLER", 12, 111, 8, C_DIM, C_PANEL);
+    text(d, "Attempt 1: 9F28B4A1...  [ TOO BIG  X ]", 12, 125, 8, C_BAD, C_PANEL);
+    text(d, "Attempt 2: 17A904C8...  [ TOO BIG  X ]", 12, 137, 8, C_BAD, C_PANEL);
+    d.drawFastHLine(12, 150, 216, C_EDGE);
+    text(d, "Target:    000039A2...  [ SMALLER  V ]", 12, 154, 8, C_GOOD, C_PANEL);
+    text(d, "Rule: Numbers below target start with 0s!", 12, 169, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 196, 228, 66, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "WHAT YOUR CYD IS DOING", 12, 201, 8, C_DIM, C_PANEL);
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 30, 304, 56, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "HOW IT WORKS: 80-BYTE BLOCK HEADER PIPELINE", 14, 34, 8, C_DIM, C_PANEL);
+
+    panel(d, 14, 46, 60, 34, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BLOCK DATA", 44, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "Prev + Txs", 44, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 77, 56, 11, C_METER, C_PANEL);
+
+    panel(d, 88, 46, 64, 34, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "80B HEADER", 120, 49, 8, C_METER, C_TRACK, Align::TopCenter);
+    text(d, "+ Nonce", 120, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 155, 56, 11, C_METER, C_PANEL);
+
+    panel(d, 166, 46, 64, 34, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "SHA-256 x2", 198, 49, 8, C_TEXT, C_TRACK, Align::TopCenter);
+    text(d, "Double Hash", 198, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
+    text(d, ">", 233, 56, 11, C_METER, C_PANEL);
+
+    panel(d, 244, 46, 62, 34, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "256-BIT TEST", 275, 49, 8, C_GOOD, C_TRACK, Align::TopCenter);
+    text(d, "< Target ?", 275, 61, 8, C_DIM, C_TRACK, Align::TopCenter);
+
+    panel(d, 8, 90, 304, 66, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TARGET TEST: IS HASH NUMERICALLY SMALLER THAN TARGET?", 14, 94, 8, C_DIM, C_PANEL);
+
+    text(d, "Attempt 1:", 14, 107, 8, C_DIM, C_PANEL);
+    text(d, "9F28B4A18E...", 66, 107, 9, C_TEXT, C_PANEL);
+    text(d, "[ TOO LARGE  X ]", 146, 107, 8, C_BAD, C_PANEL);
+
+    text(d, "Attempt 2:", 14, 119, 8, C_DIM, C_PANEL);
+    text(d, "17A904C83D...", 66, 119, 9, C_TEXT, C_PANEL);
+    text(d, "[ TOO LARGE  X ]", 146, 119, 8, C_BAD, C_PANEL);
+
+    d.drawFastHLine(14, 131, 206, C_EDGE);
+
+    text(d, "Target:", 14, 134, 8, C_METER, C_PANEL);
+    text(d, "000039A2FF...", 66, 134, 9, C_GOOD, C_PANEL);
+    text(d, "[ SMALL ENOUGH V ]", 146, 134, 8, C_GOOD, C_PANEL);
+
+    d.drawFastVLine(228, 94, 58, C_EDGE);
+    text(d, "NUMERIC RULE", 234, 98, 8, C_METER, C_PANEL);
+    text(d, "Not passwords!", 234, 110, 8, C_TEXT, C_PANEL);
+    text(d, "Tiny numbers", 234, 122, 8, C_DIM, C_PANEL);
+    text(d, "start with 0s.", 234, 133, 8, C_DIM, C_PANEL);
+
+    panel(d, 8, 160, 304, 32, 6, C_PANEL, C_EDGE, C_BG);
+    chromeStripCells(d);
+  }
+}
+
+static void paintExplainer(const ExplainerV &e)
+{
+  drawHeader(e.hdr);
+
+  String k = e.hashrateEng + "|" + (isPortrait() ? "P" : "L");
+  int ew = isPortrait() ? 216 : 292;
+  int eh = isPortrait() ? 44 : 22;
+  int ex = isPortrait() ? 12 : 14;
+  int ey = isPortrait() ? 214 : 165;
+  if (need(W_EXP_TEXT, k) && wBegin(ew, eh, C_PANEL))
+  {
+    if (isPortrait())
+    {
+      text(wgt, "Your CYD is testing about", 4, 2, 9, C_DIM, C_PANEL);
+      text(wgt, (e.hashrateEng + " hashes / second.").c_str(), 4, 16, 11, C_TEXT, C_PANEL);
+      text(wgt, "Every attempt is a fresh independent roll.", 4, 30, 8, C_DIM, C_PANEL);
+    }
+    else
+    {
+      text(wgt, "CYD is trying ~", 4, 3, 9, C_DIM, C_PANEL);
+      int w1 = textW("CYD is trying ~", 9);
+      text(wgt, e.hashrateEng.c_str(), 4 + w1, 2, 11, C_TEXT, C_PANEL);
+      int w2 = textW(e.hashrateEng.c_str(), 11);
+      text(wgt, " hashes/sec. Repeatedly testing: hash < target?", 4 + w1 + w2 + 4, 3, 9, C_DIM, C_PANEL);
+    }
+    wEnd(ex, ey);
+    done(W_EXP_TEXT, k);
+  }
+
+  drawStrip(e.strip);
+}
+
+// ========================================================== LOTTERY screen ==
+
+struct LotteryV
+{
+  HdrV hdr;
+  String netDiff;
+  String totalHashes;
+  String bestDiff;
+  StripV strip;
+};
+
+static void chromeLottery(TFT_eSPI &d)
+{
+  if (isPortrait())
+  {
+    panel(d, 6, 32, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK JACKPOT", 12, 36, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 12, 47, 16, C_GOLD, C_PANEL);
+    text(d, "+fees (~$300k+)", 84, 52, 8, C_DIM, C_PANEL);
+    d.drawFastVLine(148, 36, 44, C_EDGE);
+    text(d, "NET TARGET", 154, 36, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 90, 112, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TOTAL HASHES", 12, 94, 8, C_DIM, C_PANEL);
+
+    panel(d, 122, 90, 112, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BEST DIFFICULTY", 128, 94, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 142, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "SHARES VS REAL BLOCKS", 12, 146, 8, C_DIM, C_PANEL);
+    text(d, "* SHARES prove work to the pool at easy target.", 12, 158, 8, C_TEXT, C_PANEL);
+    text(d, "* SHARES ARE NOT PIECES OF A BITCOIN!", 12, 169, 8, C_METER, C_PANEL);
+    text(d, "* Winning requires beating the full network target.", 12, 180, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 204, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "THE LOTTERY TRUTH", 12, 208, 8, C_DIM, C_PANEL);
+    text(d, "* Best diff is a rarity score, NOT a progress bar.", 12, 220, 8, C_DIM, C_PANEL);
+    text(d, "* Prior rolls do not make the next roll closer.", 12, 231, 8, C_DIM, C_PANEL);
+    text(d, "* Every single hash is a fresh roll of the dice.", 12, 242, 8, C_GOOD, C_PANEL);
+
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 30, 304, 54, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 16, 35, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 16, 46, 18, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300,000+)", 105, 52, 9, C_DIM, C_PANEL);
+    d.drawFastVLine(190, 34, 46, C_EDGE);
+    text(d, "NETWORK TARGET", 198, 35, 8, C_DIM, C_PANEL);
+    text(d, "Global Difficulty Target", 198, 66, 8, C_DIM, C_PANEL);
+
+    panel(d, 8, 88, 148, 56, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "TOTAL HASHES TESTED", 16, 93, 8, C_DIM, C_PANEL);
+    text(d, "Independent trials since boot", 16, 127, 8, C_DIM, C_PANEL);
+
+    panel(d, 164, 88, 148, 56, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BEST HASH DIFFICULTY", 172, 93, 8, C_DIM, C_PANEL);
+    text(d, "Rarity score (not % progress)", 172, 127, 8, C_DIM, C_PANEL);
+
+    panel(d, 8, 148, 304, 44, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "* SHARES: Valid hashes for pool's easier test (NOT Bitcoin pieces!).", 14, 153, 8, C_TEXT, C_PANEL);
+    text(d, "* INDEPENDENT: Best diff does NOT build up progress toward winning.", 14, 164, 8, C_DIM, C_PANEL);
+    text(d, "* LOTTERY: Every single hash is a fresh roll with equal probability.", 14, 175, 8, C_GOOD, C_PANEL);
+
+    chromeStripCells(d);
+  }
+}
+
+static void paintLottery(const LotteryV &l)
+{
+  drawHeader(l.hdr);
+
+  String k = l.netDiff + "|" + (isPortrait() ? "P" : "L");
+  int dw = isPortrait() ? 70 : 100;
+  int dx = isPortrait() ? 154 : 198;
+  int dy = isPortrait() ? 47 : 46;
+  if (need(W_LOT_JACKPOT, k) && wBegin(dw, 20, C_PANEL))
+  {
+    text(wgt, l.netDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
+    wEnd(dx, dy);
+    done(W_LOT_JACKPOT, k);
+  }
+
+  k = l.totalHashes + "|" + (isPortrait() ? "P" : "L");
+  int tw = isPortrait() ? 96 : 132;
+  int tx = isPortrait() ? 12 : 16;
+  int ty = isPortrait() ? 107 : 105;
+  if (need(W_LOT_WORK, k) && wBegin(tw, 20, C_PANEL))
+  {
+    text(wgt, l.totalHashes.c_str(), 0, 0, isPortrait() ? 13 : 15, C_TEXT, C_PANEL);
+    wEnd(tx, ty);
+    done(W_LOT_WORK, k);
+  }
+
+  k = l.bestDiff + "|" + (isPortrait() ? "P" : "L");
+  int bx = isPortrait() ? 128 : 172;
+  int by = isPortrait() ? 107 : 105;
+  if (need(W_LOT_DIFF, k) && wBegin(tw, 20, C_PANEL))
+  {
+    text(wgt, l.bestDiff.c_str(), 0, 0, isPortrait() ? 13 : 15, C_METER, C_PANEL);
+    wEnd(bx, by);
+    done(W_LOT_DIFF, k);
+  }
+
+  drawStrip(l.strip);
+}
+
+// ===================================================== DIAGNOSTICS screen ==
+
+struct DiagV
+{
+  HdrV hdr;
+  String poolHost;
+  String poolPort;
+  String ping;
+  bool isFallback;
+  String ssid;
+  String rssi;
+  int bars;
+  String ip;
+  String tempC;
+  String tempF;
+  String freeHeap;
+  String maxBlock;
+  String uptime;
+  StripV strip;
+};
+
+static void chromeDiag(TFT_eSPI &d)
+{
+  if (isPortrait())
+  {
+    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "STRATUM POOL", 12, 36, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 104, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "WIFI CONNECTION", 12, 108, 8, C_DIM, C_PANEL);
+
+    panel(d, 6, 176, 228, 84, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "ESP32 HARDWARE HEALTH", 12, 180, 8, C_DIM, C_PANEL);
+    d.drawFastVLine(80, 194, 60, C_EDGE);
+    d.drawFastVLine(156, 194, 60, C_EDGE);
+
+    chromeStripCells(d);
+  }
+  else
+  {
+    panel(d, 8, 30, 148, 76, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "STRATUM POOL", 16, 35, 8, C_DIM, C_PANEL);
+
+    panel(d, 164, 30, 148, 76, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "WIFI CONNECTION", 172, 35, 8, C_DIM, C_PANEL);
+
+    panel(d, 8, 110, 304, 82, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "ESP32 HARDWARE HEALTH", 16, 115, 8, C_DIM, C_PANEL);
+    d.drawFastVLine(108, 126, 60, C_EDGE);
+    d.drawFastVLine(208, 126, 60, C_EDGE);
+
+    chromeStripCells(d);
+  }
+}
+
+static void paintDiag(const DiagV &dg)
+{
+  drawHeader(dg.hdr);
+
+  String k = dg.poolHost + "|" + dg.poolPort + "|" + dg.ping + "|" + dg.isFallback + "|" + (isPortrait() ? "P" : "L");
+  int pw = isPortrait() ? 212 : 132;
+  int ph = isPortrait() ? 50 : 56;
+  int px = isPortrait() ? 12 : 16;
+  int py = isPortrait() ? 46 : 46;
+  if (need(W_DIAG_NET, k) && wBegin(pw, ph, C_PANEL))
+  {
+    text(wgt, dg.poolHost.c_str(), 0, 0, 11, C_TEXT, C_PANEL);
+    text(wgt, ("Port: " + dg.poolPort).c_str(), 0, 14, 9, C_DIM, C_PANEL);
+    uint16_t pingCol = dg.ping.indexOf("--") >= 0 ? C_DIM : (dg.ping.toInt() < 100 ? C_GOOD : (dg.ping.toInt() < 250 ? C_WARN : C_BAD));
+    text(wgt, ("Ping: " + dg.ping).c_str(), 0, 27, 10, pingCol, C_PANEL);
+    text(wgt, dg.isFallback ? "FALLBACK ROUTE" : "PRIMARY ROUTE", 0, 41, 8, dg.isFallback ? C_WARN : C_GOOD, C_PANEL);
+    wEnd(px, py);
+    done(W_DIAG_NET, k);
+  }
+
+  k = dg.ssid + "|" + dg.rssi + "|" + dg.ip + "|" + (isPortrait() ? "P" : "L");
+  int wx = isPortrait() ? 12 : 172;
+  int wy = isPortrait() ? 118 : 46;
+  if (need(W_DIAG_WIFI, k) && wBegin(pw, ph, C_PANEL))
+  {
+    text(wgt, dg.ssid.c_str(), 0, 0, 11, C_TEXT, C_PANEL);
+    text(wgt, ("Signal: " + dg.rssi).c_str(), 0, 14, 9, C_GOOD, C_PANEL);
+    text(wgt, ("IP: " + dg.ip).c_str(), 0, 27, 9, C_DIM, C_PANEL);
+    text(wgt, "LINK CONNECTED", 0, 41, 8, C_GOOD, C_PANEL);
+    wEnd(wx, wy);
+    done(W_DIAG_WIFI, k);
+  }
+
+  // 1. Temp
+  k = dg.tempC + "|" + dg.tempF + "|" + (isPortrait() ? "P" : "L");
+  int colW = isPortrait() ? 66 : 88;
+  int colH = isPortrait() ? 52 : 56;
+  int ty = isPortrait() ? 198 : 128;
+  if (need(W_DIAG_TEMP, k) && wBegin(colW, colH, C_PANEL))
+  {
+    text(wgt, "CORE TEMP", 0, 0, 8, C_DIM, C_PANEL);
+    float tc = dg.tempC.toFloat();
+    uint16_t tcCol = tc < 65.0f ? C_GOOD : (tc < 75.0f ? C_WARN : C_BAD);
+    text(wgt, (dg.tempC + " C").c_str(), 0, 12, 14, tcCol, C_PANEL);
+    text(wgt, (dg.tempF + " F").c_str(), 0, 29, 9, C_DIM, C_PANEL);
+    text(wgt, tc < 70.0f ? "NORMAL" : "WARM", 0, 42, 8, tcCol, C_PANEL);
+    wEnd(isPortrait() ? 10 : 16, ty);
+    done(W_DIAG_TEMP, k);
+  }
+
+  // 2. Free Heap RAM
+  k = dg.freeHeap + "|" + dg.maxBlock + "|" + (isPortrait() ? "P" : "L");
+  int rx = isPortrait() ? 84 : 116;
+  if (need(W_DIAG_RAM, k) && wBegin(colW, colH, C_PANEL))
+  {
+    text(wgt, "FREE HEAP", 0, 0, 8, C_DIM, C_PANEL);
+    text(wgt, (dg.freeHeap + " KB").c_str(), 0, 12, 14, C_TEXT, C_PANEL);
+    text(wgt, ("Max: " + dg.maxBlock + "K").c_str(), 0, 29, 9, C_DIM, C_PANEL);
+    text(wgt, "STABLE", 0, 42, 8, C_GOOD, C_PANEL);
+    wEnd(rx, ty);
+    done(W_DIAG_RAM, k);
+  }
+
+  // 3. System Uptime
+  k = dg.uptime + "|" + (isPortrait() ? "P" : "L");
+  int ux = isPortrait() ? 160 : 216;
+  if (need(W_DIAG_UPTIME, k) && wBegin(colW, colH, C_PANEL))
+  {
+    text(wgt, "UPTIME", 0, 0, 8, C_DIM, C_PANEL);
+    text(wgt, dg.uptime.c_str(), 0, 12, 13, C_TEXT, C_PANEL);
+    text(wgt, "240 MHz (2C)", 0, 29, 8, C_DIM, C_PANEL);
+    text(wgt, "RUNNING", 0, 42, 8, C_GOOD, C_PANEL);
+    wEnd(ux, ty);
+    done(W_DIAG_UPTIME, k);
+  }
+
+  drawStrip(dg.strip);
+}
+
 // ------------------------------------------------------ boot / setup pages --
 
 static void paintLoading(TFT_eSPI &d)
@@ -925,6 +1342,18 @@ static void paintChrome(TFT_eSPI &d, int scr)
   case SCR_MARKET:
     chromeMarket(d);
     break;
+  case SCR_CLOCK:
+    chromeClock(d);
+    break;
+  case SCR_EXPLAINER:
+    chromeExplainer(d);
+    break;
+  case SCR_LOTTERY:
+    chromeLottery(d);
+    break;
+  case SCR_DIAG:
+    chromeDiag(d);
+    break;
   default:
     chromeClock(d);
     break;
@@ -955,7 +1384,11 @@ static void setAccent(int idx)
 static MineV lastMine;
 static MarketV lastMarket;
 static ClockV lastClock;
+static ExplainerV lastExplainer;
+static LotteryV lastLottery;
+static DiagV lastDiag;
 static bool haveMine = false, haveMarket = false, haveClock = false;
+static bool haveExplainer = false, haveLottery = false, haveDiag = false;
 
 static void repaintCached(int scr)
 {
@@ -965,6 +1398,12 @@ static void repaintCached(int scr)
     paintMarket(lastMarket);
   else if (scr == SCR_CLOCK && haveClock)
     paintClock(lastClock);
+  else if (scr == SCR_EXPLAINER && haveExplainer)
+    paintExplainer(lastExplainer);
+  else if (scr == SCR_LOTTERY && haveLottery)
+    paintLottery(lastLottery);
+  else if (scr == SCR_DIAG && haveDiag)
+    paintDiag(lastDiag);
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -1177,6 +1616,122 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
   lastClock = c;
   haveClock = true;
   paintClock(c);
+
+  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
+}
+
+void esp32_2432S028R_ExplainerScreen(unsigned long mElapsed)
+{
+  mining_data data = getMiningData(mElapsed);
+  refreshPool();
+  uiLive = true;
+  ensureChrome(SCR_EXPLAINER);
+  float kh = data.currentHashRate.toFloat();
+  noteHashrate(kh);
+
+  ExplainerV e;
+  e.hdr = liveHeader(data.currentTime);
+  e.hash = data.currentHashRate;
+  long hps = (long)(kh * 1000.0f);
+  e.hashrateEng = commas(String(hps));
+  e.strip.l[0] = "SPEED";
+  e.strip.v[0] = data.currentHashRate + "K";
+  e.strip.l[1] = "UNIT";
+  e.strip.v[1] = "1K H/s";
+  e.strip.l[2] = "HEADER";
+  e.strip.v[2] = "80 BYTES";
+  e.strip.l[3] = "RULE";
+  e.strip.v[3] = "HASH<TARG";
+  lastExplainer = e;
+  haveExplainer = true;
+  paintExplainer(e);
+
+  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
+}
+
+void esp32_2432S028R_LotteryScreen(unsigned long mElapsed)
+{
+  mining_data data = getMiningData(mElapsed);
+  refreshPool();
+  uiLive = true;
+  ensureChrome(SCR_LOTTERY);
+  noteHashrate(data.currentHashRate.toFloat());
+
+  LotteryV l;
+  l.hdr = liveHeader(data.currentTime);
+  if (g_networkDifficulty > 0.0)
+  {
+    char b[32];
+    snprintf(b, sizeof(b), "%.2f T", g_networkDifficulty / 1e12);
+    l.netDiff = String(b);
+  }
+  else
+  {
+    l.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
+  }
+  l.totalHashes = fmtTotalHashes(data.totalMHashes);
+  l.bestDiff = data.bestDiff;
+  l.strip.l[0] = "SHARES";
+  l.strip.v[0] = commas(data.completedShares);
+  l.strip.l[1] = "POOL DIFF";
+  l.strip.v[1] = "EASIER";
+  l.strip.l[2] = "NET DIFF";
+  l.strip.v[2] = l.netDiff;
+  l.strip.l[3] = "BLOCKS";
+  l.strip.v[3] = data.valids;
+  lastLottery = l;
+  haveLottery = true;
+  paintLottery(l);
+
+  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
+}
+
+void esp32_2432S028R_DiagScreen(unsigned long mElapsed)
+{
+  mining_data data = getMiningData(mElapsed);
+  refreshPool();
+  uiLive = true;
+  ensureChrome(SCR_DIAG);
+  noteHashrate(data.currentHashRate.toFloat());
+
+  DiagV dg;
+  dg.hdr = liveHeader(data.currentTime);
+  dg.poolHost = Settings.PoolAddress;
+  if (dg.poolHost.length() > 16)
+    dg.poolHost = dg.poolHost.substring(0, 16);
+  dg.poolPort = String(Settings.PoolPort);
+  dg.ping = g_stratumPing > 0 ? (String(g_stratumPing) + " ms") : String("-- ms");
+  dg.isFallback = g_usingFallback;
+
+  dg.ssid = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String("No WiFi");
+  if (dg.ssid.length() > 14)
+    dg.ssid = dg.ssid.substring(0, 14);
+  int rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : -100;
+  dg.rssi = String(rssi) + " dBm";
+  dg.bars = wifiBars();
+  dg.ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("--");
+
+  float tc = temperatureRead();
+  if (isnan(tc) || tc <= 0.0f)
+    tc = data.temp.toFloat();
+  dg.tempC = String((int)tc);
+  dg.tempF = String((int)((tc * 1.8f) + 32.0f));
+
+  dg.freeHeap = String(ESP.getFreeHeap() / 1024);
+  dg.maxBlock = String(ESP.getMaxAllocHeap() / 1024);
+  dg.uptime = fmtUptime(data.timeMining);
+
+  dg.strip.l[0] = "FIRMWARE";
+  dg.strip.v[0] = CURRENT_VERSION;
+  dg.strip.l[1] = "PALETTE";
+  dg.strip.v[1] = THEMES[currentThemeIdx].name;
+  dg.strip.l[2] = "DISPLAY";
+  dg.strip.v[2] = isPortrait() ? "240x320" : "320x240";
+  dg.strip.l[3] = "STATUS";
+  dg.strip.v[3] = data.currentHashRate.toFloat() > 0 ? "MINING" : "LINKING";
+  lastDiag = dg;
+  haveDiag = true;
+  paintDiag(dg);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -1543,7 +2098,13 @@ void cydDumpScreens(void)
 }
 #endif
 
-CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {esp32_2432S028R_MinerScreen, esp32_2432S028R_MarketScreen, esp32_2432S028R_ClockScreen};
+CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
+    esp32_2432S028R_MinerScreen,
+    esp32_2432S028R_MarketScreen,
+    esp32_2432S028R_ClockScreen,
+    esp32_2432S028R_ExplainerScreen,
+    esp32_2432S028R_LotteryScreen,
+    esp32_2432S028R_DiagScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
