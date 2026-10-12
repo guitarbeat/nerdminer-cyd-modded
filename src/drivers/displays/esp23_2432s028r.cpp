@@ -210,6 +210,10 @@ enum WidgetId
   W_DIAG_RAM,
   W_DIAG_UPTIME,
   W_HDR_LIVE,
+  W_DIAG_ARC0, // mini arc: core temp
+  W_DIAG_ARC1, // mini arc: free heap
+  W_DIAG_ARC2, // mini arc: ping
+  W_ECON_ARC,  // mini arc: odds meter (best diff / net diff)
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -315,6 +319,35 @@ static void gradBar(TFT_eSPI &d, int x, int y, int w, int h, uint16_t bg)
     d.drawFastVLine(x + i, y + inset, h - 2 * inset, c);
   }
   (void)bg;
+}
+
+// 240° sweep mini arc gauge drawn into the current wgt sprite.
+// Inspired by CarCYD's mini_gauge widget (lv_arc 240° rotation at 150°).
+// val = 0.0..1.0 (fill fraction). warnAt/critAt are 0..1 zone thresholds.
+// invert=true flips severity: high val = good (e.g. free heap).
+static void drawMiniArcInSprite(int cx, int cy, int r, int ri, float val,
+                                 float warnAt, float critAt, bool invert)
+{
+  const int startAngle = 150;
+  const int sweepTotal = 240;
+  if (val < 0.0f) val = 0.0f;
+  if (val > 1.0f) val = 1.0f;
+
+  uint16_t fillCol;
+  if (!invert)
+    fillCol = (val >= critAt) ? C_BAD : (val >= warnAt ? C_WARN : C_GOOD);
+  else
+    fillCol = (val <= (1.0f - critAt)) ? C_BAD : (val <= (1.0f - warnAt) ? C_WARN : C_GOOD);
+
+  // Track (full 240°)
+  wgt.drawArc(cx, cy, r, ri, startAngle, startAngle + sweepTotal, C_TRACK, C_PANEL, true);
+  // Fill
+  if (val > 0.005f)
+  {
+    int fillEnd = startAngle + (int)(val * sweepTotal + 0.5f);
+    if (fillEnd > startAngle + sweepTotal) fillEnd = startAngle + sweepTotal;
+    wgt.drawArc(cx, cy, r, ri, startAngle, fillEnd, fillCol, C_PANEL, true);
+  }
 }
 
 static String commas(const String &s)
@@ -457,9 +490,12 @@ static void gaugeDraw(TFT_eSPI &d, float v)
     uint8_t lvl = f >= 1.0f ? 4 : (f <= 0.05f ? 0 : 1 + (int)(f * 3.0f)); // 0, 1..3 (partial), 4
     if (lvl == segLvl[i])
       continue;
-    uint16_t col = lvl == 0 ? C_TRACK : (lvl == 4 ? C_METER : mix565(C_TRACK, C_METER, lvl * 64));
+    // CarCYD-style zone coloring: last ~20% transitions warm→red (redline)
+    uint16_t mCol = (i >= 27) ? C_BAD : (i >= 24 ? C_WARN : C_METER);
+    uint16_t col = lvl == 0 ? C_TRACK : (lvl == 4 ? mCol : mix565(C_TRACK, mCol, lvl * 64));
     int a0 = 45 + i * 9; // 270 degree sweep, gap at 6 o'clock
     d.drawArc(G_CX, G_CY, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
+    segLvl[i] = lvl;
   }
 }
 
@@ -471,12 +507,13 @@ struct HdrV
   String ip;
   int bars;
   int status;
+  int screen; // current screen index (0-5) for nav dots
 };
 
 static void drawHeader(const HdrV &h)
 {
-  char k[64];
-  snprintf(k, sizeof(k), "%s|%s|%d|%d|%d", h.time.c_str(), h.ip.c_str(), h.bars, h.status, isPortrait() ? 1 : 0);
+  char k[80];
+  snprintf(k, sizeof(k), "%s|%s|%d|%d|%d|%d", h.time.c_str(), h.ip.c_str(), h.bars, h.status, isPortrait() ? 1 : 0, h.screen);
   if (!need(W_HDR, k))
     return;
   const int X0 = 10, W = (isPortrait() ? 240 : 320) - X0;
@@ -522,6 +559,36 @@ static void drawHeader(const HdrV &h)
   {
     int right = barX - 12;
     text(wgt, h.ip.c_str(), right, 6, 10, C_DIM, C_BG, Align::TopRight);
+  }
+
+  // ── CarCYD-inspired nav dots: 6 tiny pills in the mid-header gap ──
+  // In landscape the gap sits between the status text and the IP.
+  // In portrait (narrower) we squeeze them just right of status.
+  {
+    const int nScreens = 6;
+    const int dotW = 7, dotH = 3, dotGap = 2;
+    int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
+    int dotY = isPortrait() ? 5 : 12; // y of top edge
+
+    int statusEnd;
+    {
+      const char *lbl2 = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "SETUP");
+      statusEnd = sx + 9 + textW(lbl2, 9) + 6;
+    }
+    int gapRight = isPortrait() ? (W - 4) : (barX - 12 - 4);
+    int center = (statusEnd + gapRight) / 2;
+    int dotX0 = center - totalW / 2;
+    if (dotX0 < statusEnd + 4) dotX0 = statusEnd + 4;
+
+    for (int i = 0; i < nScreens; i++)
+    {
+      int dx = dotX0 + i * (dotW + dotGap);
+      uint16_t dc = (i == h.screen) ? C_METER : C_TRACK;
+      // Pill shape: filled rect with rounded ends via fillCircle
+      wgt.fillRect(dx + 1, dotY, dotW - 2, dotH, dc);
+      wgt.fillCircle(dx + 1, dotY + dotH / 2, dotH / 2, dc);
+      wgt.fillCircle(dx + dotW - 2, dotY + dotH / 2, dotH / 2, dc);
+    }
   }
 
   wEnd(X0, 0);
@@ -1213,47 +1280,86 @@ static void paintDiag(const DiagV &dg)
     done(W_DIAG_WIFI, k);
   }
 
-  // 1. Temp
-  k = dg.tempC + "|" + dg.tempF + "|" + (isPortrait() ? "P" : "L");
-  int colW = isPortrait() ? 66 : 88;
-  int colH = isPortrait() ? 52 : 56;
-  int ty = isPortrait() ? 198 : 128;
-  if (need(W_DIAG_TEMP, k) && wBegin(colW, colH, C_PANEL))
+  // ── CarCYD-inspired mini arc gauges: TEMP / FREE HEAP / PING ──
+  // Landscape: 3 cells of 96px each inside the 304×82 health panel (y=110..192)
+  // Portrait:  3 cells of 72px each inside the 228×84 health panel (y=176..260)
+
+  // Cell geometry
+  int arcCellW = isPortrait() ? 70 : 96;
+  int arcCellH = isPortrait() ? 60 : 70;
+  int arcTY    = isPortrait() ? 192 : 120;  // top-y of cell, inside panel border+label row
+  int arc0X    = isPortrait() ? 10  : 16;
+  int arcStep  = isPortrait() ? 74  : 100;
+
+  // Arc geometry inside cell sprite
+  int acx = arcCellW / 2;       // center-x inside sprite
+  int acy = isPortrait() ? 26 : 30; // center-y inside sprite (upper 2/3)
+  int ar  = isPortrait() ? 20 : 26; // outer radius
+  int ari = isPortrait() ? 13 : 17; // inner radius (8-9px track width)
+
+  // ── ARC 0: Core temperature ──────────────────────────────────────────────
   {
-    text(wgt, "CORE TEMP", 0, 0, 8, C_DIM, C_PANEL);
     float tc = dg.tempC.toFloat();
-    uint16_t tcCol = tc < 65.0f ? C_GOOD : (tc < 75.0f ? C_WARN : C_BAD);
-    text(wgt, (dg.tempC + " C").c_str(), 0, 12, 14, tcCol, C_PANEL);
-    text(wgt, (dg.tempF + " F").c_str(), 0, 29, 9, C_DIM, C_PANEL);
-    text(wgt, tc < 70.0f ? "NORMAL" : "WARM", 0, 42, 8, tcCol, C_PANEL);
-    wEnd(isPortrait() ? 10 : 16, ty);
-    done(W_DIAG_TEMP, k);
+    float val = tc / 100.0f; // 0-100°C mapped to 0-1
+    char topLbl[12], botLbl[16];
+    snprintf(topLbl, sizeof(topLbl), "TEMP");
+    snprintf(botLbl, sizeof(botLbl), "%s°C / %s°F", dg.tempC.c_str(), dg.tempF.c_str());
+    String cKey = dg.tempC + "|" + dg.tempF + "|" + (isPortrait() ? "P" : "L");
+    if (need(W_DIAG_ARC0, cKey) && wBegin(arcCellW, arcCellH, C_PANEL))
+    {
+      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.65f, 0.75f, false);
+      // Value in center of arc
+      uint16_t tcCol = tc < 65.0f ? C_GOOD : (tc < 75.0f ? C_WARN : C_BAD);
+      text(wgt, (dg.tempC + "°").c_str(), acx, acy - 6, 13, tcCol, C_PANEL, Align::TopCenter);
+      text(wgt, topLbl, acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
+      text(wgt, (tc < 70.0f ? "NORMAL" : "WARM"), acx, arcCellH - 9, 7, tcCol, C_PANEL, Align::TopCenter);
+      wEnd(arc0X, arcTY);
+      done(W_DIAG_ARC0, cKey);
+    }
   }
 
-  // 2. Free Heap RAM
-  k = dg.freeHeap + "|" + dg.maxBlock + "|" + (isPortrait() ? "P" : "L");
-  int rx = isPortrait() ? 84 : 116;
-  if (need(W_DIAG_RAM, k) && wBegin(colW, colH, C_PANEL))
+  // ── ARC 1: Free heap RAM ─────────────────────────────────────────────────
   {
-    text(wgt, "FREE HEAP", 0, 0, 8, C_DIM, C_PANEL);
-    text(wgt, (dg.freeHeap + " KB").c_str(), 0, 12, 14, C_TEXT, C_PANEL);
-    text(wgt, ("Max: " + dg.maxBlock + "K").c_str(), 0, 29, 9, C_DIM, C_PANEL);
-    text(wgt, "STABLE", 0, 42, 8, C_GOOD, C_PANEL);
-    wEnd(rx, ty);
-    done(W_DIAG_RAM, k);
+    int heapKB = dg.freeHeap.toInt();
+    float val = constrain(heapKB / 150.0f, 0.0f, 1.0f); // 0-150KB mapped to 0-1; inverted zone
+    String rKey = dg.freeHeap + "|" + dg.maxBlock + "|" + (isPortrait() ? "P" : "L");
+    if (need(W_DIAG_ARC1, rKey) && wBegin(arcCellW, arcCellH, C_PANEL))
+    {
+      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.20f, 0.10f, true); // invert: more = better
+      uint16_t hCol = heapKB > 120 ? C_GOOD : (heapKB > 100 ? C_WARN : C_BAD);
+      char hbuf[12];
+      snprintf(hbuf, sizeof(hbuf), "%dK", heapKB);
+      text(wgt, hbuf, acx, acy - 6, 13, hCol, C_PANEL, Align::TopCenter);
+      text(wgt, "HEAP", acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
+      text(wgt, heapKB > 120 ? "AMPLE" : (heapKB > 100 ? "LOW" : "CRIT"), acx, arcCellH - 9, 7, hCol, C_PANEL, Align::TopCenter);
+      wEnd(arc0X + arcStep, arcTY);
+      done(W_DIAG_ARC1, rKey);
+    }
   }
 
-  // 3. System Uptime
-  k = dg.uptime + "|" + (isPortrait() ? "P" : "L");
-  int ux = isPortrait() ? 160 : 216;
-  if (need(W_DIAG_UPTIME, k) && wBegin(colW, colH, C_PANEL))
+  // ── ARC 2: Ping ───────────────────────────────────────────────────────────
   {
-    text(wgt, "UPTIME", 0, 0, 8, C_DIM, C_PANEL);
-    text(wgt, dg.uptime.c_str(), 0, 12, 13, C_TEXT, C_PANEL);
-    text(wgt, "240 MHz (2C)", 0, 29, 8, C_DIM, C_PANEL);
-    text(wgt, "RUNNING", 0, 42, 8, C_GOOD, C_PANEL);
-    wEnd(ux, ty);
-    done(W_DIAG_UPTIME, k);
+    int pingMs = dg.ping.indexOf("--") >= 0 ? -1 : dg.ping.toInt();
+    float val = (pingMs < 0) ? 0.0f : constrain(pingMs / 500.0f, 0.0f, 1.0f);
+    String pKey = dg.ping + "|" + (isPortrait() ? "P" : "L");
+    if (need(W_DIAG_ARC2, pKey) && wBegin(arcCellW, arcCellH, C_PANEL))
+    {
+      // ping: low val = good, so not inverted; warn at 20% (100ms), crit at 50% (250ms)
+      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.20f, 0.50f, false);
+      uint16_t pCol = pingMs < 0 ? C_DIM : (pingMs < 100 ? C_GOOD : (pingMs < 250 ? C_WARN : C_BAD));
+      char pbuf[12];
+      if (pingMs < 0)
+        snprintf(pbuf, sizeof(pbuf), "--");
+      else
+        snprintf(pbuf, sizeof(pbuf), "%d", pingMs);
+      text(wgt, pbuf, acx, acy - 6, 13, pCol, C_PANEL, Align::TopCenter);
+      text(wgt, "PING", arcCellH - 17 > 0 ? arcCellH - 17 : 0, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
+      text(wgt, "PING", acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
+      text(wgt, pingMs < 0 ? "OFFLINE" : (pingMs < 100 ? "GREAT" : (pingMs < 250 ? "OK" : "SLOW")),
+           acx, arcCellH - 9, 7, pCol, C_PANEL, Align::TopCenter);
+      wEnd(arc0X + arcStep * 2, arcTY);
+      done(W_DIAG_ARC2, pKey);
+    }
   }
 
   drawStrip(dg.strip);
@@ -1481,6 +1587,7 @@ static HdrV liveHeader(const String &time)
   h.ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String();
   h.bars = wifiBars();
   h.status = uiStatus();
+  h.screen = currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0;
   return h;
 }
 

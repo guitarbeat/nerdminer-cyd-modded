@@ -17,5 +17,7 @@ void animateCurrentScreen(unsigned long frame);
 void doLedStuff(unsigned long frame);
 void setDisplayTheme(int idx);
 int getDisplayTheme();
+void setDisplayScreen(int idx);
+int getDisplayScreen();
 
 #endif // DISPLAY_H

@@ -8,6 +8,7 @@
 #include "monitor.h"
 #include "drivers/displays/display.h"
 #include "mining.h"
+#include "webCydTwin.h"
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -76,6 +77,7 @@ static void handleApiStats()
   json += ",\"ping\":" + String(g_stratumPing);
   json += ",\"net_diff\":" + (g_networkDifficulty > 0.0 ? String(g_networkDifficulty, 2) : String("100000000000000.00"));
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
+  json += ",\"screen\":" + String(getDisplayScreen());
   json += "}";
   webCfgServer.send(200, "application/json", json);
 }
@@ -111,6 +113,28 @@ static void handleSetTheme()
   webCfgServer.send(200, "application/json", json);
 }
 
+static void handleGetScreen()
+{
+  String json = "{\"screen\":" + String(getDisplayScreen()) + "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
+static void handleSetScreen()
+{
+  int scr = 0;
+  if (webCfgServer.hasArg("id"))
+    scr = webCfgServer.arg("id").toInt();
+  else if (webCfgServer.hasArg("screen"))
+    scr = webCfgServer.arg("screen").toInt();
+
+  if (scr < 0 || scr > 5)
+    scr = 0;
+
+  setDisplayScreen(scr);
+  String json = "{\"status\":\"ok\",\"screen\":" + String(scr) + "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
 static void handleRestart()
 {
   webCfgServer.send(200, "application/json", "{\"status\":\"restarting\"}");
@@ -127,7 +151,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(64000);
+  page.reserve(84000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -244,8 +268,9 @@ static void handleRoot()
             ".btn-restart:hover{background:rgba(218,54,51,0.1)}"
             "#overlay{display:none;position:fixed;inset:0;background:rgba(11,14,20,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}"
             ".spinner{width:40px;height:40px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}"
-            "@keyframes spin{to{transform:rotate(360deg)}}"
-            "</style></head><body>"
+            "@keyframes spin{to{transform:rotate(360deg)}}");
+  appendCydTwinStyle(page);
+  page += F("</style></head><body>"
             "<div class='container'>"
             "<header>"
             "<div class='brand'>"
@@ -269,8 +294,9 @@ static void handleRoot()
             "<div class='fact-icon'>💡</div>"
             "<div class='fact-text'>"
             "<strong>Historical Perspective:</strong> In 2009 (Satoshi era), 3 hours of CPU mining on an ordinary home computer could earn ~100 BTC (worth over <strong>$6.8M USD</strong> today) with only <strong>8 leading zeros</strong>. Today, Bitcoin requires <strong>18 leading zeros</strong> and over 800 EH/s worldwide. That is why solo mining on this ESP32 is an educational lottery ticket!"
-            "</div></div>"
-            "<div class='story-card'>"
+            "</div></div>");
+  appendCydTwinHtml(page);
+  page += F("<div class='story-card'>"
             "<div class='story-hdr'>"
             "<span class='story-title'>Live Miner Explanation</span>"
             "<span class='story-tag'>Solo PoW Lottery</span>"
@@ -628,8 +654,9 @@ static void handleRoot()
             "<h3 style='margin-bottom:8px'>Restarting NerdMiner</h3>"
             "<p style='color:var(--muted);font-size:14px;max-width:320px'>Reconnecting in <span id='cd'>8</span> seconds...</p>"
             "</div>"
-            "<script>"
-            "function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}"
+            "<script>");
+  appendCydTwinScript(page);
+  page += F("function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}"
             "function setPool(h,p,pass){choosePreset(h,p,pass,'Switched pool to '+h+':'+p);}"
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
@@ -686,6 +713,7 @@ static void handleRoot()
             "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent=d.using_fallback?'HASHING (FALLBACK)':'HASHING';}"
             "else if(d.status==='connecting'){dot.className='dot dot-amber';txt.textContent='CONNECTING';}"
             "else{dot.className='dot dot-gray';txt.textContent='IDLE';}"
+            "cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&cydPreviewScr!==cydDevScr){cydSelectTab(cydDevScr,false);}}cydRender();}"
             "let simIsHist=true,simN=856192320,simAutoTimer=null;"
             "function toHex32LE(n){"
             "const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n>>>0,true);"
@@ -828,7 +856,7 @@ static void handleRoot()
             "function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}"
             "function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1000).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1000).toLocaleString();}"
             "function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}"
-            "pollStats();setInterval(pollStats,3000);"
+            "pollStats();setInterval(pollStats,3000);cydRender();"
             "</script></body></html>");
 
   webCfgServer.send(200, "text/html", page);
@@ -915,6 +943,8 @@ void setup_webConfig(void)
   webCfgServer.on("/api/reset-session", HTTP_POST, handleResetSession);
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
   webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);
+  webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
+  webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
   webCfgServer.onNotFound([]()
   {

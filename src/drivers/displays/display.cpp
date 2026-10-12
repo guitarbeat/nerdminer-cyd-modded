@@ -157,3 +157,16 @@ int getDisplayTheme()
   return 0;
 #endif
 }
+
+void setDisplayScreen(int idx)
+{
+  if (currentDisplayDriver && idx >= 0 && idx < currentDisplayDriver->num_cyclic_screens)
+  {
+    currentDisplayDriver->current_cyclic_screen = idx;
+  }
+}
+
+int getDisplayScreen()
+{
+  return currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0;
+}
