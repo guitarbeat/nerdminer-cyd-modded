@@ -630,76 +630,97 @@ struct MineV
   bool flash;
 };
 
+static void drawDownArrow(TFT_eSPI &d, int x, int y, uint16_t col)
+{
+  d.drawFastVLine(x, y, 4, col);
+  d.fillTriangle(x - 2, y + 4, x + 2, y + 4, x, y + 7, col);
+}
+
 static void chromeMine(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    // Card 1: How Mining Works & Target Visual (Y = 28, H = 82)
-    panel(d, 6, 28, 228, 82, 0, C_PANEL, C_EDGE, C_BG);
-    text(d, "HOW MINING WORKS: THE TARGET TEST", 12, 32, 9, C_METER, C_PANEL);
-    text(d, "CYD repeatedly hashes next block header (txs, nonce).", 12, 44, 8, C_TEXT, C_PANEL);
+    // Card 1: The Mining Pipeline (Click Miner causal flow) (Y = 28, H = 88)
+    panel(d, 6, 28, 228, 88, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "THE MINING PIPELINE: HASH < TARGET", 12, 32, 9, C_METER, C_PANEL);
+    text(d, "Block candidate -> 80B header (+1 nonce) -> dSHA256", 12, 44, 8, C_TEXT, C_PANEL);
 
-    // Target visual box
-    d.fillRect(10, 56, 220, 32, C_BG);
-    d.drawRect(10, 56, 220, 32, C_EDGE);
-    text(d, "TOO LARGE:  F82A91...", 14, 58, 8, C_DIM, C_BG);
+    // Target visual stream box
+    d.fillRect(10, 56, 220, 42, C_BG);
+    d.drawRect(10, 56, 220, 42, C_EDGE);
+    text(d, "n.381 -> 9F28...", 14, 58, 8, C_DIM, C_BG);
+    text(d, "> target", 120, 58, 8, C_DIM, C_BG);
     text(d, "X", 224, 58, 8, C_BAD, C_BG, Align::TopRight);
-    d.drawFastHLine(14, 70, 212, C_EDGE);
-    text(d, "TARGET (Must be numerically smaller)", 120, 66, 8, C_WARN, C_BG, Align::TopCenter);
-    text(d, "WINNER:     000039...", 14, 73, 8, C_GOOD, C_BG);
-    text(d, "OK", 224, 73, 8, C_GOOD, C_BG, Align::TopRight);
-    text(d, "Winning hashes begin with 0s because they are tiny numbers.", 12, 91, 8, C_DIM, C_PANEL);
 
-    // Card 2 Frame (Speed & Work, Y = 112, H = 48)
-    panel(d, 6, 112, 228, 48, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "n.382 -> 037A...", 14, 68, 8, C_DIM, C_BG);
+    text(d, "> target", 120, 68, 8, C_DIM, C_BG);
+    text(d, "X", 224, 68, 8, C_BAD, C_BG, Align::TopRight);
 
-    // Card 3 Frame (Shares, Y = 162, H = 44)
-    panel(d, 6, 162, 228, 44, 0, C_PANEL, C_EDGE, C_BG);
+    d.drawFastHLine(14, 78, 212, C_EDGE);
+    text(d, "TARGET (Numerically smaller)", 120, 74, 8, C_WARN, C_BG, Align::TopCenter);
 
-    // Card 4 Frame (Best Try vs Target, Y = 208, H = 48)
-    panel(d, 6, 208, 228, 48, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "winner-> 0001...", 14, 85, 8, C_GOOD, C_BG);
+    text(d, "< target", 120, 85, 8, C_GOOD, C_BG);
+    text(d, "OK", 224, 85, 8, C_GOOD, C_BG, Align::TopRight);
 
-    // Card 5 Frame (Blockchain & Prize Banner, Y = 258, H = 58)
-    panel(d, 6, 258, 228, 58, 0, C_PANEL, C_EDGE, C_BG);
-    text(d, "[B100] -> [B101] -> [NEXT]", 120, 261, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "Prev hash links chain. Old change breaks all.", 12, 273, 8, C_DIM, C_PANEL);
-    text(d, "LOTTERY: Next hash could win--or never!", 12, 285, 8, C_TEXT, C_PANEL);
-    text(d, "Solve block = 3.125 BTC reward + tx fees!", 12, 297, 8, C_GOLD, C_PANEL);
+    text(d, "Rule: Numerically < target (why winners start with 0s).", 12, 101, 8, C_DIM, C_PANEL);
+
+    // Card 2 Frame (Speed & Work, Y = 118, H = 48)
+    panel(d, 6, 118, 228, 48, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 3 Frame (Shares, Y = 168, H = 44)
+    panel(d, 6, 168, 228, 44, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 4 Frame (Best Try vs Target, Y = 214, H = 46)
+    panel(d, 6, 214, 228, 46, 0, C_PANEL, C_EDGE, C_BG);
+
+    // Card 5 Frame (Blockchain & Prize Banner, Y = 262, H = 54)
+    panel(d, 6, 262, 228, 54, 0, C_PANEL, C_EDGE, C_BG);
+    text(d, "[B100] -> [B101] -> [NEXT]", 120, 265, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "Prev hash links chain. Old change breaks all.", 12, 276, 8, C_DIM, C_PANEL);
+    text(d, "LOTTERY: Next hash could win--or never!", 12, 287, 8, C_TEXT, C_PANEL);
+    text(d, "Solve block = 3.125 BTC reward + tx fees!", 12, 298, 8, C_GOLD, C_PANEL);
   }
   else
   {
     // Landscape (320x240)
-    // Left Column: How Mining Works & Target Visual (X = 6, Y = 28, W = 150, H = 176)
+    // Left Column: The Causal Mining Pipeline (X = 6, Y = 28, W = 150, H = 176)
     panel(d, 6, 28, 150, 176, 0, C_PANEL, C_EDGE, C_BG);
-    text(d, "HOW MINING WORKS", 12, 33, 9, C_METER, C_PANEL);
-    text(d, "CYD repeatedly hashes next", 12, 45, 8, C_TEXT, C_PANEL);
-    text(d, "block header (txs, nonce).", 12, 55, 8, C_DIM, C_PANEL);
-    text(d, "Test: Is hash < target?", 12, 66, 8, C_TEXT, C_PANEL);
+    text(d, "THE MINING PIPELINE", 12, 32, 9, C_METER, C_PANEL);
 
-    // Target visual box
-    d.fillRect(10, 78, 142, 36, C_BG);
-    d.drawRect(10, 78, 142, 36, C_EDGE);
-    text(d, "TOO LARGE", 14, 80, 8, C_DIM, C_BG);
-    text(d, "F82A91...", 68, 80, 8, C_TEXT, C_BG);
-    text(d, "X", 146, 80, 8, C_BAD, C_BG, Align::TopRight);
-    d.drawFastHLine(14, 94, 134, C_EDGE);
-    text(d, "TARGET", 81, 90, 8, C_WARN, C_BG, Align::TopCenter);
-    text(d, "WINNER", 14, 100, 8, C_GOOD, C_BG);
-    text(d, "000039...", 68, 100, 8, C_GOOD, C_BG);
-    text(d, "OK", 148, 100, 8, C_GOOD, C_BG, Align::TopRight);
+    // Stage 1
+    text(d, "1. CANDIDATE BLOCK", 12, 43, 8, C_TEXT, C_PANEL);
+    text(d, "Txs + prev block hash", 12, 53, 8, C_DIM, C_PANEL);
+    drawDownArrow(d, 81, 62, C_METER);
+
+    // Stage 2
+    text(d, "2. 80-BYTE HEADER", 12, 70, 8, C_TEXT, C_PANEL);
+    text(d, "Tweaks changing nonce (+1)", 12, 80, 8, C_DIM, C_PANEL);
+    drawDownArrow(d, 81, 89, C_METER);
+
+    // Stage 3
+    text(d, "3. DOUBLE SHA-256", 12, 97, 8, C_TEXT, C_PANEL);
+    text(d, "Computes 256-bit hash", 12, 107, 8, C_DIM, C_PANEL);
+    drawDownArrow(d, 81, 116, C_METER);
+
+    // Stage 4: Attempt stream vs target box
+    d.fillRect(10, 125, 142, 38, C_BG);
+    d.drawRect(10, 125, 142, 38, C_EDGE);
+
+    text(d, "n.381 -> 9F28...", 14, 127, 8, C_DIM, C_BG);
+    text(d, ">tgt", 98, 127, 8, C_DIM, C_BG);
+    text(d, "X", 146, 127, 8, C_BAD, C_BG, Align::TopRight);
+
+    d.drawFastHLine(14, 137, 134, C_EDGE);
+    text(d, "TARGET LINE", 81, 134, 8, C_WARN, C_BG, Align::TopCenter);
+
+    text(d, "winner-> 0001...", 14, 142, 8, C_GOOD, C_BG);
+    text(d, "<tgt", 98, 142, 8, C_GOOD, C_BG);
+    text(d, "OK", 148, 142, 8, C_GOOD, C_BG, Align::TopRight);
 
     // Rule explanation
-    text(d, "Rule: Full 256-bit hash must", 12, 117, 8, C_TEXT, C_PANEL);
-    text(d, "be numerically < target.", 12, 127, 8, C_TEXT, C_PANEL);
-    text(d, "(Why winners start with 0s)", 12, 137, 8, C_DIM, C_PANEL);
-
-    // Divider
-    d.drawFastHLine(12, 149, 138, C_EDGE);
-
-    // Blockchain diagram
-    text(d, "[B100] -> [B101] -> [NEXT]", 81, 153, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "Blocks chain by previous hash.", 12, 166, 8, C_TEXT, C_PANEL);
-    text(d, "Old change breaks all hashes.", 12, 176, 8, C_DIM, C_PANEL);
+    text(d, "Rule: Numerically < target", 81, 166, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "(Tiny numbers start with 0s)", 81, 177, 8, C_DIM, C_PANEL, Align::TopCenter);
 
     // Right Column Panel Frame (X = 162, Y = 28, W = 152, H = 176)
     panel(d, 162, 28, 152, 176, 0, C_PANEL, C_EDGE, C_BG);
