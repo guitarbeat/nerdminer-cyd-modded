@@ -1070,16 +1070,16 @@ static void chromeLottery(TFT_eSPI &d)
     text(d, "BEST DIFFICULTY", 128, 94, 8, C_DIM, C_PANEL);
 
     panel(d, 6, 142, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHARES VS REAL BLOCKS", 12, 146, 8, C_DIM, C_PANEL);
-    text(d, "* SHARES prove work to the pool at easy target.", 12, 158, 8, C_TEXT, C_PANEL);
-    text(d, "* SHARES ARE NOT PIECES OF A BITCOIN!", 12, 169, 8, C_METER, C_PANEL);
-    text(d, "* Winning requires beating the full network target.", 12, 180, 8, C_DIM, C_PANEL);
+    text(d, "DIFFICULTY FORMULA & SHARES", 12, 146, 8, C_DIM, C_PANEL);
+    text(d, "* Diff = Target_1 / Target (1 Diff = 2^32 rolls).", 12, 158, 8, C_GOLD, C_PANEL);
+    text(d, "* Expected hashes = Diff * 4.295 Billion.", 12, 169, 8, C_TEXT, C_PANEL);
+    text(d, "* SHARES prove pool work; NOT pieces of BTC!", 12, 180, 8, C_METER, C_PANEL);
 
     panel(d, 6, 204, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "2009 VS TODAY", 12, 208, 8, C_DIM, C_PANEL);
     text(d, "* 2009: 8 zeros (~100 BTC / 3 hrs on PC).", 12, 220, 8, C_GOLD, C_PANEL);
     text(d, "* Today: 18 zeros (132T+ network target).", 12, 231, 8, C_TEXT, C_PANEL);
-    text(d, "* Every attempt is an independent roll.", 12, 242, 8, C_GOOD, C_PANEL);
+    text(d, "* Finish line: 256-bit roll < Target.", 12, 242, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1102,9 +1102,9 @@ static void chromeLottery(TFT_eSPI &d)
     text(d, "Rarity score (not % progress)", 172, 127, 8, C_DIM, C_PANEL);
 
     panel(d, 8, 148, 304, 44, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "* 2009: 3 hrs on home PC could earn 100 BTC (only ~8 leading 0s).", 14, 153, 8, C_GOLD, C_PANEL);
-    text(d, "* TODAY: 18 leading zeros requires 800+ EH/s. CYD is a pure lottery!", 14, 164, 8, C_TEXT, C_PANEL);
-    text(d, "* FINISH LINE: 256-bit die roll. Win if full hash < target!", 14, 175, 8, C_GOOD, C_PANEL);
+    text(d, "* Diff = Target_1 / Target. Expected Hashes = Diff * 2^32 (~4.295 Billion per Diff).", 14, 153, 8, C_GOLD, C_PANEL);
+    text(d, "* bdiff (0x00000000FFFF0000...) vs pdiff (non-truncated 32 leading zero bits).", 14, 164, 8, C_TEXT, C_PANEL);
+    text(d, "* Time = Diff * 2^32 / Hashrate. Win condition: 256-bit hash < Network Target!", 14, 175, 8, C_GOOD, C_PANEL);
 
     chromeStripCells(d);
   }
