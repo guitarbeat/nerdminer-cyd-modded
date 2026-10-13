@@ -53,6 +53,19 @@ typedef struct{
   NMState NerdStatus;
 }monitor_data;
 
+#define KLINE_POINTS 22
+
+struct BTCKline {
+  float o;
+  float h;
+  float l;
+  float c;
+};
+
+extern BTCKline g_btcKlines[KLINE_POINTS];
+extern uint8_t g_klineCount;
+extern float g_btc24hChange;
+
 typedef struct{
   String globalHash; //hexahashes
   String currentBlock;

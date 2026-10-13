@@ -156,18 +156,35 @@ cydDrawTile(ctx,p,196,112,116,36,'TEMPLATES','4,210',p.text);
 cydDrawTile(ctx,p,196,152,116,36,'BLOCKS FOUND',String(d.blocks||0),p.good);
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'--'},{l:'UPTIME',v:d.uptime||'--'}]);
 }else if(cydPreviewScr===1){
-cydDrawPanel(ctx,p,8,32,188,52,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('BITCOIN PRICE (USD)',16,44);
-ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('$68,420',16,68);
-cydDrawTile(ctx,p,202,32,110,52,'BLOCK HEIGHT','#884,120',p.text);
-cydDrawTile(ctx,p,8,90,96,48,'HALF-HR FEE','12 sat/vB',p.meter);
-cydDrawTile(ctx,p,112,90,96,48,'DIFFICULTY','132.72 T',p.text);
-cydDrawTile(ctx,p,216,90,96,48,'GLOBAL HASHRATE','812 EH/s',p.good);
-cydDrawPanel(ctx,p,8,144,304,48,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HALVING #5 PROGRESS (BLOCK 1,050,000)',16,156);
-ctx.fillStyle=p.track;ctx.fillRect(16,162,288,8);ctx.fillStyle=p.meter;ctx.fillRect(16,162,288*0.78,8);
-ctx.fillStyle=p.text;ctx.font='8px sans-serif';ctx.fillText('~78.4% completed • Subsidy: 3.125 → 1.5625 BTC (~yr 2028)',16,182);
-cydDrawStrip(ctx,p,[{l:'BTC / USD',v:'$68,420'},{l:'POOL',v:'public-pool'},{l:'PORT',v:'21496'},{l:'TIME',v:d.time||'--'}]);
+cydDrawPanel(ctx,p,8,30,304,52,6);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('BTC / USDT • BINANCE',16,42);
+ctx.fillStyle=p.good;ctx.font='bold 9px sans-serif';ctx.fillText('+3.62% 24h',140,42);
+ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('$68,820',16,68);
+ctx.fillStyle=p.text;ctx.font='bold 14px sans-serif';ctx.textAlign='right';ctx.fillText('#884,120',302,52);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('12 sat/vB fee',302,68);ctx.textAlign='left';
+cydDrawPanel(ctx,p,8,86,304,68,6);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('BTC/USDT 1H CANDLES',14,98);
+ctx.fillStyle=p.gold;ctx.font='8px sans-serif';ctx.textAlign='right';ctx.fillText('H: 69.1K',302,98);
+ctx.fillStyle=p.dim;ctx.textAlign='left';ctx.fillText('L: 66.0K',14,148);
+const cX=14,cY=102,cW=292,cH=44,nC=22;
+for(let i=0;i<nC;i++){
+const isBull=i%3!==0;const cCol=isBull?p.good:p.bad;const step=cW/nC;const cpx=cX+i*step+step/2;
+const bh=Math.max(4,Math.abs(Math.sin(i*0.4)*26));const by=cY+cH/2-bh/2;
+ctx.strokeStyle=cCol;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cpx,by-4);ctx.lineTo(cpx,by+bh+4);ctx.stroke();
+ctx.fillStyle=cCol;ctx.fillRect(cpx-3,by,6,bh);
+}
+ctx.strokeStyle=p.gold;ctx.lineWidth=1.5;ctx.beginPath();
+for(let i=0;i<nC;i++){
+const step=cW/nC;const cpx=cX+i*step+step/2;const my=cY+cH/2-Math.sin(i*0.35)*10;
+if(i===0)ctx.moveTo(cpx,my);else ctx.lineTo(cpx,my);
+}
+ctx.stroke();
+cydDrawPanel(ctx,p,8,158,304,36,6);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HALVING #5 PROGRESS',14,170);
+ctx.fillStyle=p.meter;ctx.font='bold 9px sans-serif';ctx.fillText('78%',110,170);
+ctx.fillStyle=p.text;ctx.textAlign='right';ctx.fillText('42,100 blk left',302,170);ctx.textAlign='left';
+ctx.fillStyle=p.track;ctx.fillRect(14,176,292,6);ctx.fillStyle=p.meter;ctx.fillRect(14,176,292*0.78,6);
+cydDrawStrip(ctx,p,[{l:'PAIR',v:'BTC/USDT'},{l:'INTERVAL',v:'1 HOUR'},{l:'POOL',v:'public-pool'},{l:'TIME',v:d.time||'--'}]);
 }else if(cydPreviewScr===2){
 cydDrawPanel(ctx,p,8,30,188,56,6);
 ctx.fillStyle=p.text;ctx.font='bold 36px monospace';
