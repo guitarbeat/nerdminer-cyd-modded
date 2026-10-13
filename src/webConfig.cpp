@@ -127,7 +127,7 @@ static void handleSetScreen()
   else if (webCfgServer.hasArg("screen"))
     scr = webCfgServer.arg("screen").toInt();
 
-  if (scr < 0 || scr > 5)
+  if (scr < 0 || scr > 3)
     scr = 0;
 
   setDisplayScreen(scr);

@@ -41,8 +41,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'><span class='cyd-live-dot'></span>0 MINE</button>
 <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>1 MARKET</button>
 <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
-<button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 ARCH</button>
-<button type='button' class='cyd-tab-btn' id='ctab-4' onclick='cydSelectTab(4)'>4 ECON</button>
+<button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 PROTOCOL</button>
 </div></div></div>
 )rawhtml";
 
@@ -60,19 +59,19 @@ function cydGetPalette(th){const idx=(typeof th==='number'&&th>=0&&th<CYD_PALETT
 function cydSelectTab(idx,isUserClick=true){
 cydPreviewScr=idx;
 if(isUserClick){const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&idx!==cydDevScr)af.checked=false;}
-for(let i=0;i<5;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
+for(let i=0;i<4;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
 const btn=document.getElementById('cyd-switch-btn');if(btn)btn.textContent='📺 Switch Device to Screen '+idx;
 cydRender();
 }
-function cydPrevScreen(){cydSelectTab((cydPreviewScr+4)%5,true);}
-function cydNextScreen(){cydSelectTab((cydPreviewScr+1)%5,true);}
+function cydPrevScreen(){cydSelectTab((cydPreviewScr+3)%4,true);}
+function cydNextScreen(){cydSelectTab((cydPreviewScr+1)%4,true);}
 function cydSwitchPhysical(){
 fetch('/api/screen?id='+cydPreviewScr,{method:'POST'}).then(r=>r.json()).then(data=>{cydDevScr=data.screen;cydUpdateDevBadge();}).catch(()=>{});
 }
 function cydUpdateDevBadge(){
-const b=document.getElementById('cyd-device-badge');const names=['MINE','MARKET','CLOCK','ARCH','ECON'];
+const b=document.getElementById('cyd-device-badge');const names=['MINE','MARKET','CLOCK','PROTOCOL'];
 if(b)b.textContent='Device: SCR '+cydDevScr+' ('+(names[cydDevScr]||'')+')';
-for(let i=0;i<5;i++){
+for(let i=0;i<4;i++){
 const el=document.getElementById('ctab-'+i);
 if(el){
 const dot=el.querySelector('.cyd-live-dot');
@@ -82,7 +81,7 @@ else if(dot){dot.remove();}
 }
 function cydDrawHeader(ctx,p,d){
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,320,26);
-const screenNames=['MINE','MARKET','CLOCK','ARCH','ECONOMICS'];
+const screenNames=['MINE','MARKET','CLOCK','PROTOCOL'];
 const title=screenNames[cydPreviewScr]||'MINE';
 ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
 const tw=ctx.measureText(title).width;
@@ -91,8 +90,8 @@ const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
 const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
 ctx.fillStyle=stCol;ctx.beginPath();ctx.arc(tw+20,13,3,0,Math.PI*2);ctx.fill();
 ctx.font='9px sans-serif';ctx.fillText(stTxt,tw+27,16);
-const dotW=7,dotH=3,gap=2,startX=154;
-for(let i=0;i<5;i++){
+const dotW=7,dotH=3,gap=2,startX=160;
+for(let i=0;i<4;i++){
 ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
 ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
 }
@@ -199,65 +198,30 @@ ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*(barW+barGap),barsY+68-bh,barW,bh);
 }
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'UPTIME',v:d.uptime||'--'},{l:'TEMP',v:(d.temp||'--')+'°C'}]);
 }else if(cydPreviewScr===3){
-cydDrawPanel(ctx,p,8,30,304,78,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('80-BYTE CANDIDATE BLOCK HEADER (FIXED 76B + DIAL 4B)',16,42);
-ctx.fillStyle=p.text;ctx.font='9px monospace';
-ctx.fillText('VER 4B [02000000]       PREV 32B [00000000...9717]',16,56);
-ctx.fillText('MERKLE 32B [871714...978a] TIME 4B [53059335]',16,70);
+cydDrawPanel(ctx,p,8,30,304,48,6);
+ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('BLOCK REWARD JACKPOT',16,42);
+ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('3.125 BTC',16,64);
+ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$300,000+ USD)',126,64);
+ctx.fillStyle=p.good;ctx.fillText('SOLO: 100% TO YOU',220,54);
+
+cydDrawPanel(ctx,p,8,82,304,52,6);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('80-BYTE CANDIDATE HEADER',14,92);
+ctx.fillStyle=p.text;ctx.font='8px monospace';
+ctx.fillText('VER 4B [02000000]   PREV 32B [00000000...9717]',14,105);
+ctx.fillText('MERKLE 32B [8717...978a]  TIME 4B [53059335]',14,116);
 ctx.fillStyle=p.acc;
-ctx.fillText('BITS 4B [19015f53]       NONCE 4B [DIAL: 0x330776...]',16,84);
-const pipeY=114;const stages=['Block Data','80B Header','SHA256d','256-Bit Test'];
+ctx.fillText('BITS 4B [19015f53]  NONCE 4B [DIAL: 0x330776]',14,127);
+
+const pipeY=138;const stages=['Header 80B','SHA256d','Target Zeros','H < Target'];
 for(let i=0;i<4;i++){
-const px=8+i*78;cydDrawPanel(ctx,p,px,pipeY,72,34,4);
+const px=8+i*78;cydDrawPanel(ctx,p,px,pipeY,72,28,4);
 ctx.fillStyle=(i===2)?p.meter:((i===3)?p.good:p.dim);
-ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i],px+36,pipeY+20);ctx.textAlign='left';
-}
-cydDrawTile(ctx,p,8,154,98,38,'FIXED / DIAL','76B / 4B',p.meter);
-cydDrawTile(ctx,p,111,154,98,38,'SATOSHI SEC 7','4.2 MB/YR',p.text);
-cydDrawTile(ctx,p,214,154,98,38,'AVALANCHE','INDEPENDENT',p.gold);
-cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'NONCE',v:'0x330776'}]);
-}else if(cydPreviewScr===4){
-cydDrawPanel(ctx,p,8,30,304,58,6);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('BLOCK REWARD JACKPOT',16,44);
-ctx.fillStyle=p.gold;ctx.font='bold 24px sans-serif';ctx.fillText('3.125 BTC',16,68);
-ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$300,000+ USD)',134,68);
-ctx.fillStyle=p.good;ctx.fillText('SOLO: 100% TO YOU',220,56);
-cydDrawTile(ctx,p,8,94,148,46,'NETWORK TARGET','132.72 T',p.text);
-cydDrawTile(ctx,p,164,94,148,46,'HARD CAP SUPPLY','20,999,999 BTC',p.gold);
-cydDrawTile(ctx,p,8,146,148,46,'1 BITCOIN UNITS','100,000,000 SATS',p.meter);
-cydDrawTile(ctx,p,164,146,148,46,'WHITE PAPER FINALITY','6 CONFS (P < 0.02%)',p.good);
+ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i],px+36,pipeY+18);ctx.textAlign='left';
+cydDrawTile(ctx,p,8,170,148,24,'GLOBAL TARGET',d.net_diff?(parseFloat(d.net_diff)/1e12).toFixed(2)+' T':'132.72 T',p.text);
+cydDrawTile(ctx,p,164,170,148,24,'HARD CAP SUPPLY','20,999,999.9769 BTC',p.gold);
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'ODDS',v:'1/70M'}]);
-}else if(cydPreviewScr===5){
-cydDrawPanel(ctx,p,8,30,148,76,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('STRATUM POOL',14,42);
-ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.fillText('tn.vkbit.com:21496',14,58);
-const ping=d.ping||42;
-const pingCol=ping<100?p.good:(ping<250?p.warn:p.bad);
-ctx.fillStyle=pingCol;ctx.fillText('Ping: '+ping+' ms',14,74);
-ctx.fillStyle=p.good;ctx.fillText('PRIMARY ROUTE',14,90);
-cydDrawPanel(ctx,p,164,30,148,76,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('WIFI CONNECTION',170,42);
-ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.fillText(d.ssid||'Home-WiFi',170,58);
-ctx.fillStyle=p.good;ctx.fillText('Signal: '+(d.rssi||-60)+' dBm',170,74);
-ctx.fillStyle=p.dim;ctx.fillText('IP: '+(d.ip||'192.168.0.27'),170,90);
-cydDrawPanel(ctx,p,8,110,304,82,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('ESP32 HARDWARE HEALTH',14,120);
-const tc=parseFloat(d.temp)||52;
-cydDrawMiniArc(ctx,p,58,150,24,16,tc/100,0.65,0.75,false);
-ctx.textAlign='center';ctx.fillStyle=tc<65?p.good:p.warn;ctx.font='bold 12px sans-serif';
-ctx.fillText(Math.round(tc)+'°',58,154);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('TEMP',58,172);
-const heapKB=Math.round((d.free_heap||120000)/1024);
-cydDrawMiniArc(ctx,p,160,150,24,16,Math.min(heapKB/150,1),0.20,0.10,true);
-ctx.fillStyle=heapKB>100?p.good:p.warn;ctx.font='bold 12px sans-serif';
-ctx.fillText(heapKB+'K',160,154);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('HEAP',160,172);
-cydDrawMiniArc(ctx,p,262,150,24,16,Math.min(ping/500,1),0.20,0.50,false);
-ctx.fillStyle=pingCol;ctx.font='bold 12px sans-serif';ctx.fillText(String(ping),262,154);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('PING',262,172);
-ctx.textAlign='left';
-cydDrawStrip(ctx,p,[{l:'FIRMWARE',v:'v1.6.3'},{l:'PALETTE',v:'Amber'},{l:'DISPLAY',v:'320x240'},{l:'STATUS',v:'MINING'}]);
-}}
+}
+}
 )rawjs";
 
 static inline void appendCydTwinStyle(String &page) { page += FPSTR(CYD_TWIN_STYLE); }

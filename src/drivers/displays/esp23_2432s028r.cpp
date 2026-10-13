@@ -122,8 +122,6 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 #define SCR_MARKET 1
 #define SCR_CLOCK 2
 #define SCR_ARCH 3
-#define SCR_ECONOMICS 4
-#define SCR_DIAG 5
 
 extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
@@ -523,14 +521,13 @@ static void drawHeader(const HdrV &h)
     return;
 
   // Dynamic Screen Title in the top-left corner
-  static const char *const SCREEN_TITLES[5] = {
+  static const char *const SCREEN_TITLES[4] = {
       "MINE",
       "MARKET",
       "CLOCK",
-      "ARCH",
-      "ECONOMICS"
+      "PROTOCOL"
   };
-  const char *title = (h.screen >= 0 && h.screen < 5) ? SCREEN_TITLES[h.screen] : "MINER";
+  const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
   text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
   int wm = textW(title, 13);
 
@@ -566,9 +563,9 @@ static void drawHeader(const HdrV &h)
     gapRight = ipRight - textW(h.ip.c_str(), 10) - 10;
   }
 
-  // ── CarCYD-inspired nav dots: 5 tiny pills in the mid-header gap ──
+  // ── CarCYD-inspired nav dots: 4 tiny pills in the mid-header gap ──
   {
-    const int nScreens = 5;
+    const int nScreens = 4;
     const int dotW = 7, dotH = 3, dotGap = 2;
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
     int dotY = 12; // y of top edge, centered vertically in 26px header
@@ -1128,13 +1125,14 @@ static void paintClock(const ClockV &c)
   drawChart();
 }
 
-// =================================================== ARCHITECTURE screen ==
-// Professional hardware instrument view of the 80-byte header structure and PoW loop.
+// =================================== PROTOCOL (ARCH & ECONOMICS) screen ==
+// Hardware instrument view unifying 80-byte block header, SHA256d PoW mechanics,
+// solo block jackpot (3.125 BTC), and network target economics.
 
 struct ArchitectureV
 {
   HdrV hdr;
-  String hashrateEng;
+  String netDiff;
   StripV strip;
 };
 
@@ -1142,123 +1140,115 @@ static void chromeArchitecture(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    // Candidate Header Container (80-Byte Block Header)
-    panel(d, 6, 30, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 14, 34, 10, C_DIM, C_PANEL);
+    // Hero Block Reward Jackpot Card (y=30, h=48)
+    panel(d, 6, 30, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 14, 34, 9, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 14, 46, 20, C_GOLD, C_PANEL);
+    text(d, "100% SOLO REWARD", 116, 52, 9, C_GOOD, C_PANEL);
 
-    // Row 1
-    panel(d, 10, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VERSION 4B", 14, 51, 9, C_METER, C_TRACK);
-    text(d, "Consensus", 74, 51, 8, C_DIM, C_TRACK);
+    // 80-Byte Candidate Block Header (y=82, h=72)
+    panel(d, 6, 82, 228, 72, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE HEADER", 14, 85, 9, C_DIM, C_PANEL);
 
-    panel(d, 120, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 124, 51, 9, C_METER, C_TRACK);
-    text(d, "Chain", 192, 51, 8, C_DIM, C_TRACK);
+    panel(d, 10, 97, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VER 4B", 14, 100, 8, C_METER, C_TRACK);
+    text(d, "PREV 32B", 68, 100, 8, C_DIM, C_TRACK);
 
-    // Row 2
-    panel(d, 10, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 14, 73, 9, C_METER, C_TRACK);
-    text(d, "Txs Tree", 74, 73, 8, C_DIM, C_TRACK);
+    panel(d, 120, 97, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 124, 100, 8, C_METER, C_TRACK);
+    text(d, "TIME 4B", 182, 100, 8, C_DIM, C_TRACK);
 
-    panel(d, 120, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 124, 73, 9, C_METER, C_TRACK);
-    text(d, "Epoch", 192, 73, 8, C_DIM, C_TRACK);
+    panel(d, 10, 117, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 14, 120, 8, C_METER, C_TRACK);
+    text(d, "Target", 78, 120, 8, C_DIM, C_TRACK);
 
-    // Row 3
-    panel(d, 10, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 14, 95, 9, C_METER, C_TRACK);
-    text(d, "Target", 78, 95, 8, C_DIM, C_TRACK);
+    panel(d, 120, 117, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "NONCE 4B", 124, 120, 8, C_GOLD, C_TRACK);
+    text(d, "0x330776", 222, 120, 8, C_GOLD, C_TRACK, Align::TopRight);
 
-    panel(d, 120, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B", 124, 95, 9, C_GOLD, C_TRACK);
-    text(d, "0x330776", 222, 95, 9, C_GOLD, C_TRACK, Align::TopRight);
+    panel(d, 10, 137, 216, 14, 3, C_BG, C_EDGE, C_PANEL);
+    text(d, "76B Static Template + 4B Nonce Increment Dial", 118, 139, 7, C_DIM, C_BG, Align::TopCenter);
 
-    // 4 Pipeline Stage Badges
-    const int py = 126;
+    // 4 Pipeline Stages (y=158, h=30)
+    const int py = 158;
     panel(d, 6, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "HEADER", 32, py + 4, 9, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 32, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "HEADER", 32, py + 4, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 32, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 64, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHA256d", 90, py + 4, 9, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "2x Hash", 90, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "SHA256d", 90, py + 4, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "2x Hash", 90, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 122, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TARGET", 148, py + 4, 9, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 148, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "TARGET", 148, py + 4, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 148, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 180, py, 54, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TEST", 207, py + 4, 9, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "H < Tgt", 207, py + 16, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "TEST", 207, py + 4, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "H < Tgt", 207, py + 16, 7, C_GOOD, C_PANEL, Align::TopCenter);
 
-    // Two Info Tiles
-    drawTile(W_EXP_STREAM, 6, 160, 112, 44, "76B FIXED + 4B DIAL", "SPV 4.2 MB/Y", C_METER, C_EDGE);
-    drawTile(W_EXP_TEXT, 122, 160, 112, 44, "AVALANCHE EFFECT", "STATELESS", C_TEXT, C_EDGE);
+    // 2 Clean Protocol Metric Tiles (y=192, h=40)
+    drawTile(W_LOT_JACKPOT, 6, 192, 112, 40, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 122, 192, 112, 40, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
 
-    // Explainer Card filling portrait space down to bottom strip
-    panel(d, 6, 208, 228, 52, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "POW MECHANICS", 12, 211, 10, C_DIM, C_PANEL);
-    text(d, "Only 4-byte Nonce increments per hash.", 12, 224, 9, C_TEXT, C_PANEL);
-    text(d, "Double-SHA256 result must be < Target.", 12, 235, 9, C_GOLD, C_PANEL);
-    text(d, "Independent trials: no memory of past work.", 12, 246, 8, C_DIM, C_PANEL);
+    // Bitcoin Economics & Finality Rule (y=236, h=26)
+    panel(d, 6, 236, 228, 26, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "Diff = Tgt_1 / Tgt (2^32 rolls)  |  6 Confs P < 0.02%", 120, 244, 7, C_GOLD, C_PANEL, Align::TopCenter);
 
     chromeStripCells(d);
   }
   else
   {
     // Landscape 320x240
-    panel(d, 8, 30, 304, 72, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE BLOCK HEADER", 16, 34, 10, C_DIM, C_PANEL);
+    // Hero Jackpot & Solo Odds Card (y=30, h=48)
+    panel(d, 8, 30, 304, 48, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 16, 34, 9, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 16, 46, 22, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300,000+ USD)", 126, 52, 9, C_DIM, C_PANEL);
+    d.drawFastVLine(224, 34, 40, C_EDGE);
+    text(d, "SOLO ODDS", 232, 36, 8, C_DIM, C_PANEL);
+    text(d, "100% TO YOU", 232, 48, 10, C_GOOD, C_PANEL);
 
-    // Row 1
-    panel(d, 14, 48, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 18, 51, 9, C_METER, C_TRACK);
-    text(d, "Consensus", 60, 51, 8, C_DIM, C_TRACK);
+    // 80-Byte Candidate Block Header (y=82, h=52)
+    panel(d, 8, 82, 304, 52, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE HEADER", 14, 85, 8, C_DIM, C_PANEL);
 
-    panel(d, 112, 48, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 116, 51, 9, C_METER, C_TRACK);
-    text(d, "Chain", 182, 51, 8, C_DIM, C_TRACK);
+    panel(d, 12, 97, 94, 18, 3, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "VER 4B", 16, 100, 8, C_METER, C_TRACK);
+    text(d, "PREV 32B", 56, 100, 8, C_DIM, C_TRACK);
 
-    panel(d, 214, 48, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 218, 51, 9, C_METER, C_TRACK);
-    text(d, "Txs", 286, 51, 8, C_DIM, C_TRACK);
+    panel(d, 110, 97, 98, 18, 3, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "MERKLE 32B", 114, 100, 8, C_METER, C_TRACK);
+    text(d, "TIME 4B", 172, 100, 8, C_DIM, C_TRACK);
 
-    // Row 2
-    panel(d, 14, 72, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 18, 75, 9, C_METER, C_TRACK);
-    text(d, "Timestamp", 60, 75, 8, C_DIM, C_TRACK);
+    panel(d, 212, 97, 94, 18, 3, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "BITS 4B", 216, 100, 8, C_METER, C_TRACK);
+    text(d, "NONCE 4B", 262, 100, 8, C_GOLD, C_TRACK);
 
-    panel(d, 112, 72, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 116, 75, 9, C_METER, C_TRACK);
-    text(d, "Target", 178, 75, 8, C_DIM, C_TRACK);
+    panel(d, 12, 117, 294, 14, 2, C_BG, C_EDGE, C_PANEL);
+    text(d, "Double-SHA256: 76B Static Template + 4B Dial  |  Target = Bits Unpack", 159, 119, 7, C_DIM, C_BG, Align::TopCenter);
 
-    panel(d, 214, 72, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B [DIAL]", 218, 75, 9, C_GOLD, C_TRACK);
-    text(d, "Miner", 280, 75, 8, C_DIM, C_TRACK);
+    // 4 Pipeline Stages (y=138, h=28)
+    const int py = 138;
+    panel(d, 8, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "1. HEADER", 44, py + 3, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 44, py + 14, 7, C_TEXT, C_PANEL, Align::TopCenter);
 
-    // Pipeline Flow Row (4 badges)
-    const int py = 108;
-    panel(d, 8, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "1. HEADER", 44, py + 6, 9, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 44, py + 20, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    panel(d, 84, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "2. SHA256d", 120, py + 3, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "Double Hash", 120, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
 
-    panel(d, 84, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "2. SHA256d", 120, py + 6, 9, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "Double Hash", 120, py + 20, 8, C_DIM, C_PANEL, Align::TopCenter);
+    panel(d, 160, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "3. TARGET", 196, py + 3, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 196, py + 14, 7, C_GOLD, C_PANEL, Align::TopCenter);
 
-    panel(d, 160, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "3. TARGET", 196, py + 6, 9, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 196, py + 20, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    panel(d, 236, py, 76, 28, 4, C_PANEL, C_EDGE, C_BG);
+    text(d, "4. 256-BIT TEST", 274, py + 3, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "H < Target", 274, py + 14, 7, C_GOOD, C_PANEL, Align::TopCenter);
 
-    panel(d, 236, py, 76, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "4. 256-BIT TEST", 274, py + 6, 9, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "Hash < Target", 274, py + 20, 8, C_GOOD, C_PANEL, Align::TopCenter);
-
-    // 3 Bottom Metric Tiles
-    const int ty = 152;
-    drawTile(W_EXP_STREAM, 8, ty, 98, 40, "FIXED / DIAL", "76B / 4B", C_METER, C_EDGE);
-    drawTile(W_EXP_TEXT, 111, ty, 98, 40, "SATOSHI SEC 7", "4.2 MB/YR", C_TEXT, C_EDGE);
-    drawTile(W_LOT_DIFF, 214, ty, 98, 40, "AVALANCHE", "INDEPENDENT", C_GOLD, C_EDGE);
+    // 2 Clean Protocol Metric Tiles (y=170, h=24)
+    drawTile(W_LOT_JACKPOT, 8, 170, 148, 24, "GLOBAL TARGET", "132.72 T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 164, 170, 148, 24, "HARD CAP SUPPLY", "20,999,999.9769 BTC", C_GOLD, C_EDGE);
 
     chromeStripCells(d);
   }
@@ -1267,258 +1257,12 @@ static void chromeArchitecture(TFT_eSPI &d)
 static void paintArchitecture(const ArchitectureV &av)
 {
   drawHeader(av.hdr);
+  if (isPortrait())
+    drawTile(W_LOT_JACKPOT, 6, 192, 112, 40, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
+  else
+    drawTile(W_LOT_JACKPOT, 8, 170, 148, 24, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
+
   drawStrip(av.strip);
-}
-
-// =============================================== ECONOMICS & ODDS screen ==
-// Structured widget dashboard for solo jackpot, difficulty formula, 21M supply, and finality.
-
-struct EconomicsV
-{
-  HdrV hdr;
-  String netDiff;
-  String totalHashes;
-  String bestDiff;
-  StripV strip;
-};
-
-static void chromeEconomics(TFT_eSPI &d)
-{
-  if (isPortrait())
-  {
-    // Hero Solo Jackpot Card
-    panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 14, 35, 9, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 14, 48, 20, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300k+ USD)", 116, 54, 9, C_DIM, C_PANEL);
-
-    // Four Clean Metric Tiles (expanded height for comfortable glancability, y=90, 142)
-    drawTile(W_LOT_JACKPOT, 6, 90, 112, 46, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 122, 90, 112, 46, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
-    drawTile(W_LOT_DIFF, 6, 142, 112, 46, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
-    drawTile(W_C0, 122, 142, 112, 46, "CONFIRMATIONS", "6 (P < 0.02%)", C_GOOD, C_EDGE);
-
-    // Solo Lottery Odds Banner (clean single card, no stacked redundant pills)
-    panel(d, 6, 196, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "SOLO LOTTERY INCENTIVES", 14, 202, 9, C_DIM, C_PANEL);
-    text(d, "100% REWARD TO YOU", 14, 216, 12, C_GOOD, C_PANEL);
-    text(d, "1 in 70M / yr", 220, 218, 10, C_DIM, C_PANEL, Align::TopRight);
-    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 14, 234, 7, C_GOLD, C_PANEL);
-
-    chromeStripCells(d);
-  }
-  else
-  {
-    // Landscape 320x240
-    // Hero Solo Jackpot Card
-    panel(d, 8, 30, 304, 58, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 18, 36, 10, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 18, 50, 24, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300,000+ USD)", 134, 58, 10, C_DIM, C_PANEL);
-    d.drawFastVLine(224, 36, 46, C_EDGE);
-    text(d, "SOLO ODDS", 232, 38, 9, C_DIM, C_PANEL);
-    text(d, "100% TO YOU", 232, 52, 11, C_GOOD, C_PANEL);
-
-    // 4 Crisp Stat Tiles (expanded height, no pill box clutter)
-    const int y1 = 94, w = 148, h = 46;
-    drawTile(W_LOT_JACKPOT, 8, y1, w, h, "NETWORK TARGET", "132.72 T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 164, y1, w, h, "HARD CAP SUPPLY", "20,999,999.9769 BTC", C_GOLD, C_EDGE);
-
-    const int y2 = 146;
-    drawTile(W_LOT_DIFF, 8, y2, w, h, "1 BITCOIN UNITS", "100,000,000 SATS", C_METER, C_EDGE);
-    drawTile(W_C0, 164, y2, w, h, "WHITE PAPER FINALITY", "6 CONFS (P < 0.024%)", C_GOOD, C_EDGE);
-
-    chromeStripCells(d);
-  }
-}
-
-static void paintEconomics(const EconomicsV &ev)
-{
-  drawHeader(ev.hdr);
-
-  String k = ev.netDiff + "|" + (isPortrait() ? "P" : "L");
-  if (isPortrait())
-  {
-    drawTile(W_LOT_JACKPOT, 6, 90, 112, 46, "GLOBAL TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
-  }
-  else
-  {
-    drawTile(W_LOT_JACKPOT, 8, 94, 148, 46, "NETWORK TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
-  }
-
-  drawStrip(ev.strip);
-}
-
-// ===================================================== DIAGNOSTICS screen ==
-
-struct DiagV
-{
-  HdrV hdr;
-  String poolHost;
-  String poolPort;
-  String ping;
-  bool isFallback;
-  String ssid;
-  String rssi;
-  int bars;
-  String ip;
-  String tempC;
-  String tempF;
-  String freeHeap;
-  String maxBlock;
-  String uptime;
-  StripV strip;
-};
-
-static void chromeDiag(TFT_eSPI &d)
-{
-  if (isPortrait())
-  {
-    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "STRATUM POOL", 12, 36, 8, C_DIM, C_PANEL);
-
-    panel(d, 6, 104, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WIFI CONNECTION", 12, 108, 8, C_DIM, C_PANEL);
-
-    panel(d, 6, 176, 228, 84, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "ESP32 HARDWARE HEALTH", 12, 180, 8, C_DIM, C_PANEL);
-    d.drawFastVLine(80, 194, 60, C_EDGE);
-    d.drawFastVLine(156, 194, 60, C_EDGE);
-
-    chromeStripCells(d);
-  }
-  else
-  {
-    panel(d, 8, 30, 148, 76, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "STRATUM POOL", 16, 35, 8, C_DIM, C_PANEL);
-
-    panel(d, 164, 30, 148, 76, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "WIFI CONNECTION", 172, 35, 8, C_DIM, C_PANEL);
-
-    panel(d, 8, 110, 304, 82, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "ESP32 HARDWARE HEALTH", 16, 115, 8, C_DIM, C_PANEL);
-    d.drawFastVLine(108, 126, 60, C_EDGE);
-    d.drawFastVLine(208, 126, 60, C_EDGE);
-
-    chromeStripCells(d);
-  }
-}
-
-static void paintDiag(const DiagV &dg)
-{
-  drawHeader(dg.hdr);
-
-  String k = dg.poolHost + "|" + dg.poolPort + "|" + dg.ping + "|" + dg.isFallback + "|" + (isPortrait() ? "P" : "L");
-  int pw = isPortrait() ? 212 : 132;
-  int ph = isPortrait() ? 50 : 56;
-  int px = isPortrait() ? 12 : 16;
-  int py = isPortrait() ? 46 : 46;
-  if (need(W_DIAG_NET, k) && wBegin(pw, ph, C_PANEL))
-  {
-    text(wgt, dg.poolHost.c_str(), 0, 0, 11, C_TEXT, C_PANEL);
-    text(wgt, ("Port: " + dg.poolPort).c_str(), 0, 14, 9, C_DIM, C_PANEL);
-    uint16_t pingCol = dg.ping.indexOf("--") >= 0 ? C_DIM : (dg.ping.toInt() < 100 ? C_GOOD : (dg.ping.toInt() < 250 ? C_WARN : C_BAD));
-    text(wgt, ("Ping: " + dg.ping).c_str(), 0, 27, 10, pingCol, C_PANEL);
-    text(wgt, dg.isFallback ? "FALLBACK ROUTE" : "PRIMARY ROUTE", 0, 41, 8, dg.isFallback ? C_WARN : C_GOOD, C_PANEL);
-    wEnd(px, py);
-    done(W_DIAG_NET, k);
-  }
-
-  k = dg.ssid + "|" + dg.rssi + "|" + dg.ip + "|" + (isPortrait() ? "P" : "L");
-  int wx = isPortrait() ? 12 : 172;
-  int wy = isPortrait() ? 118 : 46;
-  if (need(W_DIAG_WIFI, k) && wBegin(pw, ph, C_PANEL))
-  {
-    text(wgt, dg.ssid.c_str(), 0, 0, 11, C_TEXT, C_PANEL);
-    text(wgt, ("Signal: " + dg.rssi).c_str(), 0, 14, 9, C_GOOD, C_PANEL);
-    text(wgt, ("IP: " + dg.ip).c_str(), 0, 27, 9, C_DIM, C_PANEL);
-    text(wgt, "LINK CONNECTED", 0, 41, 8, C_GOOD, C_PANEL);
-    wEnd(wx, wy);
-    done(W_DIAG_WIFI, k);
-  }
-
-  // ── CarCYD-inspired mini arc gauges: TEMP / FREE HEAP / PING ──
-  // Landscape: 3 cells of 96px each inside the 304×82 health panel (y=110..192)
-  // Portrait:  3 cells of 72px each inside the 228×84 health panel (y=176..260)
-
-  // Cell geometry
-  int arcCellW = isPortrait() ? 70 : 96;
-  int arcCellH = isPortrait() ? 60 : 70;
-  int arcTY    = isPortrait() ? 192 : 120;  // top-y of cell, inside panel border+label row
-  int arc0X    = isPortrait() ? 10  : 16;
-  int arcStep  = isPortrait() ? 74  : 100;
-
-  // Arc geometry inside cell sprite
-  int acx = arcCellW / 2;       // center-x inside sprite
-  int acy = isPortrait() ? 26 : 30; // center-y inside sprite (upper 2/3)
-  int ar  = isPortrait() ? 20 : 26; // outer radius
-  int ari = isPortrait() ? 13 : 17; // inner radius (8-9px track width)
-
-  // ── ARC 0: Core temperature ──────────────────────────────────────────────
-  {
-    float tc = dg.tempC.toFloat();
-    float val = tc / 100.0f; // 0-100°C mapped to 0-1
-    char topLbl[12], botLbl[16];
-    snprintf(topLbl, sizeof(topLbl), "TEMP");
-    snprintf(botLbl, sizeof(botLbl), "%s°C / %s°F", dg.tempC.c_str(), dg.tempF.c_str());
-    String cKey = dg.tempC + "|" + dg.tempF + "|" + (isPortrait() ? "P" : "L");
-    if (need(W_DIAG_ARC0, cKey) && wBegin(arcCellW, arcCellH, C_PANEL))
-    {
-      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.65f, 0.75f, false);
-      // Value in center of arc
-      uint16_t tcCol = tc < 65.0f ? C_GOOD : (tc < 75.0f ? C_WARN : C_BAD);
-      text(wgt, (dg.tempC + "°").c_str(), acx, acy - 6, 13, tcCol, C_PANEL, Align::TopCenter);
-      text(wgt, topLbl, acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
-      text(wgt, (tc < 70.0f ? "NORMAL" : "WARM"), acx, arcCellH - 9, 7, tcCol, C_PANEL, Align::TopCenter);
-      wEnd(arc0X, arcTY);
-      done(W_DIAG_ARC0, cKey);
-    }
-  }
-
-  // ── ARC 1: Free heap RAM ─────────────────────────────────────────────────
-  {
-    int heapKB = dg.freeHeap.toInt();
-    float val = constrain(heapKB / 150.0f, 0.0f, 1.0f); // 0-150KB mapped to 0-1; inverted zone
-    String rKey = dg.freeHeap + "|" + dg.maxBlock + "|" + (isPortrait() ? "P" : "L");
-    if (need(W_DIAG_ARC1, rKey) && wBegin(arcCellW, arcCellH, C_PANEL))
-    {
-      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.20f, 0.10f, true); // invert: more = better
-      uint16_t hCol = heapKB > 120 ? C_GOOD : (heapKB > 100 ? C_WARN : C_BAD);
-      char hbuf[12];
-      snprintf(hbuf, sizeof(hbuf), "%dK", heapKB);
-      text(wgt, hbuf, acx, acy - 6, 13, hCol, C_PANEL, Align::TopCenter);
-      text(wgt, "HEAP", acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
-      text(wgt, heapKB > 120 ? "AMPLE" : (heapKB > 100 ? "LOW" : "CRIT"), acx, arcCellH - 9, 7, hCol, C_PANEL, Align::TopCenter);
-      wEnd(arc0X + arcStep, arcTY);
-      done(W_DIAG_ARC1, rKey);
-    }
-  }
-
-  // ── ARC 2: Ping ───────────────────────────────────────────────────────────
-  {
-    int pingMs = dg.ping.indexOf("--") >= 0 ? -1 : dg.ping.toInt();
-    float val = (pingMs < 0) ? 0.0f : constrain(pingMs / 500.0f, 0.0f, 1.0f);
-    String pKey = dg.ping + "|" + (isPortrait() ? "P" : "L");
-    if (need(W_DIAG_ARC2, pKey) && wBegin(arcCellW, arcCellH, C_PANEL))
-    {
-      // ping: low val = good, so not inverted; warn at 20% (100ms), crit at 50% (250ms)
-      drawMiniArcInSprite(acx, acy, ar, ari, val, 0.20f, 0.50f, false);
-      uint16_t pCol = pingMs < 0 ? C_DIM : (pingMs < 100 ? C_GOOD : (pingMs < 250 ? C_WARN : C_BAD));
-      char pbuf[12];
-      if (pingMs < 0)
-        snprintf(pbuf, sizeof(pbuf), "--");
-      else
-        snprintf(pbuf, sizeof(pbuf), "%d", pingMs);
-      text(wgt, pbuf, acx, acy - 6, 13, pCol, C_PANEL, Align::TopCenter);
-      text(wgt, "PING", acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
-      text(wgt, pingMs < 0 ? "OFFLINE" : (pingMs < 100 ? "GREAT" : (pingMs < 250 ? "OK" : "SLOW")),
-           acx, arcCellH - 9, 7, pCol, C_PANEL, Align::TopCenter);
-      wEnd(arc0X + arcStep * 2, arcTY);
-      done(W_DIAG_ARC2, pKey);
-    }
-  }
-
-  drawStrip(dg.strip);
 }
 
 // ------------------------------------------------------ boot / setup pages --
@@ -1588,14 +1332,8 @@ static void paintChrome(TFT_eSPI &d, int scr)
   case SCR_ARCH:
     chromeArchitecture(d);
     break;
-  case SCR_ECONOMICS:
-    chromeEconomics(d);
-    break;
-  case SCR_DIAG:
-    chromeDiag(d);
-    break;
   default:
-    chromeClock(d);
+    chromeMine(d);
     break;
   }
 }
@@ -1625,10 +1363,8 @@ static MineV lastMine;
 static MarketV lastMarket;
 static ClockV lastClock;
 static ArchitectureV lastArch;
-static EconomicsV lastEcon;
-static DiagV lastDiag;
 static bool haveMine = false, haveMarket = false, haveClock = false;
-static bool haveArch = false, haveEcon = false, haveDiag = false;
+static bool haveArch = false;
 
 static void repaintCached(int scr)
 {
@@ -1640,10 +1376,6 @@ static void repaintCached(int scr)
     paintClock(lastClock);
   else if (scr == SCR_ARCH && haveArch)
     paintArchitecture(lastArch);
-  else if (scr == SCR_ECONOMICS && haveEcon)
-    paintEconomics(lastEcon);
-  else if (scr == SCR_DIAG && haveDiag)
-    paintDiag(lastDiag);
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -1872,106 +1604,27 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 
   ArchitectureV av;
   av.hdr = liveHeader(data.currentTime);
-  long hps = (long)(kh * 1000.0f);
-  av.hashrateEng = commas(String(hps));
+  if (g_networkDifficulty > 0.0)
+  {
+    char b[32];
+    snprintf(b, sizeof(b), "%.2f T", g_networkDifficulty / 1e12);
+    av.netDiff = String(b);
+  }
+  else
+  {
+    av.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
+  }
   av.strip.l[0] = "WORKERS";
   av.strip.v[0] = String(pData.workersCount);
   av.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
   av.strip.v[1] = pData.workersHash;
   av.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
   av.strip.v[2] = pData.bestDifficulty;
-  av.strip.l[3] = "NONCE";
-  av.strip.v[3] = "0x330776";
+  av.strip.l[3] = "ODDS";
+  av.strip.v[3] = "1/70M";
   lastArch = av;
   haveArch = true;
   paintArchitecture(av);
-
-  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
-}
-
-void esp32_2432S028R_EconomicsScreen(unsigned long mElapsed)
-{
-  mining_data data = getMiningData(mElapsed);
-  refreshPool();
-  uiLive = true;
-  ensureChrome(SCR_ECONOMICS);
-  noteHashrate(data.currentHashRate.toFloat());
-
-  EconomicsV ev;
-  ev.hdr = liveHeader(data.currentTime);
-  if (g_networkDifficulty > 0.0)
-  {
-    char b[32];
-    snprintf(b, sizeof(b), "%.2f T", g_networkDifficulty / 1e12);
-    ev.netDiff = String(b);
-  }
-  else
-  {
-    ev.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
-  }
-  ev.totalHashes = fmtTotalHashes(data.totalMHashes);
-  ev.bestDiff = data.bestDiff;
-  ev.strip.l[0] = "WORKERS";
-  ev.strip.v[0] = String(pData.workersCount);
-  ev.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
-  ev.strip.v[1] = pData.workersHash;
-  ev.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
-  ev.strip.v[2] = pData.bestDifficulty;
-  ev.strip.l[3] = "ODDS";
-  ev.strip.v[3] = "1/70M";
-  lastEcon = ev;
-  haveEcon = true;
-  paintEconomics(ev);
-
-  logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
-}
-
-void esp32_2432S028R_DiagScreen(unsigned long mElapsed)
-{
-  mining_data data = getMiningData(mElapsed);
-  refreshPool();
-  uiLive = true;
-  ensureChrome(SCR_DIAG);
-  noteHashrate(data.currentHashRate.toFloat());
-
-  DiagV dg;
-  dg.hdr = liveHeader(data.currentTime);
-  dg.poolHost = Settings.PoolAddress;
-  if (dg.poolHost.length() > 16)
-    dg.poolHost = dg.poolHost.substring(0, 16);
-  dg.poolPort = String(Settings.PoolPort);
-  dg.ping = g_stratumPing > 0 ? (String(g_stratumPing) + " ms") : String("-- ms");
-  dg.isFallback = g_usingFallback;
-
-  dg.ssid = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String("No WiFi");
-  if (dg.ssid.length() > 14)
-    dg.ssid = dg.ssid.substring(0, 14);
-  int rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : -100;
-  dg.rssi = String(rssi) + " dBm";
-  dg.bars = wifiBars();
-  dg.ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("--");
-
-  float tc = temperatureRead();
-  if (isnan(tc) || tc <= 0.0f)
-    tc = data.temp.toFloat();
-  dg.tempC = String((int)tc);
-  dg.tempF = String((int)((tc * 1.8f) + 32.0f));
-
-  dg.freeHeap = String(ESP.getFreeHeap() / 1024);
-  dg.maxBlock = String(ESP.getMaxAllocHeap() / 1024);
-  dg.uptime = fmtUptime(data.timeMining);
-
-  dg.strip.l[0] = "FIRMWARE";
-  dg.strip.v[0] = CURRENT_VERSION;
-  dg.strip.l[1] = "PALETTE";
-  dg.strip.v[1] = THEMES[currentThemeIdx].name;
-  dg.strip.l[2] = "DISPLAY";
-  dg.strip.v[2] = isPortrait() ? "240x320" : "320x240";
-  dg.strip.l[3] = "STATUS";
-  dg.strip.v[3] = data.currentHashRate.toFloat() > 0 ? "MINING" : "LINKING";
-  lastDiag = dg;
-  haveDiag = true;
-  paintDiag(dg);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
@@ -2378,8 +2031,7 @@ CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_MinerScreen,
     esp32_2432S028R_MarketScreen,
     esp32_2432S028R_ClockScreen,
-    esp32_2432S028R_ArchitectureScreen,
-    esp32_2432S028R_EconomicsScreen};
+    esp32_2432S028R_ArchitectureScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
