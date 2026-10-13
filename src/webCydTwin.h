@@ -217,6 +217,7 @@ for(let i=0;i<4;i++){
 const px=8+i*78;cydDrawPanel(ctx,p,px,pipeY,72,28,4);
 ctx.fillStyle=(i===2)?p.meter:((i===3)?p.good:p.dim);
 ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i],px+36,pipeY+18);ctx.textAlign='left';
+}
 cydDrawTile(ctx,p,8,170,148,24,'GLOBAL TARGET',d.net_diff?(parseFloat(d.net_diff)/1e12).toFixed(2)+' T':'132.72 T',p.text);
 cydDrawTile(ctx,p,164,170,148,24,'HARD CAP SUPPLY','20,999,999.9769 BTC',p.gold);
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'ODDS',v:'1/70M'}]);
