@@ -1287,29 +1287,23 @@ static void chromeEconomics(TFT_eSPI &d)
   if (isPortrait())
   {
     // Hero Solo Jackpot Card
-    panel(d, 6, 30, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 14, 34, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 14, 46, 18, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300k+ USD)", 118, 52, 8, C_DIM, C_PANEL);
+    panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 14, 35, 9, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 14, 48, 20, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300k+ USD)", 116, 54, 9, C_DIM, C_PANEL);
 
-    // Four Clean Metric Tiles (y=84, 126)
-    drawTile(W_LOT_JACKPOT, 6, 84, 112, 38, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 122, 84, 112, 38, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
-    drawTile(W_LOT_DIFF, 6, 126, 112, 38, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
-    drawTile(W_C0, 122, 126, 112, 38, "CONFIRMATIONS", "6 (P < 0.024%)", C_GOOD, C_EDGE);
+    // Four Clean Metric Tiles (expanded height for comfortable glancability, y=90, 142)
+    drawTile(W_LOT_JACKPOT, 6, 90, 112, 46, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 122, 90, 112, 46, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
+    drawTile(W_LOT_DIFF, 6, 142, 112, 46, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
+    drawTile(W_C0, 122, 142, 112, 46, "CONFIRMATIONS", "6 (P < 0.02%)", C_GOOD, C_EDGE);
 
-    // Solo Lottery Odds Banner
-    panel(d, 6, 168, 228, 36, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "SOLO LOTTERY", 12, 172, 8, C_DIM, C_PANEL);
-    text(d, "100% REWARD TO YOU", 12, 184, 11, C_GOOD, C_PANEL);
-    text(d, "1 in 70M / yr", 224, 184, 9, C_DIM, C_PANEL, Align::TopRight);
-
-    // Bottom Summary Banner
-    panel(d, 6, 208, 228, 52, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "BITCOIN MATHEMATICS", 12, 212, 8, C_DIM, C_PANEL);
-    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 12, 224, 7, C_GOLD, C_PANEL);
-    text(d, "Satoshi: Lost coins only make everyone richer.", 12, 235, 7, C_DIM, C_PANEL);
-    text(d, "Yr 2140: 100% miner incentives transition to fees.", 12, 246, 7, C_DIM, C_PANEL);
+    // Solo Lottery Odds Banner (clean single card, no stacked redundant pills)
+    panel(d, 6, 196, 228, 58, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "SOLO LOTTERY INCENTIVES", 14, 202, 9, C_DIM, C_PANEL);
+    text(d, "100% REWARD TO YOU", 14, 216, 12, C_GOOD, C_PANEL);
+    text(d, "1 in 70M / yr", 220, 218, 10, C_DIM, C_PANEL, Align::TopRight);
+    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 14, 234, 7, C_GOLD, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1317,26 +1311,22 @@ static void chromeEconomics(TFT_eSPI &d)
   {
     // Landscape 320x240
     // Hero Solo Jackpot Card
-    panel(d, 8, 30, 304, 52, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 18, 35, 9, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 18, 47, 22, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300,000+ USD)", 126, 55, 10, C_DIM, C_PANEL);
-    d.drawFastVLine(230, 34, 44, C_EDGE);
-    text(d, "SOLO ODDS", 236, 36, 8, C_DIM, C_PANEL);
-    text(d, "100% TO YOU", 236, 50, 10, C_GOOD, C_PANEL);
+    panel(d, 8, 30, 304, 58, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, "BLOCK REWARD JACKPOT", 18, 36, 10, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 18, 50, 24, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300,000+ USD)", 134, 58, 10, C_DIM, C_PANEL);
+    d.drawFastVLine(224, 36, 46, C_EDGE);
+    text(d, "SOLO ODDS", 232, 38, 9, C_DIM, C_PANEL);
+    text(d, "100% TO YOU", 232, 52, 11, C_GOOD, C_PANEL);
 
-    // 4 Crisp Stat Tiles (matching screens 0 & 1 layout)
-    const int y1 = 86, w = 148, h = 38;
+    // 4 Crisp Stat Tiles (expanded height, no pill box clutter)
+    const int y1 = 94, w = 148, h = 46;
     drawTile(W_LOT_JACKPOT, 8, y1, w, h, "NETWORK TARGET", "132.72 T", C_TEXT, C_EDGE);
     drawTile(W_LOT_WORK, 164, y1, w, h, "HARD CAP SUPPLY", "20,999,999.9769 BTC", C_GOLD, C_EDGE);
 
-    const int y2 = 128;
+    const int y2 = 146;
     drawTile(W_LOT_DIFF, 8, y2, w, h, "1 BITCOIN UNITS", "100,000,000 SATS", C_METER, C_EDGE);
     drawTile(W_C0, 164, y2, w, h, "WHITE PAPER FINALITY", "6 CONFS (P < 0.024%)", C_GOOD, C_EDGE);
-
-    // Compact Formula Pill
-    panel(d, 8, 170, 304, 24, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "Diff = Tgt_1 / Tgt (2^32 rolls)  |  Satoshi: Lost coins = donation  |  Yr 2140: 100% fees", 14, 175, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1349,11 +1339,11 @@ static void paintEconomics(const EconomicsV &ev)
   String k = ev.netDiff + "|" + (isPortrait() ? "P" : "L");
   if (isPortrait())
   {
-    drawTile(W_LOT_JACKPOT, 6, 82, 112, 38, "GLOBAL TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_LOT_JACKPOT, 6, 90, 112, 46, "GLOBAL TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
   }
   else
   {
-    drawTile(W_LOT_JACKPOT, 8, 86, 148, 38, "NETWORK TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_LOT_JACKPOT, 8, 94, 148, 46, "NETWORK TARGET", ev.netDiff.c_str(), C_TEXT, C_EDGE);
   }
 
   drawStrip(ev.strip);
@@ -1884,14 +1874,14 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
   av.hdr = liveHeader(data.currentTime);
   long hps = (long)(kh * 1000.0f);
   av.hashrateEng = commas(String(hps));
-  av.strip.l[0] = "HEADER";
-  av.strip.v[0] = "80 BYTES";
-  av.strip.l[1] = "DIAL";
-  av.strip.v[1] = "NONCE 4B";
-  av.strip.l[2] = "ALGO";
-  av.strip.v[2] = "SHA256d";
-  av.strip.l[3] = "SPV";
-  av.strip.v[3] = "4.2MB/YR";
+  av.strip.l[0] = "WORKERS";
+  av.strip.v[0] = String(pData.workersCount);
+  av.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
+  av.strip.v[1] = pData.workersHash;
+  av.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
+  av.strip.v[2] = pData.bestDifficulty;
+  av.strip.l[3] = "NONCE";
+  av.strip.v[3] = "0x330776";
   lastArch = av;
   haveArch = true;
   paintArchitecture(av);
@@ -1921,14 +1911,14 @@ void esp32_2432S028R_EconomicsScreen(unsigned long mElapsed)
   }
   ev.totalHashes = fmtTotalHashes(data.totalMHashes);
   ev.bestDiff = data.bestDiff;
-  ev.strip.l[0] = "JACKPOT";
-  ev.strip.v[0] = "3.125 BTC";
-  ev.strip.l[1] = "HARD CAP";
-  ev.strip.v[1] = "21M BTC";
-  ev.strip.l[2] = "1 SATOSHI";
-  ev.strip.v[2] = "10^-8 BTC";
-  ev.strip.l[3] = "YEAR 2140";
-  ev.strip.v[3] = "100% FEES";
+  ev.strip.l[0] = "WORKERS";
+  ev.strip.v[0] = String(pData.workersCount);
+  ev.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
+  ev.strip.v[1] = pData.workersHash;
+  ev.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
+  ev.strip.v[2] = pData.bestDifficulty;
+  ev.strip.l[3] = "ODDS";
+  ev.strip.v[3] = "1/70M";
   lastEcon = ev;
   haveEcon = true;
   paintEconomics(ev);

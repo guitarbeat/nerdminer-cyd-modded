@@ -151,7 +151,7 @@ static void handleRoot()
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
 
   String page;
-  page.reserve(84000);
+  page.reserve(48000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -268,9 +268,8 @@ static void handleRoot()
             ".btn-restart:hover{background:rgba(218,54,51,0.1)}"
             "#overlay{display:none;position:fixed;inset:0;background:rgba(11,14,20,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}"
             ".spinner{width:40px;height:40px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}"
-            "@keyframes spin{to{transform:rotate(360deg)}}");
-  appendCydTwinStyle(page);
-  page += F("</style></head><body>"
+            "@keyframes spin{to{transform:rotate(360deg)}}"
+            "</style><link rel='stylesheet' href='/cyd-twin.css'></head><body>"
             "<div class='container'>"
             "<header>"
             "<div class='brand'>"
@@ -287,20 +286,26 @@ static void handleRoot()
   else if (mMonitor.NerdStatus == NM_Connecting)
     page += F("dot-amber'></span><span id='st-txt'>CONNECTING</span>");
   else
-    page += F("dot-gray'></span><span id='st-txt'>IDLE</span>");
-
-  page += F("</div></header>"
-            "<div class='fact-banner'>"
-            "<div class='fact-icon'>💡</div>"
-            "<div class='fact-text'>"
-            "<strong>Historical Perspective:</strong> In 2009 (Satoshi era), 3 hours of CPU mining on an ordinary home computer could earn ~100 BTC (worth over <strong>$6.8M USD</strong> today) with only <strong>8 leading zeros</strong>. Today, Bitcoin requires <strong>18 leading zeros</strong> and over 800 EH/s worldwide. That is why solo mining on this ESP32 is an educational lottery ticket!"
-            "</div></div>");
   appendCydTwinHtml(page);
-  page += F("<div class='story-card'>"
-            "<div class='story-hdr'>"
-            "<span class='story-title'>Live Miner Explanation</span>"
-            "<span class='story-tag'>Solo PoW Lottery</span>"
+  page += F("<div class='diag-strip'>"
+            "<div class='diag-item'><span class='diag-label'>Core Temp</span><span class='diag-val'><span id='st-temp'>");
+  page += d.temp.length() ? d.temp : String("--");
+  page += F("</span>&deg;C</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Uptime</span><span class='diag-val' id='st-uptime'>");
+  page += d.timeMining.length() ? d.timeMining : String("--");
+  page += F("</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
+  page += String(g_stratumPing) + F("</span> ms</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Wi-Fi Signal</span><span class='diag-val'><span id='st-wifi'>");
+  page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
+  page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
+            "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
+  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
+            "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
             "</div>"
+            "<details class='edu-acc' style='margin-bottom:14px;'>"
+            "<summary class='edu-sum'><span>📖 Live Telemetry Explanation &amp; PoW Mathematics</span></summary>"
+            "<div class='edu-body'>"
             "<div class='story-flow'>"
             "<div class='story-p'><span class='story-num'>1</span><div class='story-text'>"
             "Your CYD builds an 80-byte block header (previous block hash, transaction Merkle root, timestamp, and target bits). The <strong class='hl-key'>nonce (number used once)</strong> is the <em>only</em> dial it turns. It is currently making about <strong class='hl-val'><span id='dyn-hps'>");
@@ -332,28 +337,10 @@ static void handleRoot()
             "If your miner solves a block, there is no sharing with a pool: you claim the full current <strong class='hl-key'>block reward of 3.125 BTC</strong> plus transaction fees (worth over <strong class='hl-val'>$200,000+ USD</strong>), paid directly to your configured wallet.</div></div>"
             "<div class='story-p'><span class='story-num'>8</span><div class='story-text'>"
             "This CYD represents roughly <strong class='hl-val'><span id='dyn-netpow'>--</span></strong> of Bitcoin's worldwide computing power (~700 EH/s). At ~1.2 W of typical board power draw, it uses less than 1 kWh per month and costs just pennies to run.</div></div>"
-            "</div></div>"
-            "<div class='diag-strip'>"
-            "<div class='diag-item'><span class='diag-label'>Core Temp</span><span class='diag-val'><span id='st-temp'>");
-  page += d.temp.length() ? d.temp : String("--");
-  page += F("</span>&deg;C</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Uptime</span><span class='diag-val' id='st-uptime'>");
-  page += d.timeMining.length() ? d.timeMining : String("--");
-  page += F("</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
-  page += String(g_stratumPing) + F("</span> ms</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Wi-Fi Signal</span><span class='diag-val'><span id='st-wifi'>");
-  page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
-  page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
-  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
-            "</div>"
-            "<div class='learn-card'>"
-            "<div class='learn-hdr'>"
-            "<span class='learn-title'>📖 LEARN.TXT &bull; How Bitcoin Mining Actually Works</span>"
-            "<span class='story-tag'>Interactive Reference</span>"
-            "</div>"
+            "</div></div></details>"
+            "<details class='edu-acc' style='margin-bottom:14px;'>"
+            "<summary class='edu-sum'><span>📚 Bitcoin Mining Architecture Reference</span></summary>"
+            "<div class='edu-body'>"
             "<details class='edu-acc' name='edu-faq' open>"
             "<summary class='edu-sum'><span>1. What is a \"Hash\" &amp; SHA256d?</span></summary>"
             "<div class='edu-body'>"
@@ -398,12 +385,10 @@ static void handleRoot()
             "&bull; <strong>Gold Miner Analogy (Section 6):</strong> <em>&quot;The steady addition of a constant amount of new coins is analogous to gold miners expending resources to add gold to circulation. In our case, it is CPU time and electricity that is expended.&quot;</em> Miners find it strictly more profitable to protect the network than undermine it.<br>"
             "&bull; <strong>Gambler's Ruin Math (Section 11):</strong> Satoshi modeled double-spend races against a 10% hashpower attacker (<code>q = 0.1</code>). After <strong>z = 6 confirmations (~1 hour)</strong>, catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>, establishing 6 confirmations as the worldwide benchmark for finality."
             "</div></details>"
-            "</div>"
-            "<div class='card' id='pow-sim-card'>"
-            "<div class='card-title'>"
-            "<span>⚡ Interactive Proof-of-Work Simulator</span>"
-            "<span class='story-tag' style='margin-left:auto;'>Browser SHA256d</span>"
-            "</div>"
+            "</div></details>"
+            "<details class='edu-acc' style='margin-bottom:14px;'>"
+            "<summary class='edu-sum'><span>⚡ Interactive Tools &amp; PoW Simulator</span></summary>"
+            "<div class='edu-body'>"
             "<p style='font-size:13px;color:var(--muted);margin-bottom:12px;'>"
             "Experience the exact 80-byte double-SHA256 loop your CYD runs millions of times. Test individual nonces to see how SHA256d scrambles the hash, or solve a real historical Bitcoin block:"
             "</p>"
@@ -452,42 +437,35 @@ static void handleRoot()
             "</div>"
             "<div id='sim-result' style='margin-top:8px;font-size:12px;font-weight:700;color:var(--muted);'>Status: Ready to test (Nonce 856,192,320 &rarr; Solves at 856,192,328)</div>"
             "</div>"
-            "<div style='display:flex;gap:8px;flex-wrap:wrap;'>"
+            "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;'>"
             "<button type='button' class='preset-pill active' onclick='simStep()' style='padding:6px 14px;font-size:12px;'>Test Next Nonce (+1)</button>"
             "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()' style='padding:6px 14px;font-size:12px;'>&#9654; Auto Mine (10 H/s)</button>"
             "<button type='button' class='preset-pill' onclick='simReset()' style='padding:6px 10px;font-size:12px;'>Reset</button>"
+            "</div>"
+            "<div style='border-top:1px solid var(--card-border);padding-top:12px;'>"
+            "<p style='font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;'>🪙 Bitcoin Supply &amp; Satoshis Converter</p>"
+            "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px;'>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;'>"
+            "<label style='font-size:10px;color:var(--muted);'>Bitcoin (BTC)</label>"
+            "<input type='text' id='calc-btc' inputmode='decimal' autocomplete='off' value='1.0' oninput='calcFromBtc(this.value)' style='padding:4px;font-size:12px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;'>"
+            "<label style='font-size:10px;color:var(--muted);'>Satoshis (sats)</label>"
+            "<input type='text' id='calc-sats' inputmode='numeric' autocomplete='off' value='100,000,000' oninput='calcFromSats(this.value)' style='padding:4px;font-size:12px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;'>"
+            "<label style='font-size:10px;color:var(--muted);'>Bits (&mu;BTC)</label>"
+            "<input type='text' id='calc-bits' inputmode='numeric' autocomplete='off' value='1,000,000' oninput='calcFromBits(this.value)' style='padding:4px;font-size:12px;'>"
+            "</div>"
+            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;'>"
+            "<label style='font-size:10px;color:var(--muted);'>Millibitcoins (mBTC)</label>"
+            "<input type='text' id='calc-mbtc' inputmode='decimal' autocomplete='off' value='1,000' oninput='calcFromMbtc(this.value)' style='padding:4px;font-size:12px;'>"
+            "</div>"
+            "</div>"
+            "<div style='font-size:11px;color:var(--muted);line-height:1.4;'>"
+            "1 BTC = 100M Satoshis (<code>1 sat = 10<sup>-8</sup> BTC</code>). Bitcoin Core stores all balances as 64-bit integer sats. Integer truncation of 33 subsidy halvings yields exactly <strong>20,999,999.9769 BTC</strong>."
             "</div></div>"
-            "<div class='card' id='sats-calc-card'>"
-            "<div class='card-title'>"
-            "<span>🪙 Bitcoin Supply &amp; Satoshis Converter</span>"
-            "<span class='story-tag' style='margin-left:auto;'>Divisibility &amp; Units</span>"
-            "</div>"
-            "<p style='font-size:13px;color:var(--muted);margin-bottom:12px;'>"
-            "Explore how 1 Bitcoin divides into 100 million Satoshis, bits, and millibitcoins to prevent deflationary crises:"
-            "</p>"
-            "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;'>"
-            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
-            "<label style='font-size:11px;color:var(--muted);'>Bitcoin (BTC)</label>"
-            "<input type='text' id='calc-btc' inputmode='decimal' autocomplete='off' value='1.0' oninput='calcFromBtc(this.value)' style='padding:6px;font-size:13px;'>"
-            "</div>"
-            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
-            "<label style='font-size:11px;color:var(--muted);'>Satoshis (sats)</label>"
-            "<input type='text' id='calc-sats' inputmode='numeric' autocomplete='off' value='100,000,000' oninput='calcFromSats(this.value)' style='padding:6px;font-size:13px;'>"
-            "</div>"
-            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
-            "<label style='font-size:11px;color:var(--muted);'>Bits (&mu;BTC)</label>"
-            "<input type='text' id='calc-bits' inputmode='numeric' autocomplete='off' value='1,000,000' oninput='calcFromBits(this.value)' style='padding:6px;font-size:13px;'>"
-            "</div>"
-            "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:8px;'>"
-            "<label style='font-size:11px;color:var(--muted);'>Millibitcoins (mBTC)</label>"
-            "<input type='text' id='calc-mbtc' inputmode='decimal' autocomplete='off' value='1,000' oninput='calcFromMbtc(this.value)' style='padding:6px;font-size:13px;'>"
-            "</div>"
-            "</div>"
-            "<div style='font-size:11px;color:var(--muted);line-height:1.5;'>"
-            "&bull; <strong>Protocol Representation:</strong> <code>1 Satoshi = 10<sup>-8</sup> BTC</code>. Internally, Bitcoin Core never uses floats&mdash;all balances are 64-bit integer Satoshis.<br>"
-            "&bull; <strong>The 2140 Subsidy Schedule:</strong> 33 Halving Epochs (50 BTC &rarr; 1 satoshi at Block 6.72M &rarr; 0 at Block #6,929,999). $6,930,000 \times 10\text{m} \approx 131.8\text{ years}$ ($2009 + 131.8 = \text{Year 2140}$). Integer truncation of odd satoshis leaves exactly <strong>20,999,999.9769 BTC</strong> total.<br>"
-            "&bull; <strong>Satoshi's Rule on Lost Coins:</strong> <em>&quot;Lost coins only make everyone else's coins worth slightly more. Think of it as a donation to everyone.&quot;</em>"
-            "</div></div>");
+            "</div></details>");
 
   if (isPublicPool && cleanWallet.length() > 0)
   {
@@ -654,9 +632,9 @@ static void handleRoot()
             "<h3 style='margin-bottom:8px'>Restarting NerdMiner</h3>"
             "<p style='color:var(--muted);font-size:14px;max-width:320px'>Reconnecting in <span id='cd'>8</span> seconds...</p>"
             "</div>"
-            "<script>");
-  appendCydTwinScript(page);
-  page += F("function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}"
+            "<script src='/cyd-twin.js'></script>"
+            "<script>"
+            "function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}"
             "function setPool(h,p,pass){choosePreset(h,p,pass,'Switched pool to '+h+':'+p);}"
             "function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}"
             "function applyTz(v){if(v!=='')document.getElementById('f-tz').value=v;}"
@@ -937,6 +915,17 @@ void setup_webConfig(void)
   if (webCfgStarted)
     return;
 
+  webCfgServer.on("/favicon.ico", HTTP_GET, []() {
+    webCfgServer.send(204, "image/x-icon", "");
+  });
+  webCfgServer.on("/cyd-twin.css", HTTP_GET, []() {
+    webCfgServer.sendHeader("Cache-Control", "public, max-age=86400");
+    webCfgServer.send_P(200, "text/css", CYD_TWIN_STYLE);
+  });
+  webCfgServer.on("/cyd-twin.js", HTTP_GET, []() {
+    webCfgServer.sendHeader("Cache-Control", "public, max-age=86400");
+    webCfgServer.send_P(200, "application/javascript", CYD_TWIN_JS);
+  });
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);

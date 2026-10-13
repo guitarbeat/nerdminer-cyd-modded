@@ -4,10 +4,10 @@
 #include <Arduino.h>
 
 static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
-.cyd-preview-card{background:var(--card);border:1px solid var(--card-border);border-radius:8px;padding:16px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,0.3)}
-.cyd-preview-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
-.cyd-preview-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
-.cyd-bezel{background:#161b22;border:3px solid #21262d;border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;position:relative;box-shadow:inset 0 0 12px rgba(0,0,0,0.8),0 4px 14px rgba(0,0,0,0.4)}
+.cyd-preview-card{background:transparent;border:none;padding:0;margin-bottom:18px}
+.cyd-preview-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.cyd-preview-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+.cyd-bezel{background:#12161f;border:1px solid var(--card-border);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;position:relative}
 .cyd-bezel-lbl{font-size:10px;letter-spacing:1px;color:#8b949e;text-transform:uppercase;margin-bottom:6px;font-weight:600}
 #cyd-canvas{width:100%;max-width:480px;height:auto;aspect-ratio:4/3;background:#0b0e14;border:1px solid #30363d;border-radius:4px;image-rendering:pixelated}
 .cyd-tabs{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center;width:100%}
@@ -24,7 +24,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <div class='cyd-preview-card'>
 <div class='cyd-preview-hdr'>
-<div class='cyd-preview-title'><span>📺 CYD Live Screen Twin</span><span class='story-tag'>Real-Time Hardware Preview</span></div>
+<div class='cyd-preview-title'><span>📺 Hardware Screen Twin</span></div>
 <div style='display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);'>
 <label style='display:flex;align-items:center;gap:4px;cursor:pointer;'><input type='checkbox' id='cyd-auto-follow' checked> Follow Device</label>
 <span id='cyd-device-badge' style='background:rgba(63,185,80,0.15);color:#3fb950;padding:2px 8px;border-radius:12px;font-weight:600;border:1px solid rgba(63,185,80,0.3);'>Device: SCR 0 (MINE)</span>
@@ -215,21 +215,18 @@ ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i],px+
 cydDrawTile(ctx,p,8,154,98,38,'FIXED / DIAL','76B / 4B',p.meter);
 cydDrawTile(ctx,p,111,154,98,38,'SATOSHI SEC 7','4.2 MB/YR',p.text);
 cydDrawTile(ctx,p,214,154,98,38,'AVALANCHE','INDEPENDENT',p.gold);
-cydDrawStrip(ctx,p,[{l:'HEADER',v:'80 BYTES'},{l:'DIAL',v:'NONCE 4B'},{l:'ALGO',v:'SHA256d'},{l:'SPV',v:'4.2MB/YR'}]);
+cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'NONCE',v:'0x330776'}]);
 }else if(cydPreviewScr===4){
-cydDrawPanel(ctx,p,8,30,304,52,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('BLOCK REWARD JACKPOT',16,42);
-ctx.fillStyle=p.gold;ctx.font='bold 20px sans-serif';ctx.fillText('3.125 BTC',16,64);
-ctx.font='9px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$300,000+ USD)',124,64);
-ctx.fillStyle=p.good;ctx.fillText('SOLO: 100% TO YOU',228,56);
-cydDrawTile(ctx,p,8,86,148,38,'NETWORK TARGET','132.72 T',p.text);
-cydDrawTile(ctx,p,164,86,148,38,'HARD CAP SUPPLY','20,999,999 BTC',p.gold);
-cydDrawTile(ctx,p,8,128,148,38,'1 BITCOIN UNITS','100,000,000 SATS',p.meter);
-cydDrawTile(ctx,p,164,128,148,38,'WHITE PAPER FINALITY','6 CONFS (P < 0.02%)',p.good);
-cydDrawPanel(ctx,p,8,170,304,24,4);
-ctx.fillStyle=p.dim;ctx.font='7.5px sans-serif';
-ctx.fillText('Diff = Tgt_1 / Tgt (2^32 rolls)  |  Satoshi: Lost coins = donation  |  Yr 2140: 100% fees',14,185);
-cydDrawStrip(ctx,p,[{l:'JACKPOT',v:'3.125 BTC'},{l:'HARD CAP',v:'21M BTC'},{l:'1 SATOSHI',v:'10^-8 BTC'},{l:'YEAR 2140',v:'100% FEES'}]);
+cydDrawPanel(ctx,p,8,30,304,58,6);
+ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('BLOCK REWARD JACKPOT',16,44);
+ctx.fillStyle=p.gold;ctx.font='bold 24px sans-serif';ctx.fillText('3.125 BTC',16,68);
+ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$300,000+ USD)',134,68);
+ctx.fillStyle=p.good;ctx.fillText('SOLO: 100% TO YOU',220,56);
+cydDrawTile(ctx,p,8,94,148,46,'NETWORK TARGET','132.72 T',p.text);
+cydDrawTile(ctx,p,164,94,148,46,'HARD CAP SUPPLY','20,999,999 BTC',p.gold);
+cydDrawTile(ctx,p,8,146,148,46,'1 BITCOIN UNITS','100,000,000 SATS',p.meter);
+cydDrawTile(ctx,p,164,146,148,46,'WHITE PAPER FINALITY','6 CONFS (P < 0.02%)',p.good);
+cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'ODDS',v:'1/70M'}]);
 }else if(cydPreviewScr===5){
 cydDrawPanel(ctx,p,8,30,148,76,6);
 ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('STRATUM POOL',14,42);
