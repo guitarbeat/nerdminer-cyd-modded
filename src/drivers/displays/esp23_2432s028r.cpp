@@ -337,7 +337,7 @@ static void drawMiniArcInSprite(int cx, int cy, int r, int ri, float val,
   if (!invert)
     fillCol = (val >= critAt) ? C_BAD : (val >= warnAt ? C_WARN : C_GOOD);
   else
-    fillCol = (val <= (1.0f - critAt)) ? C_BAD : (val <= (1.0f - warnAt) ? C_WARN : C_GOOD);
+    fillCol = (val <= critAt) ? C_BAD : (val <= warnAt ? C_WARN : C_GOOD);
 
   // Track (full 240°)
   wgt.drawArc(cx, cy, r, ri, startAngle, startAngle + sweepTotal, C_TRACK, C_PANEL, true);
@@ -492,7 +492,8 @@ static void gaugeDraw(TFT_eSPI &d, float v)
       continue;
     // CarCYD-style zone coloring: last ~20% transitions warm→red (redline)
     uint16_t mCol = (i >= 27) ? C_BAD : (i >= 24 ? C_WARN : C_METER);
-    uint16_t col = lvl == 0 ? C_TRACK : (lvl == 4 ? mCol : mix565(C_TRACK, mCol, lvl * 64));
+    uint16_t tCol = (i >= 27) ? mix565(C_BAD, C_BG, 64) : C_TRACK;
+    uint16_t col = lvl == 0 ? tCol : (lvl == 4 ? mCol : mix565(tCol, mCol, lvl * 64));
     int a0 = 45 + i * 9; // 270 degree sweep, gap at 6 o'clock
     d.drawArc(G_CX, G_CY, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
     segLvl[i] = lvl;
@@ -568,7 +569,7 @@ static void drawHeader(const HdrV &h)
     const int nScreens = 6;
     const int dotW = 7, dotH = 3, dotGap = 2;
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
-    int dotY = isPortrait() ? 5 : 12; // y of top edge
+    int dotY = 12; // y of top edge, centered vertically in 26px header
 
     int statusEnd;
     {
@@ -717,10 +718,11 @@ static void paintMine(const MineV &m)
   k = m.total + "|" + (isPortrait() ? "P" : "L");
   if (need(W_TOTAL, k))
   {
-    if (wBegin(120, 16, C_BG))
+    int tw = isPortrait() ? 92 : 120;
+    if (wBegin(tw, 16, C_BG))
     {
-      textPair(wgt, 60, 1, commas(m.total).c_str(), "MH TOTAL", 11, C_TEXT, C_DIM, C_BG);
-      wEnd(cx - 60, isPortrait() ? 156 : 171);
+      textPair(wgt, tw / 2, 1, commas(m.total).c_str(), "MH TOTAL", isPortrait() ? 10 : 11, C_TEXT, C_DIM, C_BG);
+      wEnd(cx - (tw / 2), isPortrait() ? 158 : 171);
       done(W_TOTAL, k);
     }
   }
@@ -764,10 +766,10 @@ static void chromeMarket(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    panel(d, 6, 32, 228, 68, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 14, 38, 9, C_DIM, C_PANEL);
-    text(d, "LATEST BLOCK", 224, 38, 9, C_DIM, C_PANEL, Align::TopRight);
-    panel(d, 6, 196, 228, 36, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 30, 228, 72, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, btcPairLabel().c_str(), 14, 36, 9, C_DIM, C_PANEL);
+    text(d, "LATEST BLOCK", 224, 36, 9, C_DIM, C_PANEL, Align::TopRight);
+    panel(d, 6, 208, 228, 52, 8, C_PANEL, C_EDGE, C_BG);
     chromeStripCells(d);
   }
   else
@@ -785,30 +787,30 @@ static void paintMarket(const MarketV &m)
   drawHeader(m.hdr);
 
   String k = m.price + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
-  int priceW = isPortrait() ? 130 : 176;
+  int priceW = isPortrait() ? 138 : 176;
   if (need(W_PRICE, k) && wBegin(priceW, 46, C_PANEL))
   {
     const unsigned len = m.price.length();
-    int baseSz = isPortrait() ? 32 : 38;
+    int baseSz = isPortrait() ? 30 : 38;
     text(wgt, m.price.c_str(), 2, 0, len > 8 ? baseSz * 8 / len : baseSz, C_TEXT, C_PANEL);
-    wEnd(isPortrait() ? 12 : 18, 52);
+    wEnd(isPortrait() ? 12 : 18, isPortrait() ? 50 : 52);
     done(W_PRICE, k);
   }
 
   k = m.block + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
-  int blockW = isPortrait() ? 84 : 110;
+  int blockW = isPortrait() ? 78 : 110;
   if (need(W_BLOCK, k) && wBegin(blockW, 46, C_PANEL))
   {
     text(wgt, m.block.c_str(), blockW - 4, isPortrait() ? 10 : 17, isPortrait() ? 18 : 22, C_TEXT, C_PANEL, Align::TopRight);
-    wEnd(isPortrait() ? 144 : 190, 52);
+    wEnd(isPortrait() ? 150 : 190, isPortrait() ? 50 : 52);
     done(W_BLOCK, k);
   }
 
   if (isPortrait())
   {
-    drawTile(W_M0, 6, 106, 112, 40, "FEE / HALF HOUR", m.fee.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_M1, 122, 106, 112, 40, "DIFFICULTY", m.diff.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_M2, 6, 150, 228, 40, "NETWORK RATE", m.net.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M0, 6, 108, 112, 44, "FEE / HALF HOUR", m.fee.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_M1, 122, 108, 112, 44, "DIFFICULTY", m.diff.c_str(), C_GOLD, C_EDGE);
+    drawTile(W_M2, 6, 158, 228, 44, "NETWORK RATE", m.net.c_str(), C_GOOD, C_EDGE);
   }
   else
   {
@@ -821,20 +823,24 @@ static void paintMarket(const MarketV &m)
   char kb[48];
   snprintf(kb, sizeof(kb), "%d|%s|%d|%d", m.pct, m.remaining.c_str(), accentIdx, isPortrait() ? 1 : 0);
   int halvW = isPortrait() ? 216 : 288;
-  int halvY = isPortrait() ? 199 : 159;
+  int halvH = isPortrait() ? 44 : 30;
+  int halvY = isPortrait() ? 212 : 159;
   int barW = isPortrait() ? 208 : 280;
-  if (need(W_HALV, kb) && wBegin(halvW, 30, C_PANEL))
+  int barH = isPortrait() ? 8 : 6;
+  if (need(W_HALV, kb) && wBegin(halvW, halvH, C_PANEL))
   {
     text(wgt, "NEXT HALVING", 4, 1, 9, C_DIM, C_PANEL);
     char pc[8];
     snprintf(pc, sizeof(pc), "%d%%", m.pct);
-    text(wgt, pc, 4 + textW("NEXT HALVING", 9) + 8, 0, 11, C_TEXT, C_PANEL);
+    text(wgt, pc, 4 + textW("NEXT HALVING", 9) + 8, 0, 11, C_METER, C_PANEL);
     String rem = commas(m.remaining) + (isPortrait() ? " blk" : " blocks left");
     text(wgt, rem.c_str(), halvW - 4, 1, 10, C_TEXT, C_PANEL, Align::TopRight);
-    wgt.fillRect(4, 17, barW, 6, C_TRACK);
+    wgt.fillRect(4, 16, barW, barH, C_TRACK);
     int fw = (barW * m.pct) / 100;
     if (fw > 0)
-      wgt.fillRect(4, 17, fw, 6, C_METER);
+      wgt.fillRect(4, 16, fw, barH, C_METER);
+    if (isPortrait())
+      text(wgt, "Est. Apr 2028 | 3.125 -> 1.5625 BTC", 4, 28, 8, C_DIM, C_PANEL);
     wEnd(isPortrait() ? 12 : 16, halvY);
     done(W_HALV, kb);
   }
@@ -854,7 +860,16 @@ struct ClockV
 
 static void chromeClock(TFT_eSPI &d)
 {
-  chromeStrip(d);
+  if (isPortrait())
+  {
+    panel(d, 6, 214, 228, 46, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "ROLLING 36-SLOT HASHRATE HISTORY", 12, 218, 8, C_DIM, C_PANEL);
+    chromeStripCells(d);
+  }
+  else
+  {
+    chromeStrip(d);
+  }
 }
 
 static void drawChart()
@@ -866,6 +881,7 @@ static void drawChart()
   const int W = isPortrait() ? 216 : 288, H = 30;
   if (!wBegin(W, H, C_PANEL))
     return;
+  wgt.drawFastHLine(0, H - 1, W, C_TRACK); // baseline grounding
   float mx = 1;
   for (int i = 0; i < histCount; i++)
     if (hist[i] > mx)
@@ -887,7 +903,7 @@ static void drawChart()
       bh = 2;
     wgt.fillRect(x, H - bh, 5, bh, C_METER);
   }
-  wEnd(isPortrait() ? 12 : 16, isPortrait() ? 272 : (STRIP_Y + 4));
+  wEnd(isPortrait() ? 12 : 16, isPortrait() ? 228 : (STRIP_Y + 4));
   done(W_CHART, k);
 }
 
@@ -990,14 +1006,14 @@ static void chromeArchitecture(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    // Candidate Header Container
+    // Candidate Header Container (80-Byte Block Header)
     panel(d, 6, 30, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "80-BYTE CANDIDATE HEADER", 14, 35, 8, C_DIM, C_PANEL);
 
     // Row 1
     panel(d, 10, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "VERSION 4B", 14, 51, 8, C_METER, C_TRACK);
-    text(d, "Consensus", 78, 51, 7, C_DIM, C_TRACK);
+    text(d, "Consensus", 74, 51, 7, C_DIM, C_TRACK);
 
     panel(d, 120, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "PREV HASH 32B", 124, 51, 8, C_METER, C_TRACK);
@@ -1006,42 +1022,49 @@ static void chromeArchitecture(TFT_eSPI &d)
     // Row 2
     panel(d, 10, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "MERKLE 32B", 14, 73, 8, C_METER, C_TRACK);
-    text(d, "Txs Tree", 76, 73, 7, C_DIM, C_TRACK);
+    text(d, "Txs Tree", 74, 73, 7, C_DIM, C_TRACK);
 
     panel(d, 120, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "TIME 4B", 124, 73, 8, C_METER, C_TRACK);
-    text(d, "Epoch", 190, 73, 7, C_DIM, C_TRACK);
+    text(d, "Epoch", 192, 73, 7, C_DIM, C_TRACK);
 
     // Row 3
     panel(d, 10, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
     text(d, "BITS 4B", 14, 95, 8, C_METER, C_TRACK);
-    text(d, "Target", 84, 95, 7, C_DIM, C_TRACK);
+    text(d, "Target", 78, 95, 7, C_DIM, C_TRACK);
 
     panel(d, 120, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B [DIAL]", 124, 95, 8, C_GOLD, C_TRACK);
-    text(d, "Miner", 190, 95, 7, C_DIM, C_TRACK);
+    text(d, "NONCE 4B", 124, 95, 8, C_GOLD, C_TRACK);
+    text(d, "0x330776", 222, 95, 8, C_GOLD, C_TRACK, Align::TopRight);
 
     // 4 Pipeline Stage Badges
     const int py = 126;
-    panel(d, 6, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
     text(d, "HEADER", 32, py + 4, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 32, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 32, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
-    panel(d, 64, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    panel(d, 64, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
     text(d, "SHA256d", 90, py + 4, 8, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "2x Hash", 90, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "2x Hash", 90, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
-    panel(d, 122, py, 52, 28, 4, C_PANEL, C_EDGE, C_BG);
+    panel(d, 122, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
     text(d, "TARGET", 148, py + 4, 8, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 148, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 148, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
 
-    panel(d, 180, py, 54, 28, 4, C_PANEL, C_EDGE, C_BG);
+    panel(d, 180, py, 54, 30, 4, C_PANEL, C_EDGE, C_BG);
     text(d, "TEST", 207, py + 4, 8, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "H < Tgt", 207, py + 14, 7, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "H < Tgt", 207, py + 16, 7, C_GOOD, C_PANEL, Align::TopCenter);
 
     // Two Info Tiles
     drawTile(W_EXP_STREAM, 6, 160, 112, 44, "76B FIXED + 4B DIAL", "SPV 4.2 MB/Y", C_METER, C_EDGE);
-    drawTile(W_EXP_TEXT, 122, 160, 112, 44, "AVALANCHE EFFECT", "NO GET WARM", C_TEXT, C_EDGE);
+    drawTile(W_EXP_TEXT, 122, 160, 112, 44, "AVALANCHE EFFECT", "STATELESS", C_TEXT, C_EDGE);
+
+    // Explainer Card filling portrait space down to bottom strip
+    panel(d, 6, 208, 228, 52, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "POW MECHANICS", 12, 212, 8, C_DIM, C_PANEL);
+    text(d, "Only 4-byte Nonce increments per hash.", 12, 224, 8, C_TEXT, C_PANEL);
+    text(d, "Double-SHA256 result must be < Target.", 12, 235, 8, C_GOLD, C_PANEL);
+    text(d, "Independent trials: no memory of past work.", 12, 246, 7, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1128,21 +1151,29 @@ static void chromeEconomics(TFT_eSPI &d)
   if (isPortrait())
   {
     // Hero Solo Jackpot Card
-    panel(d, 6, 30, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 30, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
     text(d, "BLOCK REWARD JACKPOT", 14, 34, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 14, 45, 17, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300k+ USD)", 100, 52, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 14, 46, 18, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$300k+ USD)", 118, 52, 8, C_DIM, C_PANEL);
 
-    // Four Clean Metric Tiles
-    drawTile(W_LOT_JACKPOT, 6, 82, 112, 38, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 122, 82, 112, 38, "HARD CAP SUPPLY", "20,999,999", C_GOLD, C_EDGE);
-    drawTile(W_LOT_DIFF, 6, 124, 112, 38, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
-    drawTile(W_C0, 122, 124, 112, 38, "CONFIRMATIONS", "6 (P < 0.024%)", C_GOOD, C_EDGE);
+    // Four Clean Metric Tiles (y=84, 126)
+    drawTile(W_LOT_JACKPOT, 6, 84, 112, 38, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
+    drawTile(W_LOT_WORK, 122, 84, 112, 38, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
+    drawTile(W_LOT_DIFF, 6, 126, 112, 38, "1 BITCOIN UNITS", "100M SATS", C_METER, C_EDGE);
+    drawTile(W_C0, 122, 126, 112, 38, "CONFIRMATIONS", "6 (P < 0.024%)", C_GOOD, C_EDGE);
+
+    // Solo Lottery Odds Banner
+    panel(d, 6, 168, 228, 36, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "SOLO LOTTERY", 12, 172, 8, C_DIM, C_PANEL);
+    text(d, "100% REWARD TO YOU", 12, 184, 11, C_GOOD, C_PANEL);
+    text(d, "1 in 70M / yr", 224, 184, 9, C_DIM, C_PANEL, Align::TopRight);
 
     // Bottom Summary Banner
-    panel(d, 6, 166, 228, 38, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 12, 171, 7, C_GOLD, C_PANEL);
-    text(d, "Satoshi: Lost coins = donation | Yr 2140 = 100% fees", 12, 183, 7, C_DIM, C_PANEL);
+    panel(d, 6, 208, 228, 52, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "BITCOIN MATHEMATICS", 12, 212, 8, C_DIM, C_PANEL);
+    text(d, "Diff = Tgt_1 / Tgt (2^32 = 4.295B hashes/diff)", 12, 224, 7, C_GOLD, C_PANEL);
+    text(d, "Satoshi: Lost coins only make everyone richer.", 12, 235, 7, C_DIM, C_PANEL);
+    text(d, "Yr 2140: 100% miner incentives transition to fees.", 12, 246, 7, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1353,7 +1384,6 @@ static void paintDiag(const DiagV &dg)
       else
         snprintf(pbuf, sizeof(pbuf), "%d", pingMs);
       text(wgt, pbuf, acx, acy - 6, 13, pCol, C_PANEL, Align::TopCenter);
-      text(wgt, "PING", arcCellH - 17 > 0 ? arcCellH - 17 : 0, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
       text(wgt, "PING", acx, arcCellH - 17, 8, C_DIM, C_PANEL, Align::TopCenter);
       text(wgt, pingMs < 0 ? "OFFLINE" : (pingMs < 100 ? "GREAT" : (pingMs < 250 ? "OK" : "SLOW")),
            acx, arcCellH - 9, 7, pCol, C_PANEL, Align::TopCenter);
