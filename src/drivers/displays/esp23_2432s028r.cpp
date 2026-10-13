@@ -522,9 +522,18 @@ static void drawHeader(const HdrV &h)
   if (!wBegin(W, HDR_H, C_BG))
     return;
 
-  // Wordmark: unified, crisp typography
-  text(wgt, "NERDMINER", 0, 5, 13, C_TEXT, C_BG);
-  int wm = textW("NERDMINER", 13);
+  // Dynamic Screen Title in the top-left corner
+  static const char *const SCREEN_TITLES[6] = {
+      "MINE",
+      "MARKET",
+      "CLOCK",
+      "ARCH",
+      "ECONOMICS",
+      "DIAGNOSTICS"
+  };
+  const char *title = (h.screen >= 0 && h.screen < 6) ? SCREEN_TITLES[h.screen] : "MINER";
+  text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
+  int wm = textW(title, 13);
 
   // Status: purely typographic indicator with a minimal 3px status dot (no pill container)
   const char *label = "SETUP";
@@ -1991,6 +2000,9 @@ void esp32_2432S028R_DiagScreen(unsigned long mElapsed)
 static void touchTask(void *);
 void esp32_2432S028R_AlternateRotation(void);
 
+static volatile bool g_backlightReady = false;
+static volatile int g_currentDuty = 255;
+
 void esp32_2432S028R_Init(void)
 {
   tft.init();
@@ -2018,14 +2030,17 @@ void esp32_2432S028R_Init(void)
   hSPI.begin(TOUCH_CLK, TOUCH_MISO, TOUCH_MOSI, ETOUCH_CS);
   touch.init();
 
-  TFT_eTouchBase::Calibation calibation = {233, 3785, 3731, 120, 2};
-  touch.setCalibration(calibation);
-  xTaskCreatePinnedToCore(touchTask, "cydTouch", 3072, NULL, 1, NULL, 0);
-
   // Backlight: LEDC channel 0, 5kHz, 8 bit (0-255 duty)
   ledcSetup(0, 5000, 8);
   ledcAttachPin(TFT_BL, 0);
-  ledcWrite(0, Settings.Brightness);
+  int initBright = Settings.Brightness > 0 ? Settings.Brightness : 255;
+  g_currentDuty = initBright;
+  ledcWrite(0, initBright);
+  g_backlightReady = true;
+
+  TFT_eTouchBase::Calibation calibation = {233, 3785, 3731, 120, 2};
+  touch.setCalibration(calibation);
+  xTaskCreatePinnedToCore(touchTask, "cydTouch", 3072, NULL, 1, NULL, 0);
 
   loadUiPrefs();
   esp32_2432S028R_SetTheme(Settings.displayTheme);
@@ -2058,15 +2073,18 @@ void esp32_2432S028R_Init(void)
 void esp32_2432S028R_AlternateScreenState(void)
 {
   Serial.println("Switching display state");
-  int screen_state_duty = ledcRead(0);
+  if (!g_backlightReady)
+    return;
   // Switching the duty cycle for the ledc channel, where the TFT_BL pin is attached.
-  if (screen_state_duty > 0)
+  if (g_currentDuty > 0)
   {
+    g_currentDuty = 0;
     ledcWrite(0, 0);
   }
   else
   {
-    ledcWrite(0, Settings.Brightness);
+    g_currentDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
+    ledcWrite(0, g_currentDuty);
   }
 }
 
@@ -2174,10 +2192,10 @@ static void touchTask(void *)
 
     // Auto-dimming check every 500ms using LDR (GPIO 34)
     unsigned long now = millis();
-    if (now - lastLdrCheck >= 500)
+    if (g_backlightReady && (now - lastLdrCheck >= 500))
     {
       lastLdrCheck = now;
-      if (ledcRead(0) > 0) // only adapt if backlight is active (not switched off by tap)
+      if (g_currentDuty > 0) // only adapt if backlight is active (not switched off by tap)
       {
         int raw = analogRead(34);
         ldrEma = (ldrEma < 0) ? (float)raw : (0.10f * (float)raw + 0.90f * ldrEma);
@@ -2185,11 +2203,11 @@ static void touchTask(void *)
         // Map brightness smoothly between min duty (25) and max (Settings.Brightness or 255)
         int maxDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
         int targetDuty = map(constrain((int)ldrEma, 500, 3800), 3800, 500, 25, maxDuty);
-        int curDuty = ledcRead(0);
-        if (abs(curDuty - targetDuty) > 6)
+        if (abs(g_currentDuty - targetDuty) > 6)
         {
-          int newDuty = curDuty + (targetDuty > curDuty ? 4 : -4);
-          ledcWrite(0, constrain(newDuty, 20, maxDuty));
+          int newDuty = g_currentDuty + (targetDuty > g_currentDuty ? 4 : -4);
+          g_currentDuty = constrain(newDuty, 20, maxDuty);
+          ledcWrite(0, g_currentDuty);
         }
       }
     }

@@ -83,13 +83,16 @@ else if(dot){dot.remove();}
 }
 function cydDrawHeader(ctx,p,d){
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,320,26);
-ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText('NERDMINER',10,16);
+const screenNames=['MINE','MARKET','CLOCK','ARCH','ECONOMICS','DIAGNOSTICS'];
+const title=screenNames[cydPreviewScr]||'MINE';
+ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
+const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
 const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
-ctx.fillStyle=stCol;ctx.beginPath();ctx.arc(88,13,3,0,Math.PI*2);ctx.fill();
-ctx.font='9px sans-serif';ctx.fillText(stTxt,95,16);
-const dotW=7,dotH=3,gap=2,startX=146;
+ctx.fillStyle=stCol;ctx.beginPath();ctx.arc(tw+20,13,3,0,Math.PI*2);ctx.fill();
+ctx.font='9px sans-serif';ctx.fillText(stTxt,tw+27,16);
+const dotW=7,dotH=3,gap=2,startX=154;
 for(let i=0;i<6;i++){
 ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
 ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
