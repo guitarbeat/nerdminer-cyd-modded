@@ -49,12 +49,12 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 static const char CYD_TWIN_JS[] PROGMEM = R"rawjs(
 let cydPreviewScr=0,cydDevScr=0,cydLastStats=null,cydAutoFollow=true;
 const CYD_PALETTES=[
-{acc:'#f7931a',meter:'#f7931a',track:'#221608',text:'#f0f6fc',dim:'#8b949e',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#3fb950',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#00ff66',meter:'#00ff66',track:'#002810',text:'#e6ffed',dim:'#3fb950',panel:'#0d1b12',edge:'#1b4329',bg:'#040d07',good:'#00ff66',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#ffaa00',meter:'#ffaa00',track:'#2a1b00',text:'#fff4e5',dim:'#b37400',panel:'#1a1408',edge:'#3d2b0d',bg:'#0a0702',good:'#3fb950',warn:'#ffaa00',bad:'#f85149',gold:'#ffd700'},
-{acc:'#ff007f',meter:'#00f0ff',track:'#1f0033',text:'#ffffff',dim:'#a371f7',panel:'#150a21',edge:'#381559',bg:'#0a0312',good:'#00f0ff',warn:'#ffbf00',bad:'#ff007f',gold:'#ffd700'},
-{acc:'#58a6ff',meter:'#58a6ff',track:'#091b33',text:'#f0f6fc',dim:'#79c0ff',panel:'#0d1829',edge:'#1f3b64',bg:'#040914',good:'#58a6ff',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#e6edf3',meter:'#e6edf3',track:'#21262d',text:'#f0f6fc',dim:'#8b949e',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#e6edf3',warn:'#d29922',bad:'#f85149',gold:'#ffd700'}
+{acc:'#f7931a',meter:'#f7931a',track:'#221608',text:'#f0f6fc',dim:'#afb9c8',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#3fb950',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
+{acc:'#00ff66',meter:'#00ff66',track:'#002810',text:'#e6ffed',dim:'#78eba0',panel:'#0d1b12',edge:'#1b4329',bg:'#040d07',good:'#00ff66',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
+{acc:'#ffaa00',meter:'#ffaa00',track:'#2a1b00',text:'#fff4e5',dim:'#f5be64',panel:'#1a1408',edge:'#3d2b0d',bg:'#0a0702',good:'#3fb950',warn:'#ffaa00',bad:'#f85149',gold:'#ffd700'},
+{acc:'#ff007f',meter:'#00f0ff',track:'#1f0033',text:'#ffffff',dim:'#d7afff',panel:'#150a21',edge:'#381559',bg:'#0a0312',good:'#00f0ff',warn:'#ffbf00',bad:'#ff007f',gold:'#ffd700'},
+{acc:'#58a6ff',meter:'#58a6ff',track:'#091b33',text:'#f0f6fc',dim:'#a0e1ff',panel:'#0d1829',edge:'#1f3b64',bg:'#040914',good:'#58a6ff',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
+{acc:'#e6edf3',meter:'#e6edf3',track:'#21262d',text:'#f0f6fc',dim:'#c3c3c3',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#e6edf3',warn:'#d29922',bad:'#f85149',gold:'#ffd700'}
 ];
 function cydGetPalette(th){const idx=(typeof th==='number'&&th>=0&&th<CYD_PALETTES.length)?th:0;return CYD_PALETTES[idx];}
 function cydSelectTab(idx,isUserClick=true){
@@ -96,10 +96,6 @@ for(let i=0;i<5;i++){
 ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
 ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
 }
-const rssi=d?d.rssi:-60;
-const bars=rssi>-55?4:(rssi>-65?3:(rssi>-75?2:(rssi>-85?1:0)));
-const bx=260;
-for(let i=0;i<4;i++){const bh=3+i*3;ctx.fillStyle=(i<bars)?p.text:p.track;ctx.fillRect(bx+i*4,18-bh,2,bh);}
 const tm=(d&&d.time)?d.time:'12:00:00';
 ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText(tm,314,16);ctx.textAlign='left';
 ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,26);ctx.lineTo(314,26);ctx.stroke();
@@ -110,8 +106,8 @@ ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();ctx.stroke();
 }
 function cydDrawTile(ctx,p,x,y,w,h,lbl,val,valCol){
 cydDrawPanel(ctx,p,x,y,w,h,4);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText(lbl,x+6,y+12);
-ctx.fillStyle=valCol||p.text;ctx.font='bold 12px sans-serif';ctx.fillText(val,x+6,y+26);
+ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(lbl,x+6,y+13);
+ctx.fillStyle=valCol||p.text;ctx.font='bold 14px sans-serif';ctx.fillText(val,x+6,y+27);
 }
 function cydDrawStrip(ctx,p,cells){
 cydDrawPanel(ctx,p,8,198,304,38,6);
@@ -119,8 +115,8 @@ ctx.strokeStyle=p.edge;
 for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(8+i*76,204);ctx.lineTo(8+i*76,230);ctx.stroke();}
 for(let i=0;i<4;i++){
 const c=cells[i]||{l:'',v:''};const cx=14+i*76;
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText(c.l,cx,210);
-ctx.fillStyle=p.text;ctx.font='bold 11px sans-serif';ctx.fillText(c.v,cx,226);
+ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(c.l,cx,211);
+ctx.fillStyle=p.text;ctx.font='bold 14px sans-serif';ctx.fillText(c.v,cx,228);
 }
 }
 function cydDrawMiniArc(ctx,p,cx,cy,r,ri,val,warnAt,critAt,invert=false){

@@ -69,17 +69,17 @@ struct ThemePalette {
 
 static const ThemePalette THEMES[] = {
   // 0: Instrument Amber (Default) - Bitcoin Amber precision instrument
-  { "Instrument Amber", RGB565(8, 10, 14), RGB565(16, 20, 28), RGB565(34, 42, 54), RGB565(24, 30, 40), RGB565(245, 247, 250), RGB565(135, 145, 160), RGB565(247, 147, 26), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  { "Instrument Amber", RGB565(8, 10, 14), RGB565(16, 20, 28), RGB565(34, 42, 54), RGB565(24, 30, 40), RGB565(245, 247, 250), RGB565(175, 185, 200), RGB565(247, 147, 26), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
   // 1: Matrix Phosphor Green - Retro CRT terminal
-  { "Matrix Green", RGB565(4, 8, 4), RGB565(8, 20, 10), RGB565(18, 52, 24), RGB565(12, 32, 16), RGB565(220, 252, 231), RGB565(74, 222, 128), RGB565(34, 197, 94), RGB565(74, 222, 128), RGB565(250, 204, 21), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  { "Matrix Green", RGB565(4, 8, 4), RGB565(8, 20, 10), RGB565(18, 52, 24), RGB565(12, 32, 16), RGB565(220, 252, 231), RGB565(120, 235, 160), RGB565(34, 197, 94), RGB565(74, 222, 128), RGB565(250, 204, 21), RGB565(248, 113, 113), RGB565(245, 158, 11) },
   // 2: Cyber Amber (1980s CRT) - Warm amber monochrome terminal
-  { "Cyber Amber", RGB565(10, 8, 4), RGB565(24, 18, 8), RGB565(56, 40, 16), RGB565(36, 26, 12), RGB565(254, 243, 199), RGB565(217, 119, 6), RGB565(245, 158, 11), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  { "Cyber Amber", RGB565(10, 8, 4), RGB565(24, 18, 8), RGB565(56, 40, 16), RGB565(36, 26, 12), RGB565(254, 243, 199), RGB565(245, 190, 100), RGB565(245, 158, 11), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
   // 3: Arcade Neon - Playful classic mod neon
-  { "Arcade Neon", RGB565(10, 8, 18), RGB565(22, 16, 38), RGB565(54, 38, 86), RGB565(32, 24, 54), RGB565(245, 243, 255), RGB565(192, 132, 252), RGB565(6, 182, 212), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(236, 72, 153) },
+  { "Arcade Neon", RGB565(10, 8, 18), RGB565(22, 16, 38), RGB565(54, 38, 86), RGB565(32, 24, 54), RGB565(245, 243, 255), RGB565(215, 175, 255), RGB565(6, 182, 212), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(236, 72, 153) },
   // 4: Ice Blue (Clean Slate) - Cool slate & ice blue tech
-  { "Ice Blue", RGB565(10, 14, 22), RGB565(17, 24, 39), RGB565(35, 48, 68), RGB565(24, 34, 50), RGB565(240, 249, 255), RGB565(125, 211, 252), RGB565(56, 189, 248), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
+  { "Ice Blue", RGB565(10, 14, 22), RGB565(17, 24, 39), RGB565(35, 48, 68), RGB565(24, 34, 50), RGB565(240, 249, 255), RGB565(160, 225, 255), RGB565(56, 189, 248), RGB565(52, 211, 153), RGB565(251, 191, 36), RGB565(248, 113, 113), RGB565(245, 158, 11) },
   // 5: Minimalist Monochrome - E-ink stark white on black
-  { "Monochrome", RGB565(0, 0, 0), RGB565(18, 18, 18), RGB565(48, 48, 48), RGB565(28, 28, 28), RGB565(255, 255, 255), RGB565(160, 160, 160), RGB565(255, 255, 255), RGB565(255, 255, 255), RGB565(200, 200, 200), RGB565(255, 255, 255), RGB565(255, 255, 255) },
+  { "Monochrome", RGB565(0, 0, 0), RGB565(18, 18, 18), RGB565(48, 48, 48), RGB565(28, 28, 28), RGB565(255, 255, 255), RGB565(195, 195, 195), RGB565(255, 255, 255), RGB565(255, 255, 255), RGB565(200, 200, 200), RGB565(255, 255, 255), RGB565(255, 255, 255) },
 };
 
 static const int THEME_COUNT = sizeof(THEMES) / sizeof(THEMES[0]);
@@ -555,25 +555,18 @@ static void drawHeader(const HdrV &h)
   text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
 
   int timeW = textW(h.time.c_str(), 13);
-  int barX = (W - 4) - timeW - 18;
+  int timeLeft = (W - 4) - timeW;
 
-  // Signal indicator (neutral, functional)
-  for (int i = 0; i < 4; i++)
-  {
-    int bh = 3 + i * 3;
-    wgt.fillRect(barX + i * 4, 18 - bh, 2, bh, i < h.bars ? C_TEXT : C_TRACK);
-  }
-
-  // Local IP (landscape only, quiet secondary information)
+  // Local IP (landscape only, quiet secondary information to the left of time)
+  int gapRight = timeLeft - 8;
   if (!isPortrait() && h.ip.length())
   {
-    int right = barX - 12;
-    text(wgt, h.ip.c_str(), right, 6, 10, C_DIM, C_BG, Align::TopRight);
+    int ipRight = timeLeft - 14;
+    text(wgt, h.ip.c_str(), ipRight, 6, 10, C_DIM, C_BG, Align::TopRight);
+    gapRight = ipRight - textW(h.ip.c_str(), 10) - 10;
   }
 
   // ── CarCYD-inspired nav dots: 5 tiny pills in the mid-header gap ──
-  // In landscape the gap sits between the status text and the IP.
-  // In portrait (narrower) we squeeze them just right of status.
   {
     const int nScreens = 5;
     const int dotW = 7, dotH = 3, dotGap = 2;
@@ -585,7 +578,6 @@ static void drawHeader(const HdrV &h)
       const char *lbl2 = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "SETUP");
       statusEnd = sx + 9 + textW(lbl2, 9) + 6;
     }
-    int gapRight = isPortrait() ? (W - 4) : (barX - 12 - 4);
     int center = (statusEnd + gapRight) / 2;
     int dotX0 = center - totalW / 2;
     if (dotX0 < statusEnd + 4) dotX0 = statusEnd + 4;
@@ -629,10 +621,10 @@ static void chromeStrip(TFT_eSPI &d)
 static void drawStrip(const StripV &s)
 {
   int sy = isPortrait() ? 269 : (STRIP_Y + 3);
-  int cw = isPortrait() ? 54 : 70;
+  int cw = isPortrait() ? 55 : 72;
   int ch = isPortrait() ? 42 : 32;
   int xstep = isPortrait() ? 57 : 74;
-  int x0 = isPortrait() ? 8 : 14;
+  int x0 = isPortrait() ? 7 : 12;
   for (int i = 0; i < 4; i++)
   {
     String k = s.l[i] + "|" + s.v[i] + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
@@ -640,8 +632,8 @@ static void drawStrip(const StripV &s)
       continue;
     if (!wBegin(cw, ch, C_PANEL))
       continue;
-    text(wgt, s.l[i].c_str(), isPortrait() ? 2 : 6, 3, isPortrait() ? 8 : 9, C_DIM, C_PANEL);
-    text(wgt, s.v[i].c_str(), isPortrait() ? 2 : 6, isPortrait() ? 18 : 15, isPortrait() ? 12 : 14, C_TEXT, C_PANEL);
+    text(wgt, s.l[i].c_str(), isPortrait() ? 2 : 4, isPortrait() ? 2 : 2, isPortrait() ? 10 : 11, C_DIM, C_PANEL);
+    text(wgt, s.v[i].c_str(), isPortrait() ? 2 : 4, isPortrait() ? 17 : 15, isPortrait() ? 14 : 15, C_TEXT, C_PANEL);
     wEnd(x0 + xstep * i, sy);
     done(W_P0 + i, k);
   }
@@ -675,8 +667,8 @@ static void drawTile(int id, int x, int y, int w, int h, const char *label, cons
   wgt.fillRect(0, 0, w, h, C_PANEL);
   wgt.drawRect(0, 0, w, h, edge);
   int top = (h - 26) / 2;
-  text(wgt, label, 8, top, 9, C_DIM, C_PANEL);
-  text(wgt, value, 8, top + 11, strlen(value) > 8 ? 12 : 15, valCol, C_PANEL);
+  text(wgt, label, 8, top - 1, 10, C_DIM, C_PANEL);
+  text(wgt, value, 8, top + 11, strlen(value) > 8 ? 13 : 16, valCol, C_PANEL);
   wEnd(x, y);
   done(id, k);
 }
@@ -777,11 +769,11 @@ static void chromeMarket(TFT_eSPI &d)
   {
     // Hero Price Card (y=30..84, h=54)
     panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BTC / USDT • BINANCE", 14, 34, 8, C_DIM, C_PANEL);
+    text(d, "BTC / USDT • BINANCE", 14, 33, 10, C_DIM, C_PANEL);
 
     // Candlestick Container (y=88..206, h=118)
     panel(d, 6, 88, 228, 118, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BTC/USDT 1H CANDLES", 14, 93, 8, C_DIM, C_PANEL);
+    text(d, "BTC/USDT 1H CANDLES", 14, 92, 10, C_DIM, C_PANEL);
 
     // Halving & Network Card (y=210..260, h=50)
     panel(d, 6, 210, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
@@ -791,8 +783,8 @@ static void chromeMarket(TFT_eSPI &d)
   else
   {
     panel(d, 8, 30, 304, 52, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 16, 35, 9, C_DIM, C_PANEL);
-    text(d, "LATEST BLOCK", 300, 35, 9, C_DIM, C_PANEL, Align::TopRight);
+    text(d, btcPairLabel().c_str(), 16, 34, 10, C_DIM, C_PANEL);
+    text(d, "LATEST BLOCK", 300, 34, 10, C_DIM, C_PANEL, Align::TopRight);
 
     // Candlesticks (y=86..150, h=64)
     panel(d, 8, 86, 304, 68, 6, C_PANEL, C_EDGE, C_BG);
@@ -834,9 +826,9 @@ static void drawCandlesticks(int x, int y, int w, int h)
   char hBuf[16], lBuf[16];
   snprintf(hBuf, sizeof(hBuf), "H: %.1fK", maxP / 1000.0f);
   snprintf(lBuf, sizeof(lBuf), "L: %.1fK", minP / 1000.0f);
-  text(wgt, hBuf, w - 6, 2, 8, C_GOLD, C_PANEL, Align::TopRight);
-  text(wgt, lBuf, 6, h - 9, 7, C_DIM, C_PANEL);
-  text(wgt, "1H [MA7]", w / 2, 2, 8, C_METER, C_PANEL, Align::TopCenter);
+  text(wgt, hBuf, w - 6, 2, 9, C_GOLD, C_PANEL, Align::TopRight);
+  text(wgt, lBuf, 6, h - 11, 9, C_DIM, C_PANEL);
+  text(wgt, "1H [MA7]", w / 2, 2, 9, C_METER, C_PANEL, Align::TopCenter);
 
   // Candlesticks
   float ma7[24] = {0};
@@ -906,10 +898,10 @@ static void paintMarket(const MarketV &m)
         char chgBuf[16];
         snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%% 24h", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
         uint16_t cCol = g_btc24hChange >= 0 ? C_GOOD : C_BAD;
-        text(wgt, chgBuf, 212, 1, 8, cCol, C_PANEL, Align::TopRight);
+        text(wgt, chgBuf, 212, 1, 10, cCol, C_PANEL, Align::TopRight);
 
-        text(wgt, m.block.c_str(), 212, 14, 11, C_TEXT, C_PANEL, Align::TopRight);
-        text(wgt, (m.fee + " fee").c_str(), 212, 26, 8, C_DIM, C_PANEL, Align::TopRight);
+        text(wgt, m.block.c_str(), 212, 14, 12, C_TEXT, C_PANEL, Align::TopRight);
+        text(wgt, (m.fee + " fee").c_str(), 212, 26, 10, C_DIM, C_PANEL, Align::TopRight);
         wEnd(12, 44);
         done(W_PRICE, k);
       }
@@ -921,7 +913,7 @@ static void paintMarket(const MarketV &m)
         text(wgt, m.price.c_str(), 4, 0, 24, C_GOLD, C_PANEL);
         char chgBuf[16];
         snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%%", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
-        text(wgt, chgBuf, 120, 4, 10, g_btc24hChange >= 0 ? C_GOOD : C_BAD, C_PANEL);
+        text(wgt, chgBuf, 120, 4, 11, g_btc24hChange >= 0 ? C_GOOD : C_BAD, C_PANEL);
         text(wgt, m.block.c_str(), 288, 2, 14, C_TEXT, C_PANEL, Align::TopRight);
         wEnd(14, 44);
         done(W_PRICE, k);
@@ -949,12 +941,12 @@ static void paintMarket(const MarketV &m)
     {
       if (wBegin(216, 44, C_PANEL))
       {
-        text(wgt, "HALVING #5 PROGRESS", 2, 1, 8, C_DIM, C_PANEL);
+        text(wgt, "HALVING #5 PROGRESS", 2, 1, 10, C_DIM, C_PANEL);
         char pc[8];
         snprintf(pc, sizeof(pc), "%d%%", m.pct);
-        text(wgt, pc, 106, 1, 9, C_METER, C_PANEL);
+        text(wgt, pc, 116, 1, 10, C_METER, C_PANEL);
         String rem = commas(m.remaining) + " blk left";
-        text(wgt, rem.c_str(), 212, 1, 8, C_TEXT, C_PANEL, Align::TopRight);
+        text(wgt, rem.c_str(), 212, 1, 9, C_TEXT, C_PANEL, Align::TopRight);
 
         // Bar
         wgt.fillRect(2, 13, 212, 6, C_TRACK);
@@ -962,8 +954,8 @@ static void paintMarket(const MarketV &m)
         if (fw > 0) wgt.fillRect(2, 13, fw, 6, C_METER);
 
         // Subline: Difficulty & Hashrate
-        text(wgt, ("Diff: " + m.diff).c_str(), 2, 23, 8, C_GOLD, C_PANEL);
-        text(wgt, ("Net: " + m.net).c_str(), 212, 23, 8, C_GOOD, C_PANEL, Align::TopRight);
+        text(wgt, ("Diff: " + m.diff).c_str(), 2, 23, 10, C_GOLD, C_PANEL);
+        text(wgt, ("Net: " + m.net).c_str(), 212, 23, 10, C_GOOD, C_PANEL, Align::TopRight);
 
         wEnd(12, 213);
         done(W_HALV, kb);
@@ -973,11 +965,11 @@ static void paintMarket(const MarketV &m)
     {
       if (wBegin(288, 30, C_PANEL))
       {
-        text(wgt, "HALVING #5", 2, 1, 8, C_DIM, C_PANEL);
+        text(wgt, "HALVING #5", 2, 1, 10, C_DIM, C_PANEL);
         char pc[8];
         snprintf(pc, sizeof(pc), "%d%%", m.pct);
-        text(wgt, pc, 70, 1, 9, C_METER, C_PANEL);
-        text(wgt, ("Diff: " + m.diff + " | Net: " + m.net).c_str(), 284, 1, 8, C_TEXT, C_PANEL, Align::TopRight);
+        text(wgt, pc, 72, 1, 10, C_METER, C_PANEL);
+        text(wgt, ("Diff: " + m.diff + " | Net: " + m.net).c_str(), 284, 1, 10, C_TEXT, C_PANEL, Align::TopRight);
 
         wgt.fillRect(2, 15, 284, 6, C_TRACK);
         int fw = (284 * m.pct) / 100;
@@ -1007,7 +999,7 @@ static void chromeClock(TFT_eSPI &d)
   if (isPortrait())
   {
     panel(d, 6, 214, 228, 46, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "ROLLING 36-SLOT HASHRATE HISTORY", 12, 218, 8, C_DIM, C_PANEL);
+    text(d, "ROLLING 36-SLOT HASHRATE HISTORY", 12, 217, 10, C_DIM, C_PANEL);
     chromeStripCells(d);
   }
   else
@@ -1152,52 +1144,52 @@ static void chromeArchitecture(TFT_eSPI &d)
   {
     // Candidate Header Container (80-Byte Block Header)
     panel(d, 6, 30, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 14, 35, 8, C_DIM, C_PANEL);
+    text(d, "80-BYTE CANDIDATE HEADER", 14, 34, 10, C_DIM, C_PANEL);
 
     // Row 1
     panel(d, 10, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VERSION 4B", 14, 51, 8, C_METER, C_TRACK);
-    text(d, "Consensus", 74, 51, 7, C_DIM, C_TRACK);
+    text(d, "VERSION 4B", 14, 51, 9, C_METER, C_TRACK);
+    text(d, "Consensus", 74, 51, 8, C_DIM, C_TRACK);
 
     panel(d, 120, 48, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 124, 51, 8, C_METER, C_TRACK);
-    text(d, "Chain", 192, 51, 7, C_DIM, C_TRACK);
+    text(d, "PREV HASH 32B", 124, 51, 9, C_METER, C_TRACK);
+    text(d, "Chain", 192, 51, 8, C_DIM, C_TRACK);
 
     // Row 2
     panel(d, 10, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 14, 73, 8, C_METER, C_TRACK);
-    text(d, "Txs Tree", 74, 73, 7, C_DIM, C_TRACK);
+    text(d, "MERKLE 32B", 14, 73, 9, C_METER, C_TRACK);
+    text(d, "Txs Tree", 74, 73, 8, C_DIM, C_TRACK);
 
     panel(d, 120, 70, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 124, 73, 8, C_METER, C_TRACK);
-    text(d, "Epoch", 192, 73, 7, C_DIM, C_TRACK);
+    text(d, "TIME 4B", 124, 73, 9, C_METER, C_TRACK);
+    text(d, "Epoch", 192, 73, 8, C_DIM, C_TRACK);
 
     // Row 3
     panel(d, 10, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 14, 95, 8, C_METER, C_TRACK);
-    text(d, "Target", 78, 95, 7, C_DIM, C_TRACK);
+    text(d, "BITS 4B", 14, 95, 9, C_METER, C_TRACK);
+    text(d, "Target", 78, 95, 8, C_DIM, C_TRACK);
 
     panel(d, 120, 92, 106, 20, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B", 124, 95, 8, C_GOLD, C_TRACK);
-    text(d, "0x330776", 222, 95, 8, C_GOLD, C_TRACK, Align::TopRight);
+    text(d, "NONCE 4B", 124, 95, 9, C_GOLD, C_TRACK);
+    text(d, "0x330776", 222, 95, 9, C_GOLD, C_TRACK, Align::TopRight);
 
     // 4 Pipeline Stage Badges
     const int py = 126;
     panel(d, 6, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "HEADER", 32, py + 4, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 32, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "HEADER", 32, py + 4, 9, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "80 Bytes", 32, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 64, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHA256d", 90, py + 4, 8, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "2x Hash", 90, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "SHA256d", 90, py + 4, 9, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "2x Hash", 90, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 122, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TARGET", 148, py + 4, 8, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 148, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "TARGET", 148, py + 4, 9, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "18+ Zeros", 148, py + 16, 8, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 180, py, 54, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TEST", 207, py + 4, 8, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "H < Tgt", 207, py + 16, 7, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "TEST", 207, py + 4, 9, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "H < Tgt", 207, py + 16, 8, C_GOOD, C_PANEL, Align::TopCenter);
 
     // Two Info Tiles
     drawTile(W_EXP_STREAM, 6, 160, 112, 44, "76B FIXED + 4B DIAL", "SPV 4.2 MB/Y", C_METER, C_EDGE);
@@ -1205,10 +1197,10 @@ static void chromeArchitecture(TFT_eSPI &d)
 
     // Explainer Card filling portrait space down to bottom strip
     panel(d, 6, 208, 228, 52, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "POW MECHANICS", 12, 212, 8, C_DIM, C_PANEL);
-    text(d, "Only 4-byte Nonce increments per hash.", 12, 224, 8, C_TEXT, C_PANEL);
-    text(d, "Double-SHA256 result must be < Target.", 12, 235, 8, C_GOLD, C_PANEL);
-    text(d, "Independent trials: no memory of past work.", 12, 246, 7, C_DIM, C_PANEL);
+    text(d, "POW MECHANICS", 12, 211, 10, C_DIM, C_PANEL);
+    text(d, "Only 4-byte Nonce increments per hash.", 12, 224, 9, C_TEXT, C_PANEL);
+    text(d, "Double-SHA256 result must be < Target.", 12, 235, 9, C_GOLD, C_PANEL);
+    text(d, "Independent trials: no memory of past work.", 12, 246, 8, C_DIM, C_PANEL);
 
     chromeStripCells(d);
   }
@@ -1216,50 +1208,50 @@ static void chromeArchitecture(TFT_eSPI &d)
   {
     // Landscape 320x240
     panel(d, 8, 30, 304, 72, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE BLOCK HEADER", 16, 35, 8, C_DIM, C_PANEL);
+    text(d, "80-BYTE CANDIDATE BLOCK HEADER", 16, 34, 10, C_DIM, C_PANEL);
 
     // Row 1
     panel(d, 14, 48, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 18, 51, 8, C_METER, C_TRACK);
-    text(d, "Consensus", 60, 51, 7, C_DIM, C_TRACK);
+    text(d, "VER 4B", 18, 51, 9, C_METER, C_TRACK);
+    text(d, "Consensus", 60, 51, 8, C_DIM, C_TRACK);
 
     panel(d, 112, 48, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "PREV HASH 32B", 116, 51, 8, C_METER, C_TRACK);
-    text(d, "Chain", 182, 51, 7, C_DIM, C_TRACK);
+    text(d, "PREV HASH 32B", 116, 51, 9, C_METER, C_TRACK);
+    text(d, "Chain", 182, 51, 8, C_DIM, C_TRACK);
 
     panel(d, 214, 48, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 218, 51, 8, C_METER, C_TRACK);
-    text(d, "Txs", 286, 51, 7, C_DIM, C_TRACK);
+    text(d, "MERKLE 32B", 218, 51, 9, C_METER, C_TRACK);
+    text(d, "Txs", 286, 51, 8, C_DIM, C_TRACK);
 
     // Row 2
     panel(d, 14, 72, 94, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "TIME 4B", 18, 75, 8, C_METER, C_TRACK);
-    text(d, "Timestamp", 60, 75, 7, C_DIM, C_TRACK);
+    text(d, "TIME 4B", 18, 75, 9, C_METER, C_TRACK);
+    text(d, "Timestamp", 60, 75, 8, C_DIM, C_TRACK);
 
     panel(d, 112, 72, 98, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 116, 75, 8, C_METER, C_TRACK);
-    text(d, "Target", 178, 75, 7, C_DIM, C_TRACK);
+    text(d, "BITS 4B", 116, 75, 9, C_METER, C_TRACK);
+    text(d, "Target", 178, 75, 8, C_DIM, C_TRACK);
 
     panel(d, 214, 72, 92, 22, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B [DIAL]", 218, 75, 8, C_GOLD, C_TRACK);
-    text(d, "Miner", 280, 75, 7, C_DIM, C_TRACK);
+    text(d, "NONCE 4B [DIAL]", 218, 75, 9, C_GOLD, C_TRACK);
+    text(d, "Miner", 280, 75, 8, C_DIM, C_TRACK);
 
     // Pipeline Flow Row (4 badges)
     const int py = 108;
     panel(d, 8, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "1. HEADER", 44, py + 6, 8, C_METER, C_PANEL, Align::TopCenter);
+    text(d, "1. HEADER", 44, py + 6, 9, C_METER, C_PANEL, Align::TopCenter);
     text(d, "80 Bytes", 44, py + 20, 8, C_TEXT, C_PANEL, Align::TopCenter);
 
     panel(d, 84, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "2. SHA256d", 120, py + 6, 8, C_TEXT, C_PANEL, Align::TopCenter);
+    text(d, "2. SHA256d", 120, py + 6, 9, C_TEXT, C_PANEL, Align::TopCenter);
     text(d, "Double Hash", 120, py + 20, 8, C_DIM, C_PANEL, Align::TopCenter);
 
     panel(d, 160, py, 72, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "3. TARGET", 196, py + 6, 8, C_GOLD, C_PANEL, Align::TopCenter);
+    text(d, "3. TARGET", 196, py + 6, 9, C_GOLD, C_PANEL, Align::TopCenter);
     text(d, "18+ Zeros", 196, py + 20, 8, C_GOLD, C_PANEL, Align::TopCenter);
 
     panel(d, 236, py, 76, 40, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "4. 256-BIT TEST", 274, py + 6, 8, C_GOOD, C_PANEL, Align::TopCenter);
+    text(d, "4. 256-BIT TEST", 274, py + 6, 9, C_GOOD, C_PANEL, Align::TopCenter);
     text(d, "Hash < Target", 274, py + 20, 8, C_GOOD, C_PANEL, Align::TopCenter);
 
     // 3 Bottom Metric Tiles
@@ -1810,9 +1802,9 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.flash = millis() < shareFlashUntil;
   m.strip.l[0] = "WORKERS";
   m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[1] = "POOL RATE";
+  m.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
   m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = "LOCAL IP";
+  m.strip.l[2] = isPortrait() ? "IP ADDR" : "LOCAL IP";
   m.strip.v[2] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--";
   m.strip.l[3] = "UPTIME";
   m.strip.v[3] = fmtUptime(data.timeMining);
@@ -1842,9 +1834,9 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.remaining = String(data.remainingBlocks.toInt());
   m.strip.l[0] = "WORKERS";
   m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[1] = "POOL RATE";
+  m.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
   m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = "POOL BEST";
+  m.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
   m.strip.v[2] = pData.bestDifficulty;
   m.strip.l[3] = "SHARES";
   m.strip.v[3] = commas(data.completedShares);
