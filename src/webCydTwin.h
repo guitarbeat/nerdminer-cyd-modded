@@ -43,7 +43,6 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
 <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 ARCH</button>
 <button type='button' class='cyd-tab-btn' id='ctab-4' onclick='cydSelectTab(4)'>4 ECON</button>
-<button type='button' class='cyd-tab-btn' id='ctab-5' onclick='cydSelectTab(5)'>5 DIAG</button>
 </div></div></div>
 )rawhtml";
 
@@ -61,19 +60,19 @@ function cydGetPalette(th){const idx=(typeof th==='number'&&th>=0&&th<CYD_PALETT
 function cydSelectTab(idx,isUserClick=true){
 cydPreviewScr=idx;
 if(isUserClick){const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&idx!==cydDevScr)af.checked=false;}
-for(let i=0;i<6;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
+for(let i=0;i<5;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
 const btn=document.getElementById('cyd-switch-btn');if(btn)btn.textContent='📺 Switch Device to Screen '+idx;
 cydRender();
 }
-function cydPrevScreen(){cydSelectTab((cydPreviewScr+5)%6,true);}
-function cydNextScreen(){cydSelectTab((cydPreviewScr+1)%6,true);}
+function cydPrevScreen(){cydSelectTab((cydPreviewScr+4)%5,true);}
+function cydNextScreen(){cydSelectTab((cydPreviewScr+1)%5,true);}
 function cydSwitchPhysical(){
 fetch('/api/screen?id='+cydPreviewScr,{method:'POST'}).then(r=>r.json()).then(data=>{cydDevScr=data.screen;cydUpdateDevBadge();}).catch(()=>{});
 }
 function cydUpdateDevBadge(){
-const b=document.getElementById('cyd-device-badge');const names=['MINE','MARKET','CLOCK','ARCH','ECON','DIAG'];
+const b=document.getElementById('cyd-device-badge');const names=['MINE','MARKET','CLOCK','ARCH','ECON'];
 if(b)b.textContent='Device: SCR '+cydDevScr+' ('+(names[cydDevScr]||'')+')';
-for(let i=0;i<6;i++){
+for(let i=0;i<5;i++){
 const el=document.getElementById('ctab-'+i);
 if(el){
 const dot=el.querySelector('.cyd-live-dot');
@@ -83,7 +82,7 @@ else if(dot){dot.remove();}
 }
 function cydDrawHeader(ctx,p,d){
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,320,26);
-const screenNames=['MINE','MARKET','CLOCK','ARCH','ECONOMICS','DIAGNOSTICS'];
+const screenNames=['MINE','MARKET','CLOCK','ARCH','ECONOMICS'];
 const title=screenNames[cydPreviewScr]||'MINE';
 ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
 const tw=ctx.measureText(title).width;
@@ -93,7 +92,7 @@ const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
 ctx.fillStyle=stCol;ctx.beginPath();ctx.arc(tw+20,13,3,0,Math.PI*2);ctx.fill();
 ctx.font='9px sans-serif';ctx.fillText(stTxt,tw+27,16);
 const dotW=7,dotH=3,gap=2,startX=154;
-for(let i=0;i<6;i++){
+for(let i=0;i<5;i++){
 ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
 ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
 }
@@ -157,7 +156,7 @@ cydDrawTile(ctx,p,196,32,116,36,'SHARES',(d.shares||0).toLocaleString(),p.text);
 cydDrawTile(ctx,p,196,72,116,36,'BEST DIFF',d.best_diff||'0.000',p.acc);
 cydDrawTile(ctx,p,196,112,116,36,'TEMPLATES','4,210',p.text);
 cydDrawTile(ctx,p,196,152,116,36,'BLOCKS FOUND',String(d.blocks||0),p.good);
-cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'--'},{l:'UPTIME',v:d.uptime||'--'}]);
+cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},{l:'LOCAL IP',v:d.ip||'--'},{l:'UPTIME',v:d.uptime||'--'}]);
 }else if(cydPreviewScr===1){
 cydDrawPanel(ctx,p,8,30,304,52,6);
 ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('BTC / USDT • BINANCE',16,42);

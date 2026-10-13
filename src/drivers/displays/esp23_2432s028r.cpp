@@ -523,15 +523,14 @@ static void drawHeader(const HdrV &h)
     return;
 
   // Dynamic Screen Title in the top-left corner
-  static const char *const SCREEN_TITLES[6] = {
+  static const char *const SCREEN_TITLES[5] = {
       "MINE",
       "MARKET",
       "CLOCK",
       "ARCH",
-      "ECONOMICS",
-      "DIAGNOSTICS"
+      "ECONOMICS"
   };
-  const char *title = (h.screen >= 0 && h.screen < 6) ? SCREEN_TITLES[h.screen] : "MINER";
+  const char *title = (h.screen >= 0 && h.screen < 5) ? SCREEN_TITLES[h.screen] : "MINER";
   text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
   int wm = textW(title, 13);
 
@@ -572,11 +571,11 @@ static void drawHeader(const HdrV &h)
     text(wgt, h.ip.c_str(), right, 6, 10, C_DIM, C_BG, Align::TopRight);
   }
 
-  // ── CarCYD-inspired nav dots: 6 tiny pills in the mid-header gap ──
+  // ── CarCYD-inspired nav dots: 5 tiny pills in the mid-header gap ──
   // In landscape the gap sits between the status text and the IP.
   // In portrait (narrower) we squeeze them just right of status.
   {
-    const int nScreens = 6;
+    const int nScreens = 5;
     const int dotW = 7, dotH = 3, dotGap = 2;
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
     int dotY = 12; // y of top edge, centered vertically in 26px header
@@ -1813,8 +1812,8 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.strip.v[0] = String(pData.workersCount);
   m.strip.l[1] = "POOL RATE";
   m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = "POOL BEST";
-  m.strip.v[2] = pData.bestDifficulty;
+  m.strip.l[2] = "LOCAL IP";
+  m.strip.v[2] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--";
   m.strip.l[3] = "UPTIME";
   m.strip.v[3] = fmtUptime(data.timeMining);
   lastMine = m;
@@ -2398,8 +2397,7 @@ CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_MarketScreen,
     esp32_2432S028R_ClockScreen,
     esp32_2432S028R_ArchitectureScreen,
-    esp32_2432S028R_EconomicsScreen,
-    esp32_2432S028R_DiagScreen};
+    esp32_2432S028R_EconomicsScreen};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,
