@@ -1136,120 +1136,164 @@ struct ArchitectureV
   StripV strip;
 };
 
+static void drawBitcoinCoin(TFT_eSPI &d, int cx, int cy, int r)
+{
+  d.fillCircle(cx, cy, r, C_GOLD);
+  d.drawCircle(cx, cy, r, 0xFEA0);
+  d.fillCircle(cx, cy, r - 2, 0xD4A0);
+  d.fillCircle(cx, cy, r - 4, 0x9280);
+
+  // Crisp Bitcoin "B" glyph with double prongs
+  int h = r - 7;
+  int bx = cx - 3;
+  int by = cy - h;
+  d.fillRect(bx, by, 3, h * 2 + 1, TFT_WHITE);
+  d.drawFastHLine(bx, by + 1, 5, TFT_WHITE);
+  d.drawFastVLine(bx + 5, by + 1, h, TFT_WHITE);
+  d.drawFastHLine(bx, by + h, 5, TFT_WHITE);
+  d.drawFastHLine(bx, by + h * 2, 6, TFT_WHITE);
+  d.drawFastVLine(bx + 6, by + h, h, TFT_WHITE);
+  // Prongs
+  d.drawFastVLine(bx + 1, by - 2, 2, TFT_WHITE);
+  d.drawFastVLine(bx + 3, by - 2, 2, TFT_WHITE);
+  d.drawFastVLine(bx + 1, by + h * 2 + 1, 2, TFT_WHITE);
+  d.drawFastVLine(bx + 3, by + h * 2 + 1, 2, TFT_WHITE);
+}
+
+static void drawPipelineArrow(TFT_eSPI &d, int x, int y, int size, uint16_t color)
+{
+  d.fillTriangle(x, y - size, x + (size * 5) / 4, y, x, y + size, color);
+}
+
 static void chromeArchitecture(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    // Hero Block Reward Jackpot Card (y=30, h=48)
-    panel(d, 6, 30, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 14, 34, 9, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 14, 46, 20, C_GOLD, C_PANEL);
-    text(d, "100% SOLO REWARD", 116, 52, 9, C_GOOD, C_PANEL);
+    // 1. Hero Block Reward Jackpot Card (y=30, h=54)
+    panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
+    drawBitcoinCoin(d, 30, 57, 18);
+    text(d, "SOLO BLOCK REWARD", 58, 35, 9, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 58, 48, 22, C_GOLD, C_PANEL);
+    // Green Pill Badge
+    panel(d, 58, 68, 120, 12, 3, 0x0A24, C_GOOD, C_PANEL);
+    text(d, "★ 100% TO YOUR WALLET", 62, 69, 8, C_GOOD, 0x0A24);
 
-    // 80-Byte Candidate Block Header (y=82, h=72)
-    panel(d, 6, 82, 228, 72, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 14, 85, 9, C_DIM, C_PANEL);
+    // 2. 80-Byte Candidate Block Header Diagram (y=88, h=58)
+    panel(d, 6, 88, 228, 58, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "80-BYTE CANDIDATE HEADER", 12, 92, 8, C_DIM, C_PANEL);
 
-    panel(d, 10, 97, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 14, 100, 8, C_METER, C_TRACK);
-    text(d, "PREV 32B", 68, 100, 8, C_DIM, C_TRACK);
+    // Segmented block bar (w=216 at y=104)
+    const int bx = 12, by = 104;
+    d.fillRect(bx, by, 12, 16, 0x3DEF);        // Ver 4B
+    text(d, "V4", bx + 1, by + 3, 7, TFT_WHITE, 0x3DEF);
+    d.fillRect(bx + 13, by, 84, 16, 0x6479);   // Prev 32B
+    text(d, "PREV HASH 32B", bx + 16, by + 3, 7, TFT_WHITE, 0x6479);
+    d.fillRect(bx + 98, by, 84, 16, 0xBC9F);   // Merkle 32B
+    text(d, "MERKLE ROOT 32B", bx + 102, by + 3, 7, TFT_WHITE, 0xBC9F);
+    d.fillRect(bx + 183, by, 10, 16, 0xFC00);  // Time 4B
+    text(d, "T", bx + 185, by + 3, 7, TFT_BLACK, 0xFC00);
+    d.fillRect(bx + 194, by, 10, 16, 0xF800);  // Bits 4B
+    text(d, "B", bx + 196, by + 3, 7, TFT_WHITE, 0xF800);
+    d.fillRect(bx + 205, by, 11, 16, C_GOLD);  // Nonce 4B
+    text(d, "N", bx + 207, by + 3, 7, TFT_BLACK, C_GOLD);
 
-    panel(d, 120, 97, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 124, 100, 8, C_METER, C_TRACK);
-    text(d, "TIME 4B", 182, 100, 8, C_DIM, C_TRACK);
+    // Nonce dial indicator box
+    panel(d, 12, 124, 216, 18, 3, C_TRACK, C_EDGE, C_PANEL);
+    text(d, "76B Template  +", 16, 128, 8, C_DIM, C_TRACK);
+    text(d, "NONCE DIAL: 0x330776", 110, 128, 9, C_GOLD, C_TRACK);
 
-    panel(d, 10, 117, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 14, 120, 8, C_METER, C_TRACK);
-    text(d, "Target", 78, 120, 8, C_DIM, C_TRACK);
+    // 3. 4-Stage PoW Flow Diagram with arrows (y=150, h=48)
+    panel(d, 6, 150, 228, 48, 6, C_PANEL, C_EDGE, C_BG);
+    const int py = 154;
+    // Stage 1: 80B Header
+    panel(d, 10, py, 42, 38, 4, C_TRACK, 0x3DEF, C_PANEL);
+    text(d, "80B", 31, py + 4, 9, 0x3DEF, C_TRACK, Align::TopCenter);
+    text(d, "HEADER", 31, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 55, py + 19, 4, C_METER);
 
-    panel(d, 120, 117, 106, 18, 4, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "NONCE 4B", 124, 120, 8, C_GOLD, C_TRACK);
-    text(d, "0x330776", 222, 120, 8, C_GOLD, C_TRACK, Align::TopRight);
+    // Stage 2: 2x SHA-256
+    panel(d, 64, py, 42, 38, 4, C_TRACK, C_METER, C_PANEL);
+    text(d, "SHA256", 85, py + 4, 8, C_METER, C_TRACK, Align::TopCenter);
+    text(d, "DOUBLE", 85, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 109, py + 19, 4, C_METER);
 
-    panel(d, 10, 137, 216, 14, 3, C_BG, C_EDGE, C_PANEL);
-    text(d, "76B Static Template + 4B Nonce Increment Dial", 118, 139, 7, C_DIM, C_BG, Align::TopCenter);
+    // Stage 3: Target Zeros
+    panel(d, 118, py, 42, 38, 4, C_TRACK, C_GOLD, C_PANEL);
+    text(d, "TARGET", 139, py + 4, 8, C_GOLD, C_TRACK, Align::TopCenter);
+    text(d, "18+ 0s", 139, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 163, py + 19, 4, C_METER);
 
-    // 4 Pipeline Stages (y=158, h=30)
-    const int py = 158;
-    panel(d, 6, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "HEADER", 32, py + 4, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 32, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    // Stage 4: Test Win
+    panel(d, 172, py, 46, 38, 4, C_TRACK, C_GOOD, C_PANEL);
+    text(d, "H < TGT", 195, py + 4, 8, C_GOOD, C_TRACK, Align::TopCenter);
+    text(d, "WINNER", 195, py + 18, 7, C_GOOD, C_TRACK, Align::TopCenter);
 
-    panel(d, 64, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "SHA256d", 90, py + 4, 8, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "2x Hash", 90, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    // 4. Protocol Metrics & Scarcity (y=202, h=58)
+    drawTile(W_LOT_JACKPOT, 6, 202, 112, 58, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
 
-    panel(d, 122, py, 52, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TARGET", 148, py + 4, 8, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 148, py + 16, 7, C_DIM, C_PANEL, Align::TopCenter);
+    // Hard Cap Supply & Scarcity Bar
+    panel(d, 122, 202, 112, 58, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "HARD CAP SUPPLY", 128, 207, 8, C_DIM, C_PANEL);
+    text(d, "20,999,999", 128, 219, 13, C_GOLD, C_PANEL);
+    // Golden Scarcity Progress Bar
+    d.fillRect(128, 237, 100, 4, C_TRACK);
+    d.fillRect(128, 237, 94, 4, C_GOLD);
+    text(d, "94.3% Mined • 21M Cap", 128, 245, 7, C_DIM, C_PANEL);
 
-    panel(d, 180, py, 54, 30, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "TEST", 207, py + 4, 8, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "H < Tgt", 207, py + 16, 7, C_GOOD, C_PANEL, Align::TopCenter);
-
-    // 2 Clean Protocol Metric Tiles (y=192, h=40)
-    drawTile(W_LOT_JACKPOT, 6, 192, 112, 40, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 122, 192, 112, 40, "HARD CAP SUPPLY", "20,999,999 BTC", C_GOLD, C_EDGE);
-
-    // Bitcoin Economics & Finality Rule (y=236, h=26)
-    panel(d, 6, 236, 228, 26, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "Diff = Tgt_1 / Tgt (2^32 rolls)  |  6 Confs P < 0.02%", 120, 244, 7, C_GOLD, C_PANEL, Align::TopCenter);
-
+    // Bottom strip (y=266..314)
     chromeStripCells(d);
   }
   else
   {
     // Landscape 320x240
-    // Hero Jackpot & Solo Odds Card (y=30, h=48)
+    // 1. Hero Block Reward Jackpot Card (y=30, h=48, w=304)
     panel(d, 8, 30, 304, 48, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BLOCK REWARD JACKPOT", 16, 34, 9, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 16, 46, 22, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$300,000+ USD)", 126, 52, 9, C_DIM, C_PANEL);
-    d.drawFastVLine(224, 34, 40, C_EDGE);
-    text(d, "SOLO ODDS", 232, 36, 8, C_DIM, C_PANEL);
-    text(d, "100% TO YOU", 232, 48, 10, C_GOOD, C_PANEL);
+    drawBitcoinCoin(d, 28, 54, 16);
+    text(d, "SOLO BLOCK REWARD", 52, 34, 8, C_DIM, C_PANEL);
+    text(d, "3.125 BTC", 52, 46, 22, C_GOLD, C_PANEL);
+    text(d, "+ fees (~$250,000+ USD)", 156, 52, 9, C_DIM, C_PANEL);
+    // Green Pill Badge
+    panel(d, 230, 36, 76, 16, 4, 0x0A24, C_GOOD, C_PANEL);
+    text(d, "100% TO YOU", 268, 40, 8, C_GOOD, 0x0A24, Align::TopCenter);
 
-    // 80-Byte Candidate Block Header (y=82, h=52)
-    panel(d, 8, 82, 304, 52, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 14, 85, 8, C_DIM, C_PANEL);
+    // 2. Connected 4-Stage PoW Flow Diagram (y=82, h=50, w=304)
+    panel(d, 8, 82, 304, 50, 6, C_PANEL, C_EDGE, C_BG);
+    const int py = 88;
+    // Stage 1
+    panel(d, 14, py, 60, 38, 4, C_TRACK, 0x3DEF, C_PANEL);
+    text(d, "80B HEADER", 44, py + 4, 8, 0x3DEF, C_TRACK, Align::TopCenter);
+    text(d, "76B + Nonce", 44, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 77, py + 19, 4, C_METER);
 
-    panel(d, 12, 97, 94, 18, 3, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "VER 4B", 16, 100, 8, C_METER, C_TRACK);
-    text(d, "PREV 32B", 56, 100, 8, C_DIM, C_TRACK);
+    // Stage 2
+    panel(d, 85, py, 60, 38, 4, C_TRACK, C_METER, C_PANEL);
+    text(d, "2x SHA-256", 115, py + 4, 8, C_METER, C_TRACK, Align::TopCenter);
+    text(d, "Double Hash", 115, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 148, py + 19, 4, C_METER);
 
-    panel(d, 110, 97, 98, 18, 3, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "MERKLE 32B", 114, 100, 8, C_METER, C_TRACK);
-    text(d, "TIME 4B", 172, 100, 8, C_DIM, C_TRACK);
+    // Stage 3
+    panel(d, 156, py, 60, 38, 4, C_TRACK, C_GOLD, C_PANEL);
+    text(d, "TARGET", 186, py + 4, 8, C_GOLD, C_TRACK, Align::TopCenter);
+    text(d, "18+ Zeros", 186, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
+    drawPipelineArrow(d, 219, py + 19, 4, C_METER);
 
-    panel(d, 212, 97, 94, 18, 3, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "BITS 4B", 216, 100, 8, C_METER, C_TRACK);
-    text(d, "NONCE 4B", 262, 100, 8, C_GOLD, C_TRACK);
+    // Stage 4
+    panel(d, 227, py, 66, 38, 4, C_TRACK, C_GOOD, C_PANEL);
+    text(d, "H < TARGET", 260, py + 4, 8, C_GOOD, C_TRACK, Align::TopCenter);
+    text(d, "Jackpot Win!", 260, py + 20, 7, C_GOOD, C_TRACK, Align::TopCenter);
 
-    panel(d, 12, 117, 294, 14, 2, C_BG, C_EDGE, C_PANEL);
-    text(d, "Double-SHA256: 76B Static Template + 4B Dial  |  Target = Bits Unpack", 159, 119, 7, C_DIM, C_BG, Align::TopCenter);
+    // 3. Protocol Metrics & Scarcity (y=136, h=54, w=304)
+    drawTile(W_LOT_JACKPOT, 8, 136, 148, 54, "GLOBAL TARGET", "132.72 T", C_TEXT, C_EDGE);
 
-    // 4 Pipeline Stages (y=138, h=28)
-    const int py = 138;
-    panel(d, 8, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "1. HEADER", 44, py + 3, 8, C_METER, C_PANEL, Align::TopCenter);
-    text(d, "80 Bytes", 44, py + 14, 7, C_TEXT, C_PANEL, Align::TopCenter);
+    // Hard Cap Supply Card
+    panel(d, 164, 136, 148, 54, 6, C_PANEL, C_EDGE, C_BG);
+    text(d, "HARD CAP SUPPLY", 172, 141, 8, C_DIM, C_PANEL);
+    text(d, "20,999,999 BTC", 172, 153, 14, C_GOLD, C_PANEL);
+    d.fillRect(172, 171, 132, 4, C_TRACK);
+    d.fillRect(172, 171, 124, 4, C_GOLD);
+    text(d, "94.3% Mined • 21M Cap", 172, 178, 7, C_DIM, C_PANEL);
 
-    panel(d, 84, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "2. SHA256d", 120, py + 3, 8, C_TEXT, C_PANEL, Align::TopCenter);
-    text(d, "Double Hash", 120, py + 14, 7, C_DIM, C_PANEL, Align::TopCenter);
-
-    panel(d, 160, py, 72, 28, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "3. TARGET", 196, py + 3, 8, C_GOLD, C_PANEL, Align::TopCenter);
-    text(d, "18+ Zeros", 196, py + 14, 7, C_GOLD, C_PANEL, Align::TopCenter);
-
-    panel(d, 236, py, 76, 28, 4, C_PANEL, C_EDGE, C_BG);
-    text(d, "4. 256-BIT TEST", 274, py + 3, 8, C_GOOD, C_PANEL, Align::TopCenter);
-    text(d, "H < Target", 274, py + 14, 7, C_GOOD, C_PANEL, Align::TopCenter);
-
-    // 2 Clean Protocol Metric Tiles (y=170, h=24)
-    drawTile(W_LOT_JACKPOT, 8, 170, 148, 24, "GLOBAL TARGET", "132.72 T", C_TEXT, C_EDGE);
-    drawTile(W_LOT_WORK, 164, 170, 148, 24, "HARD CAP SUPPLY", "20,999,999.9769 BTC", C_GOLD, C_EDGE);
-
+    // Bottom strip (y=196..236)
     chromeStripCells(d);
   }
 }
@@ -1258,9 +1302,9 @@ static void paintArchitecture(const ArchitectureV &av)
 {
   drawHeader(av.hdr);
   if (isPortrait())
-    drawTile(W_LOT_JACKPOT, 6, 192, 112, 40, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_LOT_JACKPOT, 6, 202, 112, 58, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
   else
-    drawTile(W_LOT_JACKPOT, 8, 170, 148, 24, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
+    drawTile(W_LOT_JACKPOT, 8, 136, 148, 54, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
 
   drawStrip(av.strip);
 }

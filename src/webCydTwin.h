@@ -129,6 +129,16 @@ if(val>0.01){
 ctx.strokeStyle=col;ctx.beginPath();ctx.arc(cx,cy,(r+ri)/2,startAng,startAng+sweep*Math.min(val,1));ctx.stroke();
 }
 }
+function cydDrawCoin(ctx,p,cx,cy,r){
+ctx.fillStyle=p.gold;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='#feaa00';ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle='#994d00';ctx.beginPath();ctx.arc(cx,cy,r-4,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#fff';ctx.font='bold '+(r+2)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText('₿',cx,cy+1);ctx.textAlign='left';ctx.textBaseline='alphabetic';
+}
+function cydDrawArrow(ctx,p,x,y,s,col){
+ctx.fillStyle=col||p.acc;ctx.beginPath();ctx.moveTo(x,y-s);ctx.lineTo(x+s*1.2,y);ctx.lineTo(x,y+s);ctx.closePath();ctx.fill();
+}
 function cydRender(){
 const cvs=document.getElementById('cyd-canvas');if(!cvs)return;
 const ctx=cvs.getContext('2d');const d=cydLastStats||{};const p=cydGetPalette(d.theme);
@@ -198,28 +208,38 @@ ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*(barW+barGap),barsY+68-bh,barW,bh);
 }
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'UPTIME',v:d.uptime||'--'},{l:'TEMP',v:(d.temp||'--')+'°C'}]);
 }else if(cydPreviewScr===3){
-cydDrawPanel(ctx,p,8,30,304,48,6);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('BLOCK REWARD JACKPOT',16,42);
-ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('3.125 BTC',16,64);
-ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$300,000+ USD)',126,64);
-ctx.fillStyle=p.good;ctx.fillText('SOLO: 100% TO YOU',220,54);
+cydDrawPanel(ctx,p,8,30,304,48,8);
+cydDrawCoin(ctx,p,28,54,16);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('SOLO BLOCK REWARD',52,42);
+ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('3.125 BTC',52,65);
+ctx.font='9px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$250,000+ USD)',156,64);
+ctx.fillStyle='rgba(34,197,94,0.15)';ctx.beginPath();ctx.roundRect(230,38,76,16,4);ctx.fill();
+ctx.fillStyle=p.good;ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText('100% TO YOU',268,49);ctx.textAlign='left';
 
-cydDrawPanel(ctx,p,8,82,304,52,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('80-BYTE CANDIDATE HEADER',14,92);
-ctx.fillStyle=p.text;ctx.font='8px monospace';
-ctx.fillText('VER 4B [02000000]   PREV 32B [00000000...9717]',14,105);
-ctx.fillText('MERKLE 32B [8717...978a]  TIME 4B [53059335]',14,116);
-ctx.fillStyle=p.acc;
-ctx.fillText('BITS 4B [19015f53]  NONCE 4B [DIAL: 0x330776]',14,127);
-
-const pipeY=138;const stages=['Header 80B','SHA256d','Target Zeros','H < Target'];
+cydDrawPanel(ctx,p,8,82,304,50,6);
+const py=88;
+const stages=[
+{t:'80B HEADER',s:'76B + Nonce',c:p.blue||'#38bdf8'},
+{t:'2x SHA-256',s:'Double Hash',c:p.acc},
+{t:'TARGET',s:'18+ Zeros',c:p.gold},
+{t:'H < TARGET',s:'Jackpot Win!',c:p.good}
+];
 for(let i=0;i<4;i++){
-const px=8+i*78;cydDrawPanel(ctx,p,px,pipeY,72,28,4);
-ctx.fillStyle=(i===2)?p.meter:((i===3)?p.good:p.dim);
-ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i],px+36,pipeY+18);ctx.textAlign='left';
+const px=14+i*(60+14);
+cydDrawPanel(ctx,p,px,py,60,38,4);
+ctx.fillStyle=stages[i].c;ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i].t,px+30,py+14);
+ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText(stages[i].s,px+30,py+28);ctx.textAlign='left';
+if(i<3)cydDrawArrow(ctx,p,px+60+3,py+19,4,p.acc);
 }
-cydDrawTile(ctx,p,8,170,148,24,'GLOBAL TARGET',d.net_diff?(parseFloat(d.net_diff)/1e12).toFixed(2)+' T':'132.72 T',p.text);
-cydDrawTile(ctx,p,164,170,148,24,'HARD CAP SUPPLY','20,999,999.9769 BTC',p.gold);
+
+cydDrawTile(ctx,p,8,136,148,54,'GLOBAL TARGET',d.net_diff?(parseFloat(d.net_diff)/1e12).toFixed(2)+' T':'132.72 T',p.text);
+cydDrawPanel(ctx,p,164,136,148,54,6);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HARD CAP SUPPLY',172,148);
+ctx.fillStyle=p.gold;ctx.font='bold 15px sans-serif';ctx.fillText('20,999,999 BTC',172,166);
+ctx.fillStyle=p.track;ctx.fillRect(172,172,132,4);
+ctx.fillStyle=p.gold;ctx.fillRect(172,172,132*0.943,4);
+ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('94.3% Mined • 21M Cap',172,184);
+
 cydDrawStrip(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'ODDS',v:'1/70M'}]);
 }
 }
