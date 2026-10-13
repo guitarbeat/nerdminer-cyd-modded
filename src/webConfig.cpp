@@ -47,9 +47,23 @@ static int getWifiQuality(int rssi)
   return 2 * (rssi + 100);
 }
 
-static void handleApiStats()
+static String formatUptimeWeb(const String &s)
 {
-  mining_data d = getMiningData(millis());
+  int d = 0, h = 0, m = 0, sec = 0;
+  if (sscanf(s.c_str(), "%d %d:%d:%d", &d, &h, &m, &sec) == 4)
+  {
+    char b[24];
+    if (d > 0)
+      snprintf(b, sizeof(b), "%dd %02d:%02d:%02d", d, h, m, sec);
+    else
+      snprintf(b, sizeof(b), "%02d:%02d:%02d", h, m, sec);
+    return String(b);
+  }
+  return s.length() ? s : String("--");
+}
+
+static String buildStatsJson(const mining_data &d)
+{
   String json;
   json.reserve(576);
   json += "{";
@@ -79,7 +93,13 @@ static void handleApiStats()
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += ",\"screen\":" + String(getDisplayScreen());
   json += "}";
-  webCfgServer.send(200, "application/json", json);
+  return json;
+}
+
+static void handleApiStats()
+{
+  mining_data d = getMiningData(millis());
+  webCfgServer.send(200, "application/json", buildStatsJson(d));
 }
 
 static void handleResetSession()
@@ -200,7 +220,8 @@ static void handleRoot()
             "@media(min-width:620px){.diag-strip{grid-template-columns:repeat(6,1fr)}}"
             ".diag-item{background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;justify-content:center}"
             ".diag-label{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}"
-            ".diag-val{font-size:13px;font-weight:700;color:var(--text);font-feature-settings:'tnum'}"
+            ".diag-val{font-size:13px;font-weight:700;color:var(--text);font-feature-settings:'tnum';white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+            "#st-uptime{font-size:12px}"
             ".diag-sub{font-size:11px;font-weight:400;color:var(--muted)}"
             ".btn-reset-stats{background:transparent;border:1px solid var(--card-border);color:var(--muted);border-radius:4px;padding:4px 8px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;margin-top:2px;text-align:center}"
             ".btn-reset-stats:hover{border-color:var(--amber);color:var(--amber);background:rgba(247,147,26,0.08)}"
@@ -279,7 +300,7 @@ static void handleRoot()
   page += d.temp.length() ? d.temp : String("--");
   page += F("</span>&deg;C</span></div>"
             "<div class='diag-item'><span class='diag-label'>Uptime</span><span class='diag-val' id='st-uptime'>");
-  page += d.timeMining.length() ? d.timeMining : String("--");
+  page += formatUptimeWeb(d.timeMining);
   page += F("</span></div>"
             "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
   page += String(g_stratumPing) + F("</span> ms</span></div>"
@@ -669,7 +690,7 @@ static void handleRoot()
             "const eAvgWait=document.getElementById('dyn-avgwait');if(eAvgWait)eAvgWait.textContent=yrOdds>0?(fmtNum(yrOdds)+' years'):'--';"
             "const netHps=700e18,eNetpow=document.getElementById('dyn-netpow');if(eNetpow){const netSharePct=(hps/netHps)*100;eNetpow.textContent=netSharePct.toExponential(1)+'%';}"
             "if(d.temp)document.getElementById('st-temp').textContent=d.temp;"
-            "if(d.uptime)document.getElementById('st-uptime').textContent=d.uptime;"
+            "if(d.uptime){const u=document.getElementById('st-uptime');if(u){const m=d.uptime.match(/^(\\d+)\\s+(\\d{2}:\\d{2}:\\d{2})$/);u.textContent=m?(parseInt(m[1])>0?m[1]+'d '+m[2]:m[2]):d.uptime;}}"
             "const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;"
             "if(d.free_heap)document.getElementById('st-heap').textContent=Math.round(d.free_heap/1024)+' KB';"
             "if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}"
@@ -820,8 +841,10 @@ static void handleRoot()
             "function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}"
             "function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1000).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1000).toLocaleString();}"
             "function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}"
-            "pollStats();setInterval(pollStats,3000);cydRender();"
-            "</script></body></html>");
+            "setInterval(pollStats,3000);");
+  page += F("const initStats=");
+  page += buildStatsJson(d);
+  page += F(";updateStats(initStats);</script></body></html>");
 
   webCfgServer.send(200, "text/html", page);
 }
