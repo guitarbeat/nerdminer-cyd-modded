@@ -1804,8 +1804,8 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.strip.v[0] = String(pData.workersCount);
   m.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
   m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = isPortrait() ? "IP ADDR" : "LOCAL IP";
-  m.strip.v[2] = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--";
+  m.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
+  m.strip.v[2] = pData.bestDifficulty;
   m.strip.l[3] = "UPTIME";
   m.strip.v[3] = fmtUptime(data.timeMining);
   lastMine = m;
