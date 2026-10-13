@@ -169,11 +169,10 @@ static void handleRoot()
             ".logo-box{width:34px;height:34px;background:var(--amber);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px;transition:background .3s}"
             ".brand-title{font-size:18px;font-weight:800;letter-spacing:-0.5px}"
             ".brand-subtitle{font-size:12px;color:var(--muted)}"
-            ".status-badge{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--card-border);padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}"
-            ".dot{width:8px;height:8px;border-radius:50%;display:inline-block}"
-            ".dot-green{background:var(--green);box-shadow:0 0 8px var(--green)}"
-            ".dot-amber{background:var(--warn);box-shadow:0 0 8px var(--warn)}"
-            ".dot-gray{background:var(--muted)}"
+            ".status-badge{display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--card-border);padding:4px 10px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:0.3px}"
+            ".txt-green{color:var(--green)}"
+            ".txt-amber{color:var(--warn)}"
+            ".txt-gray{color:var(--muted)}"
             "details.edu-acc{border:1px solid var(--card-border);border-radius:6px;background:var(--input-bg);margin-bottom:8px;overflow:hidden;transition:border-color .2s}"
             "details.edu-acc[open]{border-color:var(--amber)}"
             "summary.edu-sum{padding:10px 14px;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none;transition:background .2s}"
@@ -263,15 +262,15 @@ static void handleRoot()
 
   page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>"
             "<div class='status-badge'>"
-            "<span id='st-dot' class='dot ");
+            "<span id='st-txt' class='");
 
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
   if (isHashing)
-    page += F("dot-green'></span><span id='st-txt'>HASHING</span>");
+    page += F("txt-green'>Hashing</span>");
   else if (mMonitor.NerdStatus == NM_Connecting)
-    page += F("dot-amber'></span><span id='st-txt'>CONNECTING</span>");
+    page += F("txt-amber'>Connecting</span>");
   else
-    page += F("dot-gray'></span><span id='st-txt'>IDLE</span>");
+    page += F("txt-gray'>Idle</span>");
 
   page += F("</div></header>");
   appendCydTwinHtml(page);
@@ -674,10 +673,10 @@ static void handleRoot()
             "const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;"
             "if(d.free_heap)document.getElementById('st-heap').textContent=Math.round(d.free_heap/1024)+' KB';"
             "if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}"
-            "const dot=document.getElementById('st-dot'),txt=document.getElementById('st-txt');"
-            "if(d.status==='hashing'){dot.className='dot dot-green';txt.textContent=d.using_fallback?'HASHING (FALLBACK)':'HASHING';}"
-            "else if(d.status==='connecting'){dot.className='dot dot-amber';txt.textContent='CONNECTING';}"
-            "else{dot.className='dot dot-gray';txt.textContent='IDLE';}"
+            "const txt=document.getElementById('st-txt');if(txt){"
+            "if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (Fallback)':'Hashing';}"
+            "else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}"
+            "else{txt.className='txt-gray';txt.textContent='Idle';}}"
             "cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&cydPreviewScr!==cydDevScr){cydSelectTab(cydDevScr,false);}}cydRender();}"
             "let simIsHist=true,simN=856192320,simAutoTimer=null;"
             "function toHex32LE(n){"

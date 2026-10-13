@@ -531,22 +531,21 @@ static void drawHeader(const HdrV &h)
   text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
   int wm = textW(title, 13);
 
-  // Status: purely typographic indicator with a minimal 3px status dot (no pill container)
-  const char *label = "SETUP";
+  // Status: purely typographic indicator with no dot prefix to save space
+  const char *label = "Setup";
   uint16_t col = C_DIM;
   if (h.status == NM_hashing)
   {
-    label = "HASHING";
+    label = "Hashing";
     col = C_GOOD;
   }
   else if (h.status == NM_Connecting)
   {
-    label = "LINKING";
+    label = "Linking";
     col = C_WARN;
   }
-  int sx = wm + (isPortrait() ? 10 : 14);
-  wgt.fillCircle(sx + 2, 12, 3, col);
-  text(wgt, label, sx + 9, 6, 9, col, C_BG);
+  int sx = wm + (isPortrait() ? 8 : 12);
+  text(wgt, label, sx, 6, 9, col, C_BG);
 
   // Time (right-aligned)
   text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
@@ -570,11 +569,7 @@ static void drawHeader(const HdrV &h)
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
     int dotY = 12; // y of top edge, centered vertically in 26px header
 
-    int statusEnd;
-    {
-      const char *lbl2 = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "SETUP");
-      statusEnd = sx + 9 + textW(lbl2, 9) + 6;
-    }
+    int statusEnd = sx + textW(label, 9) + 6;
     int center = (statusEnd + gapRight) / 2;
     int dotX0 = center - totalW / 2;
     if (dotX0 < statusEnd + 4) dotX0 = statusEnd + 4;

@@ -87,9 +87,8 @@ ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
 const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
-const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
-ctx.fillStyle=stCol;ctx.beginPath();ctx.arc(tw+20,13,3,0,Math.PI*2);ctx.fill();
-ctx.font='9px sans-serif';ctx.fillText(stTxt,tw+27,16);
+const stTxt=isHash?'Hashing':(d&&d.status==='connecting'?'Linking':'Setup');
+ctx.fillStyle=stCol;ctx.font='9px sans-serif';ctx.fillText(stTxt,tw+14,16);
 const dotW=7,dotH=3,gap=2,startX=160;
 for(let i=0;i<4;i++){
 ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
