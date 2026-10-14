@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <Update.h>
 #include "webConfig.h"
 #include "wManager.h"
 #include "drivers/storage/storage.h"
@@ -165,6 +166,52 @@ static void handleRestart()
   ESP.restart();
 }
 
+static void handleUpdateDone()
+{
+  bool ok = !Update.hasError();
+  String res = ok ? "{\"status\":\"success\",\"message\":\"Update complete. Rebooting...\"}"
+                  : "{\"status\":\"error\",\"message\":\"Update failed\"}";
+  webCfgServer.sendHeader("Connection", "close");
+  webCfgServer.send(ok ? 200 : 500, "application/json", res);
+  if (ok)
+  {
+    delay(800);
+    ESP.restart();
+  }
+}
+
+static void handleUpdateUpload()
+{
+  HTTPUpload &upload = webCfgServer.upload();
+  if (upload.status == UPLOAD_FILE_START)
+  {
+    Serial.printf("[OTA] Starting firmware update: %s\n", upload.filename.c_str());
+    mMonitor.NerdStatus = NM_waitingConfig; // Pause active mining status
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH))
+    {
+      Update.printError(Serial);
+    }
+  }
+  else if (upload.status == UPLOAD_FILE_WRITE)
+  {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+    {
+      Update.printError(Serial);
+    }
+  }
+  else if (upload.status == UPLOAD_FILE_END)
+  {
+    if (Update.end(true))
+    {
+      Serial.printf("[OTA] Update Success: %u bytes written\n", upload.totalSize);
+    }
+    else
+    {
+      Update.printError(Serial);
+    }
+  }
+}
+
 static const char DASH_STYLE[] PROGMEM = R"rawcss(
 :root{
 --bg:#0b0e14;--card:#141a22;--card-border:#252d38;--input-bg:#0f1520;
@@ -256,6 +303,16 @@ input[type=range]{flex:1;accent-color:var(--amber)}
 .btn-save:hover{opacity:.9}
 .btn-restart{background:transparent;border:1px solid #da3633;color:#f85149;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:background .15s}
 .btn-restart:hover{background:rgba(218,54,51,0.08)}
+.ota-box{background:var(--card);padding:18px;margin-bottom:20px;border-left:4px solid var(--amber)}
+.ota-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px}
+.ota-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;max-width:56ch}
+.ota-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.btn-ota{background:var(--input-bg);border:1px solid var(--card-border);color:var(--text);padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-ota:hover{border-color:var(--amber);color:var(--amber)}
+.ota-progress-box{display:none;margin-top:12px}
+.ota-progress-bar{height:6px;background:var(--input-bg);overflow:hidden}
+.ota-progress-fill{height:100%;width:0%;background:var(--amber);transition:width .1s linear}
+.ota-status{font-size:12px;color:var(--muted);margin-top:6px}
 .guide-grid{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0 20px}
 @media(min-width:480px){.guide-grid{grid-template-columns:repeat(2,1fr)}}
 .guide-card{background:var(--input-bg);padding:14px;font-size:13px;color:var(--muted);line-height:1.6}
@@ -286,6 +343,37 @@ if(s<=0){clearInterval(t);checkBack();}},1000);}
 function checkBack(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(checkBack,1000));}
 document.getElementById('cfg-form').addEventListener('submit',()=>setTimeout(pollReboot,100));
 function rebootDevice(){if(confirm('Reboot the miner now?')){fetch('/restart',{method:'POST'}).then(pollReboot).catch(pollReboot);}}
+function uploadOta(){
+const fi=document.getElementById('ota-file');
+if(!fi||!fi.files||!fi.files.length){alert('Please select a firmware .bin file first');return;}
+const f=fi.files[0];
+if(!f.name.endsWith('.bin')){if(!confirm('File does not end in .bin. Are you sure this is a valid firmware file?'))return;}
+const pBox=document.getElementById('ota-progress-box'),pFill=document.getElementById('ota-progress-fill'),pStat=document.getElementById('ota-status'),btn=document.getElementById('btn-ota-start');
+if(pBox)pBox.style.display='block';
+if(btn)btn.disabled=true;
+if(pStat)pStat.textContent='Uploading '+f.name+' ('+Math.round(f.size/1024)+' KB)...';
+const fd=new FormData();
+fd.append('firmware',f,f.name);
+const xhr=new XMLHttpRequest();
+xhr.open('POST','/update',true);
+xhr.upload.onprogress=function(e){if(e.lengthComputable&&pFill){const pct=Math.round((e.loaded/e.total)*100);pFill.style.width=pct+'%';if(pStat)pStat.textContent='Flashing: '+pct+'% ('+Math.round(e.loaded/1024)+' / '+Math.round(e.total/1024)+' KB)';}};
+xhr.onload=function(){
+if(xhr.status===200){
+if(pStat)pStat.textContent='Update successful! Rebooting miner...';
+setTimeout(pollReboot,500);
+}else{
+if(btn)btn.disabled=false;
+if(pStat)pStat.textContent='Update failed: '+(xhr.responseText||'HTTP '+xhr.status);
+alert('Firmware update failed: '+(xhr.responseText||'Unknown error'));
+}
+};
+xhr.onerror=function(){
+if(btn)btn.disabled=false;
+if(pStat)pStat.textContent='Upload error / connection lost';
+alert('Network error during upload');
+};
+xhr.send(fd);
+}
 function fmtNum(n){if(isNaN(n)||n<=0)return'0';if(n>=1e12)return(n/1e12).toFixed(2)+' trillion';if(n>=1e9)return(n/1e9).toFixed(1)+' billion';if(n>=1e6)return(n/1e6).toFixed(1)+' million';return Math.round(n).toLocaleString();}
 function fmtUptime(u){if(!u)return'--';const p=u.trim().split(/\s+/);let d=0,t=u;if(p.length===2){d=parseInt(p[0])||0;t=p[1];}const c=t.split(':');if(c.length===3){const hrs=parseInt(c[0])||0,mins=parseInt(c[1])||0;return(d>0?d+'d ':'')+(hrs>0?hrs+'h ':'')+mins+'m';}return u;}
 function resetSession(){
@@ -665,6 +753,18 @@ static void handleRoot()
             "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
             "</div>"
             "</form>"
+            "<div class='ota-box'>"
+            "<div class='ota-title'>Firmware Update Over-the-Air</div>"
+            "<div class='ota-desc'>Flash new firmware (.bin) directly over Wi-Fi without connecting a USB cable. The miner will write to flash and automatically reboot.</div>"
+            "<div class='ota-row'>"
+            "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:8px;border:1px solid var(--card-border);'>"
+            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload &amp; Flash</button>"
+            "</div>"
+            "<div class='ota-progress-box' id='ota-progress-box'>"
+            "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
+            "<div class='ota-status' id='ota-status'>Ready</div>"
+            "</div>"
+            "</div>"
             "<div class='guide-grid'>"
             "<div class='guide-card'>"
             "<div class='guide-title'>&#128070; CYD Touch Zones</div>"
@@ -960,6 +1060,7 @@ void setup_webConfig(void)
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
+  webCfgServer.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   webCfgServer.onNotFound([]()
   {
     webCfgServer.sendHeader("Location", "/");
