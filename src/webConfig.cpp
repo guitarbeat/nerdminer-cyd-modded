@@ -92,6 +92,9 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"net_diff\":" + (g_networkDifficulty > 0.0 ? String(g_networkDifficulty, 2) : String("100000000000000.00"));
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += ",\"screen\":" + String(getDisplayScreen());
+  bool isPort = (Settings.screenRotation == 0 || Settings.screenRotation == 2);
+  json += ",\"is_portrait\":" + String(isPort ? "true" : "false");
+  json += ",\"rotation\":" + String(Settings.screenRotation);
   json += "}";
   return json;
 }
