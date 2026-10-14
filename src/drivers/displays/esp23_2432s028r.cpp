@@ -532,16 +532,16 @@ static void drawHeader(const HdrV &h)
   int wm = textW(title, 13);
 
   // Status: purely typographic indicator with no dot prefix to save space
-  const char *label = "Setup";
+  const char *label = "SETUP";
   uint16_t col = C_DIM;
   if (h.status == NM_hashing)
   {
-    label = "Hashing";
+    label = "HASHING";
     col = C_GOOD;
   }
   else if (h.status == NM_Connecting)
   {
-    label = "Linking";
+    label = "LINKING";
     col = C_WARN;
   }
   int sx = wm + (isPortrait() ? 8 : 12);
