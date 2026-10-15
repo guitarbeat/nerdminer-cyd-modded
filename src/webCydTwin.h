@@ -128,6 +128,16 @@ function cydMkt(d){const m=(d&&d.market)||{};const pre=m.prefix||'$';const rem=m
 return {price:m.price?pre+Number(m.price).toLocaleString('en-US'):'--',chg:Number(m.chg||0),block:m.block?Number(m.block).toLocaleString('en-US'):'--',
 fee:m.fee?m.fee+' sat/vB':'--',diff:m.diff||'--',net:m.net?m.net+' EH/s':'--',rem:rem,pct:rem?Math.floor((210000-rem)*100/210000):0,
 pool:cydPoolLbl(m.pool),iv:m.iv||'1H',k:Array.isArray(m.k)?m.k:[],time:(d&&d.time?d.time:'--:--').substring(0,5)};}
+function cydDrawStrip2(ctx,p,cells,ls){
+if(ls)cydDrawPanel(ctx,p,8,198,304,38,6);else cydDrawPanel(ctx,p,6,266,228,48,8);
+const mx=ls?160:120;ctx.strokeStyle=p.edge;ctx.beginPath();ctx.moveTo(mx+.5,ls?204:272);ctx.lineTo(mx+.5,ls?230:308);ctx.stroke();
+ctx.textAlign='center';
+for(let i=0;i<2;i++){const c=cells[i]||{l:'',v:''};const cx=ls?(84+i*152):(63+i*114);
+ctx.fillStyle=p.dim;ctx.font=(ls?10:9)+'px sans-serif';ctx.fillText(c.l,cx,ls?211:282);
+ctx.fillStyle=p.text;ctx.font='bold '+(ls?14:15)+'px sans-serif';ctx.fillText(c.v,cx,ls?228:302);}
+ctx.textAlign='left';
+}
+function cydMktCells(d){const hr=d&&d.hashrate?parseFloat(d.hashrate):0;return [{l:'HASHRATE',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},{l:'SHARES',v:(parseInt((d&&d.shares)||0)||0).toLocaleString('en-US')}];}
 function cydDrawStripPortrait(ctx,p,cells){
 cydDrawPanel(ctx,p,6,266,228,48,8);
 ctx.strokeStyle=p.edge;
@@ -188,7 +198,7 @@ ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='9px sans-serif';ctx.fillTe
 ctx.strokeStyle=p.edge;ctx.beginPath();ctx.moveTo(14,220.5);ctx.lineTo(226,220.5);ctx.moveTo(120.5,226);ctx.lineTo(120.5,254);ctx.stroke();
 ctx.fillStyle=p.dim;ctx.fillText('DIFFICULTY',63,233);ctx.fillText('NETWORK',177,233);
 ctx.font='bold 13px sans-serif';ctx.fillStyle=p.gold;ctx.fillText(m.diff,63,250);ctx.fillStyle=p.good;ctx.fillText(m.net,177,250);ctx.textAlign='left';
-cydDrawStripPortrait(ctx,p,[{l:'PAIR',v:'BTC'},{l:'HASH KH/s',v:d&&d.hashrate?parseFloat(d.hashrate).toFixed(0):'--'},{l:'POOL',v:m.pool},{l:'TIME',v:m.time}]);
+cydDrawStrip2(ctx,p,cydMktCells(d),false);
 }else if(cydPreviewScr===2){
 cydDrawPanel(ctx,p,6,30,228,82,8);
 ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='bold 42px monospace';
@@ -346,7 +356,7 @@ ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='9px sans-serif';ctx.fillTe
 ctx.strokeStyle=p.edge;ctx.beginPath();ctx.moveTo(16,146.5);ctx.lineTo(304,146.5);ctx.moveTo(160.5,152);ctx.lineTo(160.5,186);ctx.stroke();
 ctx.fillStyle=p.dim;ctx.fillText('DIFFICULTY',84,160);ctx.fillText('NETWORK HASHRATE',236,160);
 ctx.font='bold 15px sans-serif';ctx.fillStyle=p.gold;ctx.fillText(m.diff,84,181);ctx.fillStyle=p.good;ctx.fillText(m.net,236,181);ctx.textAlign='left';
-cydDrawStripLandscape(ctx,p,[{l:'PAIR',v:'BTC/USDT'},{l:'HASHRATE',v:d&&d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL',v:m.pool},{l:'TIME',v:m.time}]);
+cydDrawStrip2(ctx,p,cydMktCells(d),true);
 }else if(cydPreviewScr===2){
 cydDrawPanel(ctx,p,8,30,188,56,6);
 ctx.fillStyle=p.text;ctx.font='bold 36px monospace';

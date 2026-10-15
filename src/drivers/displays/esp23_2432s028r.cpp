@@ -646,6 +646,37 @@ static void chromeStripCells(TFT_eSPI &d)
   }
 }
 
+// Two wide centred cells (Market footer): HASHRATE | SHARES.
+static void drawStrip2(const StripV &s)
+{
+  int sy = isPortrait() ? 269 : (STRIP_Y + 3);
+  int cw = isPortrait() ? 110 : 148;
+  int ch = isPortrait() ? 42 : 32;
+  int x0 = isPortrait() ? 8 : 10;
+  int xstep = isPortrait() ? 114 : 152;
+  for (int i = 0; i < 2; i++)
+  {
+    String k = "2|" + s.l[i] + "|" + s.v[i] + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
+    if (!need(W_P0 + i, k))
+      continue;
+    if (!wBegin(cw, ch, C_PANEL))
+      continue;
+    text(wgt, s.l[i].c_str(), cw / 2, isPortrait() ? 4 : 2, isPortrait() ? 10 : 11, C_DIM, C_PANEL, Align::TopCenter);
+    text(wgt, s.v[i].c_str(), cw / 2, isPortrait() ? 19 : 15, isPortrait() ? 16 : 15, C_TEXT, C_PANEL, Align::TopCenter);
+    wEnd(x0 + xstep * i, sy);
+    done(W_P0 + i, k);
+  }
+}
+
+static void chromeStrip2(TFT_eSPI &d)
+{
+  chromeStrip(d);
+  if (isPortrait())
+    d.drawFastVLine(120, 272, 36, C_EDGE);
+  else
+    d.drawFastVLine(160, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
+}
+
 // generic stat tile (quiet uppercase label over bold value, crisp hairline border)
 static void drawTile(int id, int x, int y, int w, int h, const char *label, const char *value,
                      uint16_t valCol, uint16_t edge)
@@ -778,7 +809,7 @@ static void chromeMarket(TFT_eSPI &d)
     text(d, "DIFFICULTY", 63, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
     text(d, "NETWORK", 177, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
 
-    chromeStripCells(d);
+    chromeStrip2(d);
   }
   else
   {
@@ -792,7 +823,7 @@ static void chromeMarket(TFT_eSPI &d)
     text(d, "DIFFICULTY", 84, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
     text(d, "NETWORK HASHRATE", 236, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
 
-    chromeStripCells(d);
+    chromeStrip2(d);
   }
 }
 
@@ -879,7 +910,7 @@ static void paintMarket(const MarketV &m)
     }
   }
 
-  drawStrip(m.strip);
+  drawStrip2(m.strip);
 }
 
 // ============================================================ CLOCK screen ==
@@ -1482,20 +1513,6 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
 
-// Short pool name for the market footer: "public-pool.io" -> "public-pool".
-static String marketPoolLabel()
-{
-  String h = Settings.PoolAddress;
-  int dot = h.lastIndexOf('.');
-  if (dot > 0)
-    h = h.substring(0, dot);
-  if (h.startsWith("pool."))
-    h = h.substring(5);
-  if (h.length() > 9)
-    h = h.substring(0, 9);
-  return h.length() ? h : String("--");
-}
-
 void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 {
   coin_data data = getCoinData(mElapsed);
@@ -1513,18 +1530,11 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.net = data.globalHashRate.length() ? data.globalHashRate + " EH/s" : String("--");
   m.pct = (int)data.progressPercent;
   m.remaining = String(data.remainingBlocks.toInt());
-  // Footer: pair / hashrate / pool / time (portrait cells are 57px wide)
-  {
-    String khs = String(data.currentHashRate.toFloat(), 0);
-    m.strip.l[0] = "PAIR";
-    m.strip.v[0] = isPortrait() ? "BTC" : "BTC/USDT";
-    m.strip.l[1] = isPortrait() ? "HASH KH/s" : "HASHRATE";
-    m.strip.v[1] = isPortrait() ? khs : khs + " KH/s";
-  }
-  m.strip.l[2] = "POOL";
-  m.strip.v[2] = marketPoolLabel();
-  m.strip.l[3] = "TIME";
-  m.strip.v[3] = data.currentTime.substring(0, 5);
+  // Footer: hashrate / shares (same sources as the MINE screen)
+  m.strip.l[0] = "HASHRATE";
+  m.strip.v[0] = String(data.currentHashRate.toFloat(), 0) + " KH/s";
+  m.strip.l[1] = "SHARES";
+  m.strip.v[1] = commas(data.completedShares);
   lastMarket = m;
   haveMarket = true;
   paintMarket(m);
@@ -2045,14 +2055,10 @@ void cydDumpScreens(void)
     k.net = "912 EH/s";
     k.pct = 47;
     k.remaining = "111,655";
-    k.strip.l[0] = "PAIR";
-    k.strip.v[0] = isPortrait() ? "BTC" : "BTC/USDT";
-    k.strip.l[1] = isPortrait() ? "HASH KH/s" : "HASHRATE";
-    k.strip.v[1] = isPortrait() ? "950" : "950 KH/s";
-    k.strip.l[2] = "POOL";
-    k.strip.v[2] = "public-po";
-    k.strip.l[3] = "TIME";
-    k.strip.v[3] = "21:47";
+    k.strip.l[0] = "HASHRATE";
+    k.strip.v[0] = "950 KH/s";
+    k.strip.l[1] = "SHARES";
+    k.strip.v[1] = "1,284";
     paintMarket(k);
     dumpShot("market");
 
