@@ -1513,11 +1513,14 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.net = data.globalHashRate.length() ? data.globalHashRate + " EH/s" : String("--");
   m.pct = (int)data.progressPercent;
   m.remaining = String(data.remainingBlocks.toInt());
-  // Footer per ticker layout: pair / interval / pool / time
-  m.strip.l[0] = "PAIR";
-  m.strip.v[0] = "BTC/USDT";
-  m.strip.l[1] = "INTERVAL";
-  m.strip.v[1] = KLINE_INTERVAL_LABEL;
+  // Footer: pair / hashrate / pool / time (portrait cells are 57px wide)
+  {
+    String khs = String(data.currentHashRate.toFloat(), 0);
+    m.strip.l[0] = "PAIR";
+    m.strip.v[0] = isPortrait() ? "BTC" : "BTC/USDT";
+    m.strip.l[1] = isPortrait() ? "HASH KH/s" : "HASHRATE";
+    m.strip.v[1] = isPortrait() ? khs : khs + " KH/s";
+  }
   m.strip.l[2] = "POOL";
   m.strip.v[2] = marketPoolLabel();
   m.strip.l[3] = "TIME";
@@ -2043,9 +2046,9 @@ void cydDumpScreens(void)
     k.pct = 47;
     k.remaining = "111,655";
     k.strip.l[0] = "PAIR";
-    k.strip.v[0] = "BTC/USDT";
-    k.strip.l[1] = "INTERVAL";
-    k.strip.v[1] = KLINE_INTERVAL_LABEL;
+    k.strip.v[0] = isPortrait() ? "BTC" : "BTC/USDT";
+    k.strip.l[1] = isPortrait() ? "HASH KH/s" : "HASHRATE";
+    k.strip.v[1] = isPortrait() ? "950" : "950 KH/s";
     k.strip.l[2] = "POOL";
     k.strip.v[2] = "public-po";
     k.strip.l[3] = "TIME";
