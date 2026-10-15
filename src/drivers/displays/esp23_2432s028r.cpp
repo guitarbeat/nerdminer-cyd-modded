@@ -833,17 +833,14 @@ static void paintMarket(const MarketV &m)
   const bool P = isPortrait();
 
   // 1. Hero price card (+ block/fee in landscape)
-  char chgBuf[20];
-  snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%% 24h", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
-  const uint16_t cCol = g_btc24hChange >= 0 ? C_GOOD : C_BAD;
-  String k = m.price + "|" + String(g_btc24hChange, 2) + "|" + (P ? m.price : m.block + m.fee) + (P ? "P" : "L");
+  // (24h change removed: no real data feed behind it.)
+  String k = m.price + "|" + (P ? m.price : m.block + m.fee) + (P ? "P" : "L");
   if (need(W_PRICE, k))
   {
     if (P)
     {
       if (wBegin(212, 50, C_PANEL))
       {
-        text(wgt, chgBuf, 210, 0, 10, cCol, C_PANEL, Align::TopRight);
         text(wgt, m.price.c_str(), 106, 16, 30, C_GOLD, C_PANEL, Align::TopCenter);
         wEnd(14, 47);
         done(W_PRICE, k);
@@ -854,7 +851,6 @@ static void paintMarket(const MarketV &m)
       if (wBegin(288, 38, C_PANEL))
       {
         text(wgt, m.price.c_str(), 0, 2, 28, C_GOLD, C_PANEL);
-        text(wgt, chgBuf, 0 + textW(m.price.c_str(), 28) + 8, 14, 11, cCol, C_PANEL);
         text(wgt, m.block.c_str(), 284, 2, 16, C_TEXT, C_PANEL, Align::TopRight);
         text(wgt, (m.fee + " fee").c_str(), 284, 24, 10, C_DIM, C_PANEL, Align::TopRight);
         wEnd(16, 48);

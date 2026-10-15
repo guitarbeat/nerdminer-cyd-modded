@@ -196,7 +196,6 @@ unsigned long mBTCUpdate = 0;
 // The chart UI stays and shows its empty "waiting" state.
 uint8_t g_klineCount = 0;
 uint32_t g_klineEpoch = 0;
-float g_btc24hChange = 0.0f;
 
 uint8_t copyKlines(Kline *out) {
   (void)out;
@@ -213,15 +212,13 @@ String getMarketJson(void) {
   j.reserve(200);
   j += "{\"price\":" + String(bitcoin_price);
   j += ",\"prefix\":\"" + String(cur.prefix) + "\"";
-  j += ",\"chg\":" + String(g_btc24hChange, 2);
+  j += ",\"cur\":\"" + String(cur.code) + "\"";
   j += ",\"block\":" + String(blk);
   j += ",\"fee\":" + String(gData.halfHourFee);
   j += ",\"diff\":\"" + gData.difficulty + "\"";
   j += ",\"net\":\"" + gData.globalHash + "\"";
   j += ",\"rem\":" + String(rem);
-  j += ",\"pool\":\"" + Settings.PoolAddress + "\"";
-  j += ",\"iv\":\"" KLINE_INTERVAL_LABEL "\"";
-  j += ",\"k\":[]}";
+  j += ",\"pool\":\"" + Settings.PoolAddress + "\"}";
   return j;
 }
 

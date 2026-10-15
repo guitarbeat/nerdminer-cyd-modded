@@ -68,7 +68,6 @@ struct Kline {
 
 extern uint8_t g_klineCount;              // always 0 (no feed)
 extern uint32_t g_klineEpoch;             // always 0 (no feed)
-extern float g_btc24hChange;              // always 0 (no feed)
 
 // Copies candles into out[]; returns count (always 0 now).
 uint8_t copyKlines(Kline *out);
