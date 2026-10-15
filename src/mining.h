@@ -97,6 +97,7 @@ void resetStat();
 void resetSessionStats();
 
 extern volatile uint32_t g_stratumPing;
+extern volatile uint32_t g_acceptedShares;
 extern double g_networkDifficulty;
 extern bool g_usingFallback;
 

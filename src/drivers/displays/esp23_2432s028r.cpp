@@ -1856,6 +1856,11 @@ enum TouchAction
 };
 static volatile int pendingTouch = TA_NONE;
 
+// Ambient light sensor (LDR on GPIO 34, ADC1) auto-dimming
+#define PIN_LDR 34
+#define LDR_MIN_DUTY 15      // backlight floor in a dark room
+#define LDR_RAW_DARK 3800    // ADC reading treated as "dark"
+#define LDR_RAW_BRIGHT 500   // ADC reading treated as "bright"
 static float ldrEma = -1.0f;
 static unsigned long lastLdrCheck = 0;
 
@@ -1863,7 +1868,7 @@ static void touchTask(void *)
 {
   bool wasDown = false;
   int downCount = 0;
-  pinMode(34, INPUT); // CYD LDR photoresistor on GPIO 34
+  pinMode(PIN_LDR, INPUT); // CYD LDR photoresistor
   for (;;)
   {
     int16_t t_x, t_y;
@@ -1885,23 +1890,29 @@ static void touchTask(void *)
       wasDown = false;
     }
 
-    // Auto-dimming check every 500ms using LDR (GPIO 34)
+    // Auto-dimming: sample the LDR every 100 ms (cheap ADC1 read, no Wi-Fi conflict)
     unsigned long now = millis();
-    if (g_backlightReady && (now - lastLdrCheck >= 500))
+    if (g_backlightReady && (now - lastLdrCheck >= 100))
     {
       lastLdrCheck = now;
       if (g_currentDuty > 0) // only adapt if backlight is active (not switched off by tap)
       {
-        int raw = analogRead(34);
-        ldrEma = (ldrEma < 0) ? (float)raw : (0.10f * (float)raw + 0.90f * ldrEma);
-        // Dark room raw ~ 3500-4095; Bright room raw ~ 200-1000 (LDR pulls to GND in light)
-        // Map brightness smoothly between min duty (25) and max (Settings.Brightness or 255)
+        int raw = analogRead(PIN_LDR);
+        // EMA smoothing (alpha 0.05) so passing shadows don't pump the light.
+        ldrEma = (ldrEma < 0) ? (float)raw : (0.05f * (float)raw + 0.95f * ldrEma);
+        // CYD LDR divider reads high in the dark (~3500-4095) and low in
+        // bright light (~200-1000). Map dark -> floor, bright -> user max.
         int maxDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
-        int targetDuty = map(constrain((int)ldrEma, 500, 3800), 3800, 500, 25, maxDuty);
-        if (abs(g_currentDuty - targetDuty) > 6)
+        if (maxDuty < LDR_MIN_DUTY)
+          maxDuty = LDR_MIN_DUTY;
+        int targetDuty = map(constrain((int)ldrEma, LDR_RAW_BRIGHT, LDR_RAW_DARK),
+                             LDR_RAW_DARK, LDR_RAW_BRIGHT, LDR_MIN_DUTY, maxDuty);
+        if (abs(g_currentDuty - targetDuty) > 3)
         {
-          int newDuty = g_currentDuty + (targetDuty > g_currentDuty ? 4 : -4);
-          g_currentDuty = constrain(newDuty, 20, maxDuty);
+          // slew a few steps per tick for a smooth fade
+          int stepSz = abs(targetDuty - g_currentDuty) > 24 ? 6 : 2;
+          int newDuty = g_currentDuty + (targetDuty > g_currentDuty ? stepSz : -stepSz);
+          g_currentDuty = constrain(newDuty, LDR_MIN_DUTY, maxDuty);
           ledcWrite(0, g_currentDuty);
         }
       }
@@ -1909,6 +1920,75 @@ static void touchTask(void *)
 
     vTaskDelay(20 / portTICK_PERIOD_MS);
   }
+}
+
+// ------------------------------------------------------ reactive RGB LED --
+extern String current_block; // monitor.cpp, latest tip height from mempool
+extern volatile uint32_t g_acceptedShares; // mining.cpp
+enum RgbFx
+{
+  FX_NONE = 0,
+  FX_BLOCK, // white double-blink: new block
+  FX_SHARE  // short green pulse: share accepted by the pool
+};
+static RgbFx rgbFx = FX_NONE;
+static unsigned long rgbFxStart = 0;
+static String rgbLastBlock;
+static uint32_t rgbLastAccepted = 0;
+
+static void rgbSet(bool r, bool g, bool b) // true = lit (pins are active-low)
+{
+  digitalWrite(LED_PIN, r ? LOW : HIGH);
+  digitalWrite(LED_PIN_G, g ? LOW : HIGH);
+  digitalWrite(LED_PIN_B, b ? LOW : HIGH);
+}
+
+// Detect events and run the active effect. Returns true while an effect owns
+// the LED. Non-blocking: called every monitor tick.
+static bool rgbEffectStep(unsigned long now)
+{
+  if (mMonitor.NerdStatus == NM_hashing)
+  {
+    const String &cur = current_block;
+    if (rgbLastBlock.length() && cur.length() && cur != rgbLastBlock)
+    {
+      rgbFx = FX_BLOCK; // block beats share
+      rgbFxStart = now;
+    }
+    rgbLastBlock = cur;
+    uint32_t acc = g_acceptedShares;
+    if (acc != rgbLastAccepted && rgbFx == FX_NONE)
+    {
+      rgbFx = FX_SHARE;
+      rgbFxStart = now;
+    }
+    rgbLastAccepted = acc;
+  }
+  if (rgbFx == FX_NONE)
+    return false;
+
+  unsigned long t = now - rgbFxStart;
+  if (rgbFx == FX_BLOCK)
+  {
+    if (t < 700)
+    {
+      bool on = (t < 150) || (t >= 300 && t < 450);
+      rgbSet(on, on, on);
+      return true;
+    }
+  }
+  else if (rgbFx == FX_SHARE)
+  {
+    if (t < 250)
+    {
+      rgbSet(false, true, false);
+      return true;
+    }
+  }
+  rgbFx = FX_NONE;
+  rgbSet(false, false, false);
+  previousMillis = now; // let the status pattern resume cleanly
+  return false;
 }
 
 void esp32_2432S028R_DoLedStuff(unsigned long frame)
@@ -1944,6 +2024,11 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
   }
   if (uiLive)
     saveUiPrefs();
+
+  // Reactive RGB (active-low, R=GPIO4 G=GPIO16 B=GPIO17): an event effect
+  // pre-empts the status pattern until it finishes.
+  if (rgbEffectStep(currentMillis))
+    return;
 
   switch (mMonitor.NerdStatus)
   {

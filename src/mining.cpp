@@ -110,6 +110,8 @@ double best_diff = 0.0;
 
 // Stratum ping latency & live network stats
 volatile uint32_t g_stratumPing = 0;
+// Bumped on every pool-accepted submit (drives the CYD RGB "share" pulse).
+volatile uint32_t g_acceptedShares = 0;
 double g_networkDifficulty = 0.0;
 bool g_usingFallback = false;
 static uint32_t s_poolFailCount = 0;
@@ -573,6 +575,7 @@ void runStratumWorker(void *name) {
                                             uint32_t rtt = millis() - itt->second->submitTime;
                                             g_stratumPing = (g_stratumPing == 0) ? rtt : ((g_stratumPing * 3 + rtt) / 4);
                                           }
+                                          g_acceptedShares++;
                                           if (itt->second->diff > best_diff)
                                             best_diff = itt->second->diff;
                                           if (itt->second->is32bit)
