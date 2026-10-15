@@ -137,6 +137,39 @@ ctx.fillStyle=p.dim;ctx.font=(ls?10:9)+'px sans-serif';ctx.fillText(c.l,cx,ls?21
 ctx.fillStyle=p.text;ctx.font='bold '+(ls?14:15)+'px sans-serif';ctx.fillText(c.v,cx,ls?228:302);}
 ctx.textAlign='left';
 }
+
+function cydHashLog2Q8FromDiff(d){if(!(d>0))return 0xFF00;const log2True=223.999978314;let exp=0;let m=d;while(m>=2){m*=0.5;exp++;}while(m<1&&m>0){m*=2;exp--;}const z=2*m-1;const log2m=-1+(z-0.5*z*z+(z*z*z)/3)/0.69314718056;let log2h=log2True-(exp+log2m);if(log2h<0)log2h=0;if(log2h>255.996)log2h=255.996;return (log2h*256)|0;}
+function cydSynthSamples(n,tgtLog){const out=[];for(let i=0;i<n;i++){const bits=248+((Math.random()*8)|0)-((Math.random()<0.08)?((Math.random()*30)|0):0);const frac=(Math.random()*255)|0;out.push(((Math.max(0,Math.min(255,bits))<<8)|frac));}return out;}
+function cydProtoY(log2q8,yTop,yBot,plotY,plotH){const span=yTop-yBot;if(span<=0)return plotY+(plotH>>1);let v=yTop-log2q8;if(v<0)v=0;if(v>span)v=span;return plotY+((v*(plotH-1))/span)|0;}
+function cydDrawProtoX(ctx,x,y,col){ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-2.5,y-2.5);ctx.lineTo(x+2.5,y+2.5);ctx.moveTo(x-2.5,y+2.5);ctx.lineTo(x+2.5,y-2.5);ctx.stroke();}
+function cydDrawProtocol(ctx,p,d,ls){
+const W=ls?320:240,H=ls?240:320;const plotX=ls?8:6,plotY=28,plotW=W-(ls?16:12);const footH=ls?44:52,footY=H-footH-4,plotH=footY-plotY-4;
+const hr=parseFloat(d.hashrate)||0;const netDiff=(d.net_diff&&d.net_diff>0)?Number(d.net_diff):133e12;
+const best=parseFloat(d.best_diff)||0;const tgtLog=cydHashLog2Q8FromDiff(netDiff);const bestLog=best>0?cydHashLog2Q8FromDiff(best):0;
+const yTop=0xFF00,yBot=tgtLog>0x1400?(tgtLog-0x1400):0;
+let samples=Array.isArray(d.hash_samples)?d.hash_samples.slice():null;
+if(!samples||!samples.length)samples=cydSynthSamples(40,tgtLog);
+cydDrawPanel(ctx,p,plotX,plotY,plotW,plotH,6);
+const tgtY=cydProtoY(tgtLog,yTop,yBot,plotY,plotH);
+ctx.fillStyle='rgba(52,211,153,0.10)';ctx.fillRect(plotX+1,tgtY,plotW-2,plotY+plotH-tgtY-1);
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LARGER',plotX+4,plotY+12);ctx.fillText('HASHES',plotX+4,plotY+22);
+ctx.fillText('SMALLER',plotX+4,plotY+plotH-22);ctx.fillText('HASHES',plotX+4,plotY+plotH-12);
+ctx.textAlign='center';ctx.fillText('recent sampled attempts \u2192',plotX+plotW/2,plotY+plotH-8);ctx.textAlign='left';
+ctx.strokeStyle=p.meter;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(plotX+8,tgtY+0.5);ctx.lineTo(plotX+plotW-6,tgtY+0.5);ctx.stroke();ctx.setLineDash([]);
+const tLab='TARGET  '+(netDiff/1e12>=100?(netDiff/1e12).toFixed(0)+'T':(netDiff/1e12).toFixed(1)+'T');
+ctx.fillStyle=p.meter;ctx.font='bold 9px sans-serif';ctx.textAlign='right';ctx.fillText(tLab,plotX+plotW-6,tgtY>plotY+14?tgtY-4:tgtY+12);
+ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('hashes below would solve a block',plotX+plotW-6,tgtY+12<plotY+plotH-4?tgtY+12:tgtY-14);ctx.textAlign='left';
+const n=samples.length;
+for(let i=0;i<n;i++){const x=plotX+28+((i*(plotW-40))/Math.max(1,n-1));const y=cydProtoY(samples[i],yTop,yBot,plotY,plotH);cydDrawProtoX(ctx,x,y,p.bad||'#f87171');}
+if(n>0){const cx=plotX+28+(((n-1)*(plotW-40))/Math.max(1,n-1));const cy=cydProtoY(samples[n-1],yTop,yBot,plotY,plotH);ctx.strokeStyle=p.meter;ctx.strokeRect(cx-5,cy-5,11,11);ctx.fillStyle=p.meter;ctx.font='8px sans-serif';ctx.fillText('current',cx+8,cy+3);}
+if(best>0){const by=cydProtoY(bestLog,yTop,yBot,plotY,plotH);ctx.fillStyle=p.meter;ctx.beginPath();ctx.moveTo(plotX+18,by);ctx.lineTo(plotX+10,by-5);ctx.lineTo(plotX+10,by+5);ctx.fill();ctx.font='8px sans-serif';ctx.fillText('BEST '+(d.best_diff||''),plotX+22,by>plotY+12?by-6:by+10);}
+cydDrawPanel(ctx,p,plotX,footY,plotW,footH,6);
+ctx.fillStyle=p.meter;ctx.beginPath();ctx.moveTo(plotX+10,footY+(ls?22:24));ctx.lineTo(plotX+18,footY+(ls?8:10));ctx.lineTo(plotX+15,footY+(ls?16:18));ctx.fill();ctx.beginPath();ctx.moveTo(plotX+14,footY+(ls?14:16));ctx.lineTo(plotX+22,footY+(ls?14:16));ctx.lineTo(plotX+16,footY+(ls?28:30));ctx.fill();
+ctx.fillStyle=p.meter;ctx.font='bold '+(ls?20:22)+'px sans-serif';ctx.fillText((hr>0?hr.toFixed(0):'--')+' KH/s',plotX+28,footY+(ls?26:28));
+ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText('\u2248 '+(hr>0?(hr*1000).toFixed(0):'--')+' attempts/sec',plotX+plotW-8,footY+(ls?24:26));ctx.textAlign='left';
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('sampled view \u00b7 miner hashes continuously',plotX+28,footY+(ls?36:42));
+}
+
 function cydMktCells(d){const hr=d&&d.hashrate?parseFloat(d.hashrate):0;return [{l:'HASHRATE',v:hr.toFixed(0)+' KH/s'},{l:'SHARES',v:(parseInt((d&&d.shares)||0)||0).toLocaleString('en-US')}];}
 function cydDrawStripPortrait(ctx,p,cells){
 cydDrawPanel(ctx,p,6,266,228,48,8);
@@ -227,63 +260,7 @@ cydDrawStripPortrait(ctx,p,[
 {l:'TEMP',v:(d.temp||'52')+'°C'}
 ]);
 }else if(cydPreviewScr===3){
-cydDrawPanel(ctx,p,6,30,228,54,8);
-cydDrawCoin(ctx,p,30,57,18);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('SOLO BLOCK REWARD',58,42);
-ctx.fillStyle=p.gold;ctx.font='bold 20px sans-serif';ctx.fillText('3.125 BTC',58,62);
-ctx.fillStyle='rgba(34,197,94,0.15)';ctx.strokeStyle=p.good;ctx.lineWidth=1;
-ctx.beginPath();ctx.roundRect(58,68,124,12,3);ctx.fill();ctx.stroke();
-ctx.fillStyle=p.good;ctx.font='bold 8px sans-serif';ctx.fillText('★ 100% TO YOUR WALLET',62,77);
-
-cydDrawPanel(ctx,p,6,88,228,58,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('80-BYTE CANDIDATE HEADER',12,98);
-const bx=12,by=104;
-ctx.fillStyle='#38bdf8';ctx.fillRect(bx,by,12,16);ctx.fillStyle='#fff';ctx.font='7px sans-serif';ctx.fillText('V4',bx+1,by+11);
-ctx.fillStyle='#64748b';ctx.fillRect(bx+13,by,84,16);ctx.fillStyle='#fff';ctx.fillText('PREV HASH 32B',bx+16,by+11);
-ctx.fillStyle='#a855f7';ctx.fillRect(bx+98,by,84,16);ctx.fillStyle='#fff';ctx.fillText('MERKLE ROOT 32B',bx+102,by+11);
-ctx.fillStyle='#eab308';ctx.fillRect(bx+183,by,10,16);ctx.fillStyle='#000';ctx.fillText('T',bx+185,by+11);
-ctx.fillStyle='#ef4444';ctx.fillRect(bx+194,by,10,16);ctx.fillStyle='#fff';ctx.fillText('B',bx+196,by+11);
-ctx.fillStyle=p.gold;ctx.fillRect(bx+205,by,11,16);ctx.fillStyle='#000';ctx.fillText('N',bx+207,by+11);
-
-cydDrawPanel(ctx,p,12,124,216,18,3);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('76B Template  +',16,136);
-ctx.fillStyle=p.gold;ctx.font='bold 9px sans-serif';ctx.fillText('NONCE DIAL: 0x330776',105,136);
-
-cydDrawPanel(ctx,p,6,148,228,50,6);
-const py=154;
-cydDrawPanel(ctx,p,10,py,42,38,4);
-ctx.fillStyle='#38bdf8';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('80B',31,py+14);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('HEADER',31,py+28);
-cydDrawArrow(ctx,p,55,py+19,4,p.meter);
-
-cydDrawPanel(ctx,p,64,py,42,38,4);
-ctx.fillStyle=p.meter;ctx.font='bold 8px sans-serif';ctx.fillText('SHA256',85,py+14);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('DOUBLE',85,py+28);
-cydDrawArrow(ctx,p,109,py+19,4,p.meter);
-
-cydDrawPanel(ctx,p,118,py,42,38,4);
-ctx.fillStyle=p.gold;ctx.font='bold 8px sans-serif';ctx.fillText('TARGET',139,py+14);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('18+ 0s',139,py+28);
-cydDrawArrow(ctx,p,163,py+19,4,p.meter);
-
-cydDrawPanel(ctx,p,172,py,46,38,4);
-ctx.fillStyle=p.good;ctx.font='bold 8px sans-serif';ctx.fillText('H < TGT',195,py+14);
-ctx.fillText('WINNER',195,py+28);ctx.textAlign='left';
-
-const nd=(d&&d.net_diff)?(Number(d.net_diff)/1e12).toFixed(0)+'+ T':'132+ T';
-cydDrawTile(ctx,p,6,202,112,58,'GLOBAL TARGET',nd,p.text);
-cydDrawPanel(ctx,p,122,202,112,58,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HARD CAP SUPPLY',128,214);
-ctx.fillStyle=p.gold;ctx.font='bold 13px sans-serif';ctx.fillText('20,999,999',128,230);
-ctx.fillStyle=p.track;ctx.fillRect(128,238,100,4);ctx.fillStyle=p.gold;ctx.fillRect(128,238,94,4);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('94.3% Mined • 21M Cap',128,252);
-
-cydDrawStripPortrait(ctx,p,[
-{l:'WORKERS',v:'1'},
-{l:'POOL',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},
-{l:'BEST',v:d.best_diff||'--'},
-{l:'ODDS',v:'1/70M'}
-]);
+cydDrawProtocol(ctx,p,d,false);
 }
 }
 
@@ -373,39 +350,7 @@ ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*(barW+barGap),barsY+68-bh,barW,bh);
 }
 cydDrawStripLandscape(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'UPTIME',v:d.uptime||'--'},{l:'TEMP',v:(d.temp||'--')+'°C'}]);
 }else if(cydPreviewScr===3){
-cydDrawPanel(ctx,p,8,30,304,48,8);
-cydDrawCoin(ctx,p,28,54,16);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('SOLO BLOCK REWARD',52,42);
-ctx.fillStyle=p.gold;ctx.font='bold 22px sans-serif';ctx.fillText('3.125 BTC',52,65);
-ctx.font='9px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('+ fees (~$250,000+ USD)',156,64);
-ctx.fillStyle='rgba(34,197,94,0.15)';ctx.beginPath();ctx.roundRect(230,38,76,16,4);ctx.fill();
-ctx.fillStyle=p.good;ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText('100% TO YOU',268,49);ctx.textAlign='left';
-
-cydDrawPanel(ctx,p,8,82,304,50,6);
-const py=88;
-const stages=[
-{t:'80B HEADER',s:'76B + Nonce',c:p.blue||'#38bdf8'},
-{t:'2x SHA-256',s:'Double Hash',c:p.acc},
-{t:'TARGET',s:'18+ Zeros',c:p.gold},
-{t:'H < TARGET',s:'Jackpot Win!',c:p.good}
-];
-for(let i=0;i<4;i++){
-const px=14+i*(60+14);
-cydDrawPanel(ctx,p,px,py,60,38,4);
-ctx.fillStyle=stages[i].c;ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(stages[i].t,px+30,py+14);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText(stages[i].s,px+30,py+28);ctx.textAlign='left';
-if(i<3)cydDrawArrow(ctx,p,px+60+3,py+19,4,p.acc);
-}
-
-cydDrawTile(ctx,p,8,136,148,54,'GLOBAL TARGET',d.net_diff?(parseFloat(d.net_diff)/1e12).toFixed(2)+' T':'132.72 T',p.text);
-cydDrawPanel(ctx,p,164,136,148,54,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HARD CAP SUPPLY',172,148);
-ctx.fillStyle=p.gold;ctx.font='bold 15px sans-serif';ctx.fillText('20,999,999 BTC',172,166);
-ctx.fillStyle=p.track;ctx.fillRect(172,172,132,4);
-ctx.fillStyle=p.gold;ctx.fillRect(172,172,132*0.943,4);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('94.3% Mined • 21M Cap',172,184);
-
-cydDrawStripLandscape(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'0.000'},{l:'ODDS',v:'1/70M'}]);
+cydDrawProtocol(ctx,p,d,true);
 }
 }
 

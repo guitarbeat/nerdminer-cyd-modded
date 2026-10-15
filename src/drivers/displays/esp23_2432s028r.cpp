@@ -24,6 +24,7 @@
 #include "media/myFonts.h"
 #include "version.h"
 #include "monitor.h"
+#include "mining.h"
 #include "OpenFontRender.h"
 #include <SPI.h>
 #include "rotation.h"
@@ -213,6 +214,8 @@ enum WidgetId
   W_DIAG_ARC1, // mini arc: free heap
   W_DIAG_ARC2, // mini arc: ping
   W_ECON_ARC,  // mini arc: odds meter (best diff / net diff)
+  W_PROTO_PLOT,
+  W_PROTO_FOOT,
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -528,8 +531,23 @@ static void drawHeader(const HdrV &h)
       "PROTOCOL"
   };
   const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
-  text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
-  int wm = textW(title, 13);
+  // Protocol screen: compact "PROTOCOL|HASHING" wordmark (mock).
+  if (h.screen == SCR_ARCH)
+  {
+    text(wgt, "PROTOCOL", 0, 5, 12, C_TEXT, C_BG);
+    int wm0 = textW("PROTOCOL", 12);
+    text(wgt, "|", wm0 + 1, 5, 12, C_DIM, C_BG);
+    const char *lab = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE");
+    uint16_t col = (h.status == NM_hashing) ? C_GOOD : (h.status == NM_Connecting ? C_WARN : C_DIM);
+    text(wgt, lab, wm0 + 8, 5, 12, col, C_BG);
+  }
+  else
+  {
+    text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
+  }
+  int wm = (h.screen == SCR_ARCH)
+               ? (textW("PROTOCOL", 12) + 8 + textW((h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE"), 12))
+               : textW(title, 13);
 
   // Status: purely typographic indicator with no dot prefix to save space
   const char *label = "SETUP";
@@ -545,7 +563,11 @@ static void drawHeader(const HdrV &h)
     col = C_WARN;
   }
   int sx = wm + (isPortrait() ? 8 : 12);
-  text(wgt, label, sx, 6, 9, col, C_BG);
+  // Protocol already shows HASHING in the wordmark — skip duplicate.
+  if (h.screen != SCR_ARCH)
+    text(wgt, label, sx, 6, 9, col, C_BG);
+  else
+    sx = wm + 4;
 
   // Time (right-aligned)
   text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
@@ -569,7 +591,7 @@ static void drawHeader(const HdrV &h)
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
     int dotY = 12; // y of top edge, centered vertically in 26px header
 
-    int statusEnd = sx + textW(label, 9) + 6;
+    int statusEnd = (h.screen == SCR_ARCH) ? sx : (sx + textW(label, 9) + 6);
     int center = (statusEnd + gapRight) / 2;
     int dotX0 = center - totalW / 2;
     if (dotX0 < statusEnd + 4) dotX0 = statusEnd + 4;
@@ -1053,188 +1075,208 @@ static void paintClock(const ClockV &c)
   drawChart();
 }
 
-// =================================== PROTOCOL (ARCH & ECONOMICS) screen ==
-// Hardware instrument view unifying 80-byte block header, SHA256d PoW mechanics,
-// solo block jackpot (3.125 BTC), and network target economics.
+// =================================== PROTOCOL · HASHING scatter screen ==
+// Live sampled hashes (log2 Y) vs rolling attempts (X). Display-only: the
+// miner pushes into g_hashSamples with a 1/16384 mask; this screen never
+// touches g_hwShaMutex or the SHA engine.
 
 struct ArchitectureV
 {
   HdrV hdr;
-  String netDiff;
-  StripV strip;
+  String netDiff;   // e.g. "133T"
+  String hashRate;  // KH/s text
+  String bestDiff;  // session best (suffix string)
+  double netDiffRaw;
+  double bestDiffRaw;
+  StripV strip;     // unused (kept so call sites compile)
 };
 
-static void drawBitcoinCoin(TFT_eSPI &d, int cx, int cy, int r)
+static uint16_t protoLog2Q8FromDiff(double d)
 {
-  d.fillCircle(cx, cy, r, C_GOLD);
-  d.drawCircle(cx, cy, r, 0xFEA0);
-  d.fillCircle(cx, cy, r - 2, 0xD4A0);
-  d.fillCircle(cx, cy, r - 4, 0x9280);
-
-  // Crisp Bitcoin "B" glyph with double prongs
-  int h = r - 7;
-  int bx = cx - 3;
-  int by = cy - h;
-  d.fillRect(bx, by, 3, h * 2 + 1, TFT_WHITE);
-  d.drawFastHLine(bx, by + 1, 5, TFT_WHITE);
-  d.drawFastVLine(bx + 5, by + 1, h, TFT_WHITE);
-  d.drawFastHLine(bx, by + h, 5, TFT_WHITE);
-  d.drawFastHLine(bx, by + h * 2, 6, TFT_WHITE);
-  d.drawFastVLine(bx + 6, by + h, h, TFT_WHITE);
-  // Prongs
-  d.drawFastVLine(bx + 1, by - 2, 2, TFT_WHITE);
-  d.drawFastVLine(bx + 3, by - 2, 2, TFT_WHITE);
-  d.drawFastVLine(bx + 1, by + h * 2 + 1, 2, TFT_WHITE);
-  d.drawFastVLine(bx + 3, by + h * 2 + 1, 2, TFT_WHITE);
+  return hashLog2Q8FromDifficulty(d);
 }
 
-static void drawPipelineArrow(TFT_eSPI &d, int x, int y, int size, uint16_t color)
+// Map log2_q8 → pixel Y inside plot (top = larger hashes).
+static int protoYFromLog2(uint16_t log2q8, uint16_t yTopLog, uint16_t yBotLog, int plotY, int plotH)
 {
-  d.fillTriangle(x, y - size, x + (size * 5) / 4, y, x, y + size, color);
+  if (yTopLog <= yBotLog)
+    return plotY + plotH / 2;
+  int32_t span = (int32_t)yTopLog - (int32_t)yBotLog;
+  int32_t v = (int32_t)yTopLog - (int32_t)log2q8;
+  if (v < 0) v = 0;
+  if (v > span) v = span;
+  return plotY + (int)((v * (plotH - 1)) / span);
+}
+
+static void drawProtoX(TFT_eSPI &d, int cx, int cy, uint16_t col)
+{
+  d.drawLine(cx - 2, cy - 2, cx + 2, cy + 2, col);
+  d.drawLine(cx - 2, cy + 2, cx + 2, cy - 2, col);
 }
 
 static void chromeArchitecture(TFT_eSPI &d)
 {
-  if (isPortrait())
+  // Static chrome only: plot panel frame + footer band. Live ink is paintArchitecture.
+  const bool P = isPortrait();
+  const int scrW = P ? 240 : 320;
+  const int scrH = P ? 320 : 240;
+  const int plotX = P ? 6 : 8;
+  const int plotY = 28;
+  const int plotW = scrW - (P ? 12 : 16);
+  const int footH = P ? 52 : 44;
+  const int footY = scrH - footH - 4;
+  const int plotH = footY - plotY - 4;
+
+  panel(d, plotX, plotY, plotW, plotH, 6, C_PANEL, C_EDGE, C_BG);
+  panel(d, plotX, footY, plotW, footH, 6, C_PANEL, C_EDGE, C_BG);
+}
+
+static void paintProtocolPlot(const ArchitectureV &av)
+{
+  const bool P = isPortrait();
+  const int scrW = P ? 240 : 320;
+  const int scrH = P ? 320 : 240;
+  const int plotX = P ? 6 : 8;
+  const int plotY = 28;
+  const int plotW = scrW - (P ? 12 : 16);
+  const int footH = P ? 52 : 44;
+  const int footY = scrH - footH - 4;
+  const int plotH = footY - plotY - 4;
+
+  // Snapshot ring (volatile reads; no mutex).
+  uint8_t count = g_hashSampleCount;
+  uint8_t head = g_hashSampleHead;
+  uint16_t latest = g_hashSampleLatest;
+  uint16_t snap[HASH_SAMPLE_N];
+  if (count > HASH_SAMPLE_N)
+    count = HASH_SAMPLE_N;
+  for (uint8_t i = 0; i < count; i++)
   {
-    // 1. Hero Block Reward Jackpot Card (y=30, h=54)
-    panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    drawBitcoinCoin(d, 30, 57, 18);
-    text(d, "SOLO BLOCK REWARD", 58, 35, 9, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 58, 48, 22, C_GOLD, C_PANEL);
-    // Green Pill Badge
-    panel(d, 58, 68, 120, 12, 3, 0x0A24, C_GOOD, C_PANEL);
-    text(d, "★ 100% TO YOUR WALLET", 62, 69, 8, C_GOOD, 0x0A24);
+    // oldest .. newest
+    uint8_t idx = (uint8_t)((head + HASH_SAMPLE_N - count + i) % HASH_SAMPLE_N);
+    snap[i] = g_hashSamples[idx];
+  }
 
-    // 2. 80-Byte Candidate Block Header Diagram (y=88, h=58)
-    panel(d, 6, 88, 228, 58, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "80-BYTE CANDIDATE HEADER", 12, 92, 8, C_DIM, C_PANEL);
+  uint16_t tgtLog = protoLog2Q8FromDiff(av.netDiffRaw > 0 ? av.netDiffRaw : 1e14);
+  uint16_t bestLog = av.bestDiffRaw > 0 ? protoLog2Q8FromDiff(av.bestDiffRaw) : 0;
 
-    // Segmented block bar (w=216 at y=104)
-    const int bx = 12, by = 104;
-    d.fillRect(bx, by, 12, 16, 0x3DEF);        // Ver 4B
-    text(d, "V4", bx + 1, by + 3, 7, TFT_WHITE, 0x3DEF);
-    d.fillRect(bx + 13, by, 84, 16, 0x6479);   // Prev 32B
-    text(d, "PREV HASH 32B", bx + 16, by + 3, 7, TFT_WHITE, 0x6479);
-    d.fillRect(bx + 98, by, 84, 16, 0xBC9F);   // Merkle 32B
-    text(d, "MERKLE ROOT 32B", bx + 102, by + 3, 7, TFT_WHITE, 0xBC9F);
-    d.fillRect(bx + 183, by, 10, 16, 0xFC00);  // Time 4B
-    text(d, "T", bx + 185, by + 3, 7, TFT_BLACK, 0xFC00);
-    d.fillRect(bx + 194, by, 10, 16, 0xF800);  // Bits 4B
-    text(d, "B", bx + 196, by + 3, 7, TFT_WHITE, 0xF800);
-    d.fillRect(bx + 205, by, 11, 16, C_GOLD);  // Nonce 4B
-    text(d, "N", bx + 207, by + 3, 7, TFT_BLACK, C_GOLD);
+  // Y window: top ≈ 256, bottom a bit under the network target so the
+  // green "would solve" band is visible.
+  uint16_t yTopLog = 0xFF00; // ~255.0
+  uint16_t yBotLog = (tgtLog > 0x1400) ? (uint16_t)(tgtLog - 0x1400) : 0; // ~20 bits below target
 
-    // Nonce dial indicator box
-    panel(d, 12, 124, 216, 18, 3, C_TRACK, C_EDGE, C_PANEL);
-    text(d, "76B Template  +", 16, 128, 8, C_DIM, C_TRACK);
-    text(d, "NONCE DIAL: 0x330776", 110, 128, 9, C_GOLD, C_TRACK);
+  // Key for partial redraw: count + latest + target + best + rate
+  char kbuf[96];
+  snprintf(kbuf, sizeof(kbuf), "%u|%u|%u|%u|%s|%d",
+           (unsigned)count, (unsigned)latest, (unsigned)tgtLog, (unsigned)bestLog,
+           av.hashRate.c_str(), P ? 1 : 0);
+  if (!need(W_PROTO_PLOT, kbuf))
+    return;
+  if (!wBegin(plotW, plotH, C_PANEL))
+    return;
 
-    // 3. 4-Stage PoW Flow Diagram with arrows (y=150, h=48)
-    panel(d, 6, 150, 228, 48, 6, C_PANEL, C_EDGE, C_BG);
-    const int py = 154;
-    // Stage 1: 80B Header
-    panel(d, 10, py, 42, 38, 4, C_TRACK, 0x3DEF, C_PANEL);
-    text(d, "80B", 31, py + 4, 9, 0x3DEF, C_TRACK, Align::TopCenter);
-    text(d, "HEADER", 31, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 55, py + 19, 4, C_METER);
+  // Subtle green zone below target
+  int tgtY = protoYFromLog2(tgtLog, yTopLog, yBotLog, 0, plotH);
+  if (tgtY < plotH - 1)
+  {
+    uint16_t gfill = mix565(C_PANEL, C_GOOD, 28);
+    wgt.fillRect(0, tgtY, plotW, plotH - tgtY, gfill);
+  }
 
-    // Stage 2: 2x SHA-256
-    panel(d, 64, py, 42, 38, 4, C_TRACK, C_METER, C_PANEL);
-    text(d, "SHA256", 85, py + 4, 8, C_METER, C_TRACK, Align::TopCenter);
-    text(d, "DOUBLE", 85, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 109, py + 19, 4, C_METER);
+  // Axis hints
+  text(wgt, "LARGER", 4, 4, 8, C_DIM, C_PANEL);
+  text(wgt, "HASHES", 4, 14, 8, C_DIM, C_PANEL);
+  text(wgt, "SMALLER", 4, plotH - 28, 8, C_DIM, C_PANEL);
+  text(wgt, "HASHES", 4, plotH - 18, 8, C_DIM, C_PANEL);
+  text(wgt, "recent sampled attempts ->", plotW / 2, plotH - 12, 8, C_DIM, C_PANEL, Align::TopCenter);
 
-    // Stage 3: Target Zeros
-    panel(d, 118, py, 42, 38, 4, C_TRACK, C_GOLD, C_PANEL);
-    text(d, "TARGET", 139, py + 4, 8, C_GOLD, C_TRACK, Align::TopCenter);
-    text(d, "18+ 0s", 139, py + 18, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 163, py + 19, 4, C_METER);
+  // Dashed network target
+  for (int x = 8; x < plotW - 4; x += 6)
+    wgt.drawFastHLine(x, tgtY, 3, C_METER);
 
-    // Stage 4: Test Win
-    panel(d, 172, py, 46, 38, 4, C_TRACK, C_GOOD, C_PANEL);
-    text(d, "H < TGT", 195, py + 4, 8, C_GOOD, C_TRACK, Align::TopCenter);
-    text(d, "WINNER", 195, py + 18, 7, C_GOOD, C_TRACK, Align::TopCenter);
+  char tlab[40];
+  snprintf(tlab, sizeof(tlab), "TARGET  %s", av.netDiff.c_str());
+  text(wgt, tlab, plotW - 6, (tgtY > 14) ? tgtY - 12 : tgtY + 4, 9, C_METER, C_PANEL, Align::TopRight);
+  text(wgt, "hashes below would solve a block", plotW - 6,
+       (tgtY + 14 < plotH - 4) ? tgtY + 4 : tgtY - 22, 7, C_DIM, C_PANEL, Align::TopRight);
 
-    // 4. Protocol Metrics & Scarcity (y=202, h=58)
-    drawTile(W_LOT_JACKPOT, 6, 202, 112, 58, "GLOBAL TARGET", "132+ T", C_TEXT, C_EDGE);
-
-    // Hard Cap Supply & Scarcity Bar
-    panel(d, 122, 202, 112, 58, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "HARD CAP SUPPLY", 128, 207, 8, C_DIM, C_PANEL);
-    text(d, "20,999,999", 128, 219, 13, C_GOLD, C_PANEL);
-    // Golden Scarcity Progress Bar
-    d.fillRect(128, 237, 100, 4, C_TRACK);
-    d.fillRect(128, 237, 94, 4, C_GOLD);
-    text(d, "94.3% Mined • 21M Cap", 128, 245, 7, C_DIM, C_PANEL);
-
-    // Bottom strip (y=266..314)
-    chromeStripCells(d);
+  // Scatter
+  const uint16_t xCol = C_BAD; // red X
+  int nShow = count;
+  if (nShow < 1)
+  {
+    text(wgt, "waiting for samples…", plotW / 2, plotH / 2 - 6, 10, C_DIM, C_PANEL, Align::TopCenter);
   }
   else
   {
-    // Landscape 320x240
-    // 1. Hero Block Reward Jackpot Card (y=30, h=48, w=304)
-    panel(d, 8, 30, 304, 48, 8, C_PANEL, C_EDGE, C_BG);
-    drawBitcoinCoin(d, 28, 54, 16);
-    text(d, "SOLO BLOCK REWARD", 52, 34, 8, C_DIM, C_PANEL);
-    text(d, "3.125 BTC", 52, 46, 22, C_GOLD, C_PANEL);
-    text(d, "+ fees (~$250,000+ USD)", 156, 52, 9, C_DIM, C_PANEL);
-    // Green Pill Badge
-    panel(d, 230, 36, 76, 16, 4, 0x0A24, C_GOOD, C_PANEL);
-    text(d, "100% TO YOU", 268, 40, 8, C_GOOD, 0x0A24, Align::TopCenter);
-
-    // 2. Connected 4-Stage PoW Flow Diagram (y=82, h=50, w=304)
-    panel(d, 8, 82, 304, 50, 6, C_PANEL, C_EDGE, C_BG);
-    const int py = 88;
-    // Stage 1
-    panel(d, 14, py, 60, 38, 4, C_TRACK, 0x3DEF, C_PANEL);
-    text(d, "80B HEADER", 44, py + 4, 8, 0x3DEF, C_TRACK, Align::TopCenter);
-    text(d, "76B + Nonce", 44, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 77, py + 19, 4, C_METER);
-
-    // Stage 2
-    panel(d, 85, py, 60, 38, 4, C_TRACK, C_METER, C_PANEL);
-    text(d, "2x SHA-256", 115, py + 4, 8, C_METER, C_TRACK, Align::TopCenter);
-    text(d, "Double Hash", 115, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 148, py + 19, 4, C_METER);
-
-    // Stage 3
-    panel(d, 156, py, 60, 38, 4, C_TRACK, C_GOLD, C_PANEL);
-    text(d, "TARGET", 186, py + 4, 8, C_GOLD, C_TRACK, Align::TopCenter);
-    text(d, "18+ Zeros", 186, py + 20, 7, C_DIM, C_TRACK, Align::TopCenter);
-    drawPipelineArrow(d, 219, py + 19, 4, C_METER);
-
-    // Stage 4
-    panel(d, 227, py, 66, 38, 4, C_TRACK, C_GOOD, C_PANEL);
-    text(d, "H < TARGET", 260, py + 4, 8, C_GOOD, C_TRACK, Align::TopCenter);
-    text(d, "Jackpot Win!", 260, py + 20, 7, C_GOOD, C_TRACK, Align::TopCenter);
-
-    // 3. Protocol Metrics & Scarcity (y=136, h=54, w=304)
-    drawTile(W_LOT_JACKPOT, 8, 136, 148, 54, "GLOBAL TARGET", "132.72 T", C_TEXT, C_EDGE);
-
-    // Hard Cap Supply Card
-    panel(d, 164, 136, 148, 54, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "HARD CAP SUPPLY", 172, 141, 8, C_DIM, C_PANEL);
-    text(d, "20,999,999 BTC", 172, 153, 14, C_GOLD, C_PANEL);
-    d.fillRect(172, 171, 132, 4, C_TRACK);
-    d.fillRect(172, 171, 124, 4, C_GOLD);
-    text(d, "94.3% Mined • 21M Cap", 172, 178, 7, C_DIM, C_PANEL);
-
-    // Bottom strip (y=196..236)
-    chromeStripCells(d);
+    for (int i = 0; i < nShow; i++)
+    {
+      int x = 28 + (i * (plotW - 40)) / (nShow > 1 ? (nShow - 1) : 1);
+      int y = protoYFromLog2(snap[i], yTopLog, yBotLog, 0, plotH);
+      drawProtoX(wgt, x, y, xCol);
+    }
+    // Current sample: amber outline box on the newest point
+    int cx = 28 + ((nShow - 1) * (plotW - 40)) / (nShow > 1 ? (nShow - 1) : 1);
+    int cy = protoYFromLog2(snap[nShow - 1], yTopLog, yBotLog, 0, plotH);
+    wgt.drawRect(cx - 5, cy - 5, 11, 11, C_METER);
+    text(wgt, "current", cx + 8, cy - 4, 8, C_METER, C_PANEL);
   }
+
+  // Best this session marker (from real best_diff, not from samples)
+  if (av.bestDiffRaw > 0.0)
+  {
+    int by = protoYFromLog2(bestLog, yTopLog, yBotLog, 0, plotH);
+    // Amber triangle / arrow on the left of the plot
+    wgt.fillTriangle(18, by, 10, by - 5, 10, by + 5, C_METER);
+    char blab[48];
+    snprintf(blab, sizeof(blab), "BEST %s", av.bestDiff.c_str());
+    text(wgt, blab, 22, (by > 12) ? by - 10 : by + 6, 8, C_METER, C_PANEL);
+  }
+
+  wEnd(plotX, plotY);
+  done(W_PROTO_PLOT, kbuf);
+
+  // Footer: big hashrate + attempts/sec + sampled note
+  char fkey[64];
+  snprintf(fkey, sizeof(fkey), "%s|%d", av.hashRate.c_str(), P ? 1 : 0);
+  if (!need(W_PROTO_FOOT, fkey))
+    return;
+  if (!wBegin(plotW, footH, C_PANEL))
+    return;
+
+  float kh = av.hashRate.toFloat();
+  char rateBuf[24];
+  if (kh > 0)
+    snprintf(rateBuf, sizeof(rateBuf), "%.0f KH/s", kh);
+  else
+    snprintf(rateBuf, sizeof(rateBuf), "-- KH/s");
+
+  // Lightning bolt (simple glyph)
+  int bx = 10, by = P ? 10 : 8;
+  wgt.fillTriangle(bx, by + 14, bx + 8, by, bx + 5, by + 8, C_METER);
+  wgt.fillTriangle(bx + 4, by + 6, bx + 12, by + 6, bx + 6, by + 20, C_METER);
+
+  text(wgt, rateBuf, 28, P ? 8 : 6, P ? 22 : 20, C_METER, C_PANEL);
+
+  char att[40];
+  if (kh > 0)
+    snprintf(att, sizeof(att), "~ %.0f attempts/sec", kh * 1000.0f);
+  else
+    snprintf(att, sizeof(att), "~ -- attempts/sec");
+  text(wgt, att, plotW - 8, P ? 12 : 10, 11, C_TEXT, C_PANEL, Align::TopRight);
+  text(wgt, "sampled view · miner hashes continuously", 28, P ? 34 : 28, 8, C_DIM, C_PANEL);
+
+  wEnd(plotX, footY);
+  done(W_PROTO_FOOT, fkey);
 }
 
 static void paintArchitecture(const ArchitectureV &av)
 {
-  drawHeader(av.hdr);
-  if (isPortrait())
-    drawTile(W_LOT_JACKPOT, 6, 202, 112, 58, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
-  else
-    drawTile(W_LOT_JACKPOT, 8, 136, 148, 54, "GLOBAL TARGET", av.netDiff.c_str(), C_TEXT, C_EDGE);
-
-  drawStrip(av.strip);
+  // Tiny top title: PROTOCOL|HASHING + time (reuse header chrome)
+  HdrV h = av.hdr;
+  h.screen = SCR_ARCH;
+  drawHeader(h);
+  paintProtocolPlot(av);
 }
 
 // ------------------------------------------------------ boot / setup pages --
@@ -1565,7 +1607,6 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 {
   mining_data data = getMiningData(mElapsed);
-  refreshPool();
   uiLive = true;
   ensureChrome(SCR_ARCH);
   float kh = data.currentHashRate.toFloat();
@@ -1573,24 +1614,20 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 
   ArchitectureV av;
   av.hdr = liveHeader(data.currentTime);
-  if (g_networkDifficulty > 0.0)
+  av.netDiffRaw = g_networkDifficulty > 0.0 ? g_networkDifficulty : 1e14;
   {
     char b[32];
-    snprintf(b, sizeof(b), "%.2f T", g_networkDifficulty / 1e12);
+    double t = av.netDiffRaw / 1e12;
+    if (t >= 100.0)
+      snprintf(b, sizeof(b), "%.0fT", t);
+    else
+      snprintf(b, sizeof(b), "%.1fT", t);
     av.netDiff = String(b);
   }
-  else
-  {
-    av.netDiff = gData.difficulty.length() ? gData.difficulty : String("146.72 T");
-  }
-  av.strip.l[0] = "WORKERS";
-  av.strip.v[0] = String(pData.workersCount);
-  av.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
-  av.strip.v[1] = pData.workersHash;
-  av.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
-  av.strip.v[2] = pData.bestDifficulty;
-  av.strip.l[3] = "ODDS";
-  av.strip.v[3] = "1/70M";
+  av.hashRate = data.currentHashRate;
+  av.bestDiff = data.bestDiff;
+  // best_diff is the real session/persisted best (updated on improve).
+  av.bestDiffRaw = best_diff;
   lastArch = av;
   haveArch = true;
   paintArchitecture(av);
@@ -1746,6 +1783,12 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
   {
     gaugeShown += (gaugeTarget - gaugeShown) * 0.3f; // ease toward the measured rate
     gaugeDraw(out(), gaugeShown);
+  }
+  // Protocol scatter: 5–10 Hz partial redraw from the sample ring.
+  if (uiScreen == SCR_ARCH && haveArch && (frame & 1) == 0)
+  {
+    // Refresh hashrate text periodically from lastArch; samples read live.
+    paintProtocolPlot(lastArch);
   }
 }
 

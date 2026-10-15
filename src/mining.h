@@ -99,6 +99,7 @@ void resetSessionStats();
 extern volatile uint32_t g_stratumPing;
 extern volatile uint32_t g_acceptedShares;
 extern double g_networkDifficulty;
+extern double best_diff;
 extern bool g_usingFallback;
 
 typedef struct{
@@ -108,5 +109,27 @@ typedef struct{
   uint8_t bytearray_blockheader[128];
 } miner_data;
 
+
+
+// ---------------------------------------------------------------------------
+// Display-only hash samples for the Protocol scatter plot.
+// Hot path: power-of-two mask (~1/16384). Fixed ring, no heap / mutex / String.
+// ---------------------------------------------------------------------------
+#ifndef HASH_SAMPLE_MASK
+#define HASH_SAMPLE_MASK 0x3FFFu
+#endif
+#define HASH_SAMPLE_N 48
+
+// log2(hash)*256 as Q8: high byte = MSB bit index (0..255), low = frac bits.
+extern uint16_t g_hashSamples[HASH_SAMPLE_N];
+extern volatile uint8_t g_hashSampleHead;   // next write index
+extern volatile uint8_t g_hashSampleCount;  // 0..HASH_SAMPLE_N
+extern volatile uint16_t g_hashSampleLatest;
+
+// Push a Bitcoin-LE (or mbedtls-BE — both have numeric MSB at byte 31) digest.
+void hashSamplePushDigest(const uint8_t hash[32]);
+
+// log2_q8 of (truediffone / difficulty) for network target / best-diff markers.
+uint16_t hashLog2Q8FromDifficulty(double difficulty);
 
 #endif // UTILS_API_H

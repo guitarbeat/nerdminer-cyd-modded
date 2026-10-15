@@ -19,6 +19,7 @@
 #include "mbedtls/sha256.h"
 #include "i2c_master.h"
 #include <esp_timer.h>
+#include <math.h>
  
 //10 Jobs per second
 #define NONCE_PER_JOB_SW 4096
@@ -115,6 +116,84 @@ volatile uint32_t g_acceptedShares = 0;
 double g_networkDifficulty = 0.0;
 bool g_usingFallback = false;
 static uint32_t s_poolFailCount = 0;
+
+// ---- Protocol screen hash samples (display-only; must not move the needle) --
+uint16_t g_hashSamples[HASH_SAMPLE_N];
+volatile uint8_t g_hashSampleHead = 0;
+volatile uint8_t g_hashSampleCount = 0;
+volatile uint16_t g_hashSampleLatest = 0;
+
+// Bitcoin LE / nerd digest / mbedtls BE: numeric MSB lives at byte 31.
+static inline uint16_t hashLog2Q8FromDigest(const uint8_t h[32])
+{
+  for (int i = 31; i >= 0; --i)
+  {
+    uint8_t b = h[i];
+    if (!b)
+      continue;
+    int msb = 31 - __builtin_clz((unsigned)b); // 0..7 within byte
+    int bit = i * 8 + msb;                     // 0..255
+    // Next 8 bits below the leading 1 for Q8 fraction.
+    uint32_t win = (uint32_t)b << 16;
+    if (i > 0)
+      win |= (uint32_t)h[i - 1] << 8;
+    if (i > 1)
+      win |= (uint32_t)h[i - 2];
+    // Shift so the leading 1 sits at bit 23; bits 22..15 are the fraction.
+    win <<= (7 - msb);
+    uint8_t frac = (uint8_t)((win >> 15) & 0xFFu);
+    return (uint16_t)((bit << 8) | frac);
+  }
+  return 0;
+}
+
+void hashSamplePushDigest(const uint8_t hash[32])
+{
+  uint16_t v = hashLog2Q8FromDigest(hash);
+  uint8_t i = g_hashSampleHead;
+  g_hashSamples[i] = v;
+  g_hashSampleHead = (uint8_t)((i + 1u) % HASH_SAMPLE_N);
+  if (g_hashSampleCount < HASH_SAMPLE_N)
+    g_hashSampleCount++;
+  g_hashSampleLatest = v;
+}
+
+uint16_t hashLog2Q8FromDifficulty(double difficulty)
+{
+  if (!(difficulty > 0.0))
+    return 0xFF00; // near top of plot
+  // truediffone = 0xFFFF * 2^208 → log2 ≈ 223.999978314
+  const double log2True = 223.999978314;
+  int exp = 0;
+  double m = frexp(difficulty, &exp); // difficulty = m * 2^exp, m in [0.5, 1)
+  // log2(m) for m in [0.5,1): use a short polynomial on (2m-1) in [0,1)
+  double t = 2.0 * m - 1.0;
+  // log2(1+t) ≈ (t - t^2/2 + t^3/3) / ln(2) for t in [0,1) where 1+t = 2m
+  // But m in [0.5,1) → 2m in [1,2) → log2(m) = log2(2m) - 1
+  double u = 2.0 * m; // [1,2)
+  double z = u - 1.0; // [0,1)
+  double log2m = -1.0 + (z - 0.5 * z * z + (z * z * z) / 3.0) / 0.69314718056;
+  double log2d = (double)exp + log2m;
+  double log2h = log2True - log2d;
+  if (log2h < 0.0)
+    log2h = 0.0;
+  if (log2h > 255.996)
+    log2h = 255.996;
+  return (uint16_t)(log2h * 256.0);
+}
+
+// Full double-SHA256 of an 80-byte header (native byte order). Used only on
+// the sample mask so the early-out miner paths stay untouched.
+static void hashSampleSha256dHeader(const uint8_t hdr80[80], uint32_t nonce, uint8_t out[32])
+{
+  uint8_t hdr[80];
+  memcpy(hdr, hdr80, 80);
+  ((uint32_t *)(hdr + 76))[0] = nonce;
+  mbedtls_sha256(hdr, 80, out, 0);
+  mbedtls_sha256(out, 32, out, 0);
+}
+
+
 
 // Variables to hold data from custom textboxes
 //Track mining stats in non volatile memory
@@ -765,17 +844,28 @@ void minerWorkerSw(void * task_id)
       uint8_t job_in_work = job->id & 0xFF;
       for (uint32_t n = 0; n < job->nonce_count; ++n)
       {
-        ((uint32_t*)(job->sha_buffer+64+12))[0] = job->nonce_start+n;
+        uint32_t nonce_n = job->nonce_start + n;
+        ((uint32_t*)(job->sha_buffer+64+12))[0] = nonce_n;
         #ifdef DEBUG_MINING
         (*myDebugCounter)++;
         #endif
+        // Display sample (~1/16384): full SHA256d off the early-out path.
+        // mbedtls may use the HW SHA engine — serialize with g_hwShaMutex.
+        if ((nonce_n & HASH_SAMPLE_MASK) == 0)
+        {
+          uint8_t sample_hash[32];
+          g_hwShaMutex.lock();
+          hashSampleSha256dHeader(job->sha_buffer, nonce_n, sample_hash);
+          g_hwShaMutex.unlock();
+          hashSamplePushDigest(sample_hash);
+        }
         if (nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash))
         {
           double diff_hash = diff_from_target(hash);
           if (diff_hash > result->difficulty)
           {
             result->difficulty = diff_hash;
-            result->nonce = job->nonce_start+n;
+            result->nonce = nonce_n;
             memcpy(result->hash, hash, 32);
           }
         }
@@ -1669,6 +1759,10 @@ void minerWorkerHw(void * task_id)
       result->difficulty = job->difficulty;
       uint8_t job_in_work = job->id & 0xFF;
       memcpy(sha_buffer, job->sha_buffer, 80);
+      #ifdef PIPELINED_ASM_MINING
+      uint32_t sample_done = 0;
+      uint32_t sample_swapped_end = 0;
+      #endif
 
       g_hwShaMutex.lock();
       esp_sha_lock_engine(SHA2_256);
@@ -1765,6 +1859,10 @@ void minerWorkerHw(void * task_id)
         #ifdef DEBUG_MINING
         debugHashesHw += result->nonce_count;
         #endif
+        // Stash sample window for after we drop the SHA engine (mbedtls may
+        // also take the HW SHA lock — must not nest under esp_sha_lock_engine).
+        sample_done = result->nonce_count;
+        sample_swapped_end = pipelined_swapped_cursor;
       }
 #else
       for (uint32_t n = 0; n < job->nonce_count; ++n)
@@ -1794,17 +1892,26 @@ void minerWorkerHw(void * task_id)
 
         nerd_sha_hal_wait_idle();
         sha_ll_load(SHA2_256);
-        if (nerd_sha_ll_read_digest_swap_if(hash))
         {
-          //~5 per second
-          double diff_hash = diff_from_target(hash);
-          if (diff_hash > result->difficulty)
+          uint32_t nonce_n = job->nonce_start + n;
+          if ((nonce_n & HASH_SAMPLE_MASK) == 0)
           {
-            if (isSha256Valid(hash))
+            // Force a full digest read for the display sample (rare).
+            nerd_sha_ll_read_digest(hash);
+            hashSamplePushDigest(hash);
+          }
+          else if (nerd_sha_ll_read_digest_swap_if(hash))
+          {
+            //~5 per second
+            double diff_hash = diff_from_target(hash);
+            if (diff_hash > result->difficulty)
             {
-              result->difficulty = diff_hash;
-              result->nonce = job->nonce_start+n;
-              memcpy(result->hash, hash, sizeof(hash));
+              if (isSha256Valid(hash))
+              {
+                result->difficulty = diff_hash;
+                result->nonce = nonce_n;
+                memcpy(result->hash, hash, sizeof(hash));
+              }
             }
           }
         }
@@ -1819,6 +1926,25 @@ void minerWorkerHw(void * task_id)
 #endif // PIPELINED_ASM_MINING
       esp_sha_unlock_engine(SHA2_256);
       g_hwShaMutex.unlock();
+      #ifdef PIPELINED_ASM_MINING
+      // Display-only samples off the hot path / off the SHA engine lock.
+      // ~1/16384 of the nonces just hashed; mbedtls under g_hwShaMutex.
+      if (sample_done > 0)
+      {
+        uint32_t swapped_start = sample_swapped_end - sample_done;
+        g_hwShaMutex.lock();
+        for (uint32_t s = swapped_start; s != sample_swapped_end; ++s)
+        {
+          uint32_t native = __builtin_bswap32(s);
+          if ((native & HASH_SAMPLE_MASK) != 0)
+            continue;
+          uint8_t sample_hash[32];
+          hashSampleSha256dHeader(pipelined_native_header_cache, native, sample_hash);
+          hashSamplePushDigest(sample_hash);
+        }
+        g_hwShaMutex.unlock();
+      }
+      #endif
       #ifdef DEBUG_MINING
       debugChunkEndUs = esp_timer_get_time();
       #endif

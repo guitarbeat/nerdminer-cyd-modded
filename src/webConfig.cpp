@@ -99,6 +99,21 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"is_portrait\":" + String(isPort ? "true" : "false");
   json += ",\"rotation\":" + String(Settings.screenRotation);
   json += ",\"market\":" + getMarketJson();
+  json += ",\"hash_samples\":[";
+  {
+    uint8_t count = g_hashSampleCount;
+    uint8_t head = g_hashSampleHead;
+    if (count > HASH_SAMPLE_N)
+      count = HASH_SAMPLE_N;
+    for (uint8_t i = 0; i < count; i++)
+    {
+      uint8_t idx = (uint8_t)((head + HASH_SAMPLE_N - count + i) % HASH_SAMPLE_N);
+      if (i)
+        json += ",";
+      json += String((unsigned)g_hashSamples[idx]);
+    }
+  }
+  json += "]";
   json += "}";
   return json;
 }
