@@ -314,6 +314,32 @@ void fetchKlines(void) {
   // else: keep the cached candles on screen.
 }
 
+// Dedicated low-priority task for the candle feed. It used to run inline in
+// the Monitor loop, so every refresh's TLS handshake (~1-1.5 s) also stalled
+// the Monitor task. Here it runs at priority 1 on the non-mining core, below
+// Monitor/Stratum and the HW miner. g_hwShaMutex is still taken around
+// http.GET() only -- mbedTLS's handshake drives the HW SHA engine and the
+// classic ESP32 crashes if that overlaps the miner (see mining.h) -- the JSON
+// parse and ring-buffer publish happen without it.
+static void klineTask(void *) {
+  for (;;) {
+    fetchKlines();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+}
+
+void startKlineTask(void) {
+  static bool started = false;
+  if (started) return;
+  started = true;
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(S3_HW_MINER_OWNS_CORE1)
+  const BaseType_t core = 0;   // core 1 belongs to the HW mining loop
+#else
+  const BaseType_t core = tskNO_AFFINITY;
+#endif
+  xTaskCreatePinnedToCore(klineTask, "Klines", 8192, NULL, 1, NULL, core);
+}
+
 // Market snapshot for the web twin (Screen 1). Uses cached values only --
 // never triggers a network fetch from the web server task.
 String getMarketJson(void) {
@@ -348,8 +374,6 @@ String getMarketJson(void) {
 String getBTCprice(void){
     const CurrencyInfo &cur = currencyFor(Settings.Currency);
     static char price_buffer[24];
-
-    fetchKlines();
 
     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
 

@@ -161,6 +161,9 @@ void setup()
   BaseType_t res1 = xTaskCreatePinnedToCore(runMonitor, "Monitor", 10000, (void*)monitor_name, 5, NULL,1);
   #endif
 
+  /******** CANDLE FEED TASK (low prio, off the mining core) *****/
+  startKlineTask();
+
   /******** CREATE STRATUM TASK *****/
   static const char stratum_name[] = "(Stratum)";
  #if defined(CONFIG_IDF_TARGET_ESP32) && !defined(ESP32_2432S028R) && !defined(ESP32_2432S028_2USB)

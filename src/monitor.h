@@ -55,7 +55,8 @@ typedef struct{
 }monitor_data;
 
 // ---- BTC/USDT 1h candlestick feed (Screen 1 MARKET) -----------------------
-// Fetched from Binance US (Kraken fallback) once a minute by the monitor task.
+// Fetched from Binance US (Kraken fallback) once a minute by its own low-priority
+// "Klines" task (startKlineTask), never from the Monitor loop.
 // Stored in a fixed ring buffer so a refresh never reallocates; readers take a
 // linear, oldest-first snapshot with copyKlines() so they never see a
 // half-written update.
@@ -80,6 +81,8 @@ uint8_t copyKlines(Kline *out);
 // Refresh the kline buffer if due. Safe to call often: returns immediately
 // unless a minute has elapsed; keeps cached candles on any failure.
 void fetchKlines(void);
+// Spawns the dedicated low-priority "Klines" task that calls fetchKlines().
+void startKlineTask(void);
 // Compact JSON object with market data + candles for the web twin.
 String getMarketJson(void);
 
