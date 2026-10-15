@@ -1075,10 +1075,10 @@ static void paintClock(const ClockV &c)
   drawChart();
 }
 
-// =================================== PROTOCOL · HASHING scatter screen ==
-// Live sampled hashes (log2 Y) vs rolling attempts (X). Display-only: the
-// miner pushes into g_hashSamples with a 1/16384 mask; this screen never
-// touches g_hwShaMutex or the SHA engine.
+// =================================== PROTOCOL · live difficulty scatter ==
+// Y = log2(achieved difficulty) — higher = rarer/better. X = recent samples
+// (right = newest). Display-only: miner pushes g_hashSamples at ~1/16384;
+// UI redraw is 5–10 Hz and never touches g_hwShaMutex / the SHA engine.
 
 struct ArchitectureV
 {
@@ -1094,18 +1094,6 @@ struct ArchitectureV
 static uint16_t protoLog2Q8FromDiff(double d)
 {
   return hashLog2Q8FromDifficulty(d);
-}
-
-// Map log2_q8 → pixel Y inside plot (top = larger hashes).
-static int protoYFromLog2(uint16_t log2q8, uint16_t yTopLog, uint16_t yBotLog, int plotY, int plotH)
-{
-  if (yTopLog <= yBotLog)
-    return plotY + plotH / 2;
-  int32_t span = (int32_t)yTopLog - (int32_t)yBotLog;
-  int32_t v = (int32_t)yTopLog - (int32_t)log2q8;
-  if (v < 0) v = 0;
-  if (v > span) v = span;
-  return plotY + (int)((v * (plotH - 1)) / span);
 }
 
 static void drawProtoX(TFT_eSPI &d, int cx, int cy, uint16_t col)
@@ -1125,10 +1113,29 @@ static void chromeArchitecture(TFT_eSPI &d)
   const int plotW = scrW - (P ? 12 : 16);
   const int footH = P ? 52 : 44;
   const int footY = scrH - footH - 4;
-  const int plotH = footY - plotY - 4;
 
-  panel(d, plotX, plotY, plotW, plotH, 6, C_PANEL, C_EDGE, C_BG);
+  panel(d, plotX, plotY, plotW, footY - plotY - 4, 6, C_PANEL, C_EDGE, C_BG);
   panel(d, plotX, footY, plotW, footH, 6, C_PANEL, C_EDGE, C_BG);
+}
+
+// Sample → difficulty: diff = truediffone / hash ≈ 2^224 / hash, so
+// log2(diff) = 224 - log2(hash). Samples store log2(hash) in Q8; plot
+// log2(diff) in signed Q8 (higher = rarer). Pure display math — no mining.
+static inline int32_t protoDiffQ8FromHashQ8(uint16_t hashLog2q8)
+{
+  return (int32_t)(224 << 8) - (int32_t)hashLog2q8;
+}
+
+// Y window in log2(diff): bottom ≈ 2^-32 (typical random hash), top =
+// network target + 4 bits headroom. Linear in log2 → compressed rarity.
+static int protoYDiff(int32_t dq8, int32_t topQ8, int32_t botQ8, int plotH)
+{
+  int32_t span = topQ8 - botQ8;
+  if (span <= 0) return plotH / 2;
+  int32_t v = topQ8 - dq8;
+  if (v < 0) v = 0;
+  if (v > span) v = span;
+  return 2 + (int)((v * (plotH - 5)) / span);
 }
 
 static void paintProtocolPlot(const ArchitectureV &av)
@@ -1152,120 +1159,128 @@ static void paintProtocolPlot(const ArchitectureV &av)
     count = HASH_SAMPLE_N;
   for (uint8_t i = 0; i < count; i++)
   {
-    // oldest .. newest
     uint8_t idx = (uint8_t)((head + HASH_SAMPLE_N - count + i) % HASH_SAMPLE_N);
-    snap[i] = g_hashSamples[idx];
+    snap[i] = g_hashSamples[idx]; // oldest .. newest
   }
 
-  uint16_t tgtLog = protoLog2Q8FromDiff(av.netDiffRaw > 0 ? av.netDiffRaw : 1e14);
-  uint16_t bestLog = av.bestDiffRaw > 0 ? protoLog2Q8FromDiff(av.bestDiffRaw) : 0;
+  double net = av.netDiffRaw > 0 ? av.netDiffRaw : 1e14;
+  // hashLog2Q8FromDifficulty returns log2(truediffone/diff); invert to log2(diff).
+  int32_t tgtQ8 = protoDiffQ8FromHashQ8(protoLog2Q8FromDiff(net));
+  int32_t bestQ8 = av.bestDiffRaw > 0
+                       ? protoDiffQ8FromHashQ8(protoLog2Q8FromDiff(av.bestDiffRaw))
+                       : INT32_MIN;
+  const int32_t topQ8 = tgtQ8 + (4 << 8);
+  const int32_t botQ8 = -(32 << 8);
 
-  // Y window: top ≈ 256, bottom a bit under the network target so the
-  // green "would solve" band is visible.
-  uint16_t yTopLog = 0xFF00; // ~255.0
-  uint16_t yBotLog = (tgtLog > 0x1400) ? (uint16_t)(tgtLog - 0x1400) : 0; // ~20 bits below target
-
-  // Key for partial redraw: count + latest + target + best + rate
   char kbuf[96];
-  snprintf(kbuf, sizeof(kbuf), "%u|%u|%u|%u|%s|%d",
-           (unsigned)count, (unsigned)latest, (unsigned)tgtLog, (unsigned)bestLog,
-           av.hashRate.c_str(), P ? 1 : 0);
-  if (!need(W_PROTO_PLOT, kbuf))
-    return;
-  if (!wBegin(plotW, plotH, C_PANEL))
-    return;
-
-  // Subtle green zone below target
-  int tgtY = protoYFromLog2(tgtLog, yTopLog, yBotLog, 0, plotH);
-  if (tgtY < plotH - 1)
+  snprintf(kbuf, sizeof(kbuf), "%u|%u|%ld|%ld|%s|%d",
+           (unsigned)count, (unsigned)latest, (long)tgtQ8, (long)bestQ8,
+           av.bestDiff.c_str(), P ? 1 : 0);
+  if (need(W_PROTO_PLOT, kbuf) && wBegin(plotW, plotH, C_PANEL))
   {
-    uint16_t gfill = mix565(C_PANEL, C_GOOD, 28);
-    wgt.fillRect(0, tgtY, plotW, plotH - tgtY, gfill);
-  }
-
-  // Axis hints
-  text(wgt, "LARGER", 4, 4, 8, C_DIM, C_PANEL);
-  text(wgt, "HASHES", 4, 14, 8, C_DIM, C_PANEL);
-  text(wgt, "SMALLER", 4, plotH - 28, 8, C_DIM, C_PANEL);
-  text(wgt, "HASHES", 4, plotH - 18, 8, C_DIM, C_PANEL);
-  text(wgt, "recent sampled attempts ->", plotW / 2, plotH - 12, 8, C_DIM, C_PANEL, Align::TopCenter);
-
-  // Dashed network target
-  for (int x = 8; x < plotW - 4; x += 6)
-    wgt.drawFastHLine(x, tgtY, 3, C_METER);
-
-  char tlab[40];
-  snprintf(tlab, sizeof(tlab), "TARGET  %s", av.netDiff.c_str());
-  text(wgt, tlab, plotW - 6, (tgtY > 14) ? tgtY - 12 : tgtY + 4, 9, C_METER, C_PANEL, Align::TopRight);
-  text(wgt, "hashes below would solve a block", plotW - 6,
-       (tgtY + 14 < plotH - 4) ? tgtY + 4 : tgtY - 22, 7, C_DIM, C_PANEL, Align::TopRight);
-
-  // Scatter
-  const uint16_t xCol = C_BAD; // red X
-  int nShow = count;
-  if (nShow < 1)
-  {
-    text(wgt, "waiting for samples…", plotW / 2, plotH / 2 - 6, 10, C_DIM, C_PANEL, Align::TopCenter);
-  }
-  else
-  {
-    for (int i = 0; i < nShow; i++)
+    // Left gutter: rarity ticks (1 … 1T) + RARER ^ / difficulty cue.
+    const int G = textW("1T", 8) + 8;
+    const int sx0 = G + 8;
+    const int sxSpan = plotW - sx0 - 14;
+    static const char *tk[] = {"1", "1K", "1M", "1G", "1T"};
+    for (int t = 0; t < 5; t++)
     {
-      int x = 28 + (i * (plotW - 40)) / (nShow > 1 ? (nShow - 1) : 1);
-      int y = protoYFromLog2(snap[i], yTopLog, yBotLog, 0, plotH);
-      drawProtoX(wgt, x, y, xCol);
+      int32_t q = (int32_t)(t * 10) << 8; // log2(10^t)≈3.32t; use decade≈10 bits
+      if (q >= topQ8 - (3 << 8))
+        break;
+      int ty = protoYDiff(q, topQ8, botQ8, plotH);
+      for (int x = G + 2; x < plotW - 4; x += 4)
+        wgt.drawPixel(x, ty, C_EDGE);
+      text(wgt, tk[t], G - 4, ty - 4, 8, C_DIM, C_PANEL, Align::TopRight);
     }
-    // Current sample: amber outline box on the newest point
-    int cx = 28 + ((nShow - 1) * (plotW - 40)) / (nShow > 1 ? (nShow - 1) : 1);
-    int cy = protoYFromLog2(snap[nShow - 1], yTopLog, yBotLog, 0, plotH);
-    wgt.drawRect(cx - 5, cy - 5, 11, 11, C_METER);
-    text(wgt, "current", cx + 8, cy - 4, 8, C_METER, C_PANEL);
+    wgt.drawFastVLine(G, 2, plotH - 4, C_EDGE);
+
+    // Block-target threshold near top (higher difficulty = rarer).
+    int tgtY = protoYDiff(tgtQ8, topQ8, botQ8, plotH);
+    if (tgtY > 2)
+      wgt.fillRect(G + 1, 1, plotW - G - 2, tgtY - 1, mix565(C_PANEL, C_GOOD, 28));
+    for (int x = G + 2; x < plotW - 4; x += 6)
+      wgt.drawFastHLine(x, tgtY, 3, C_METER);
+
+    char tlab[44];
+    snprintf(tlab, sizeof(tlab), "BLOCK TARGET · %s", av.netDiff.c_str());
+    int tLabY = (tgtY + 3 < plotH - 28) ? tgtY + 3 : tgtY - 20;
+    text(wgt, tlab, plotW - 6, tLabY, 8, C_METER, C_PANEL, Align::TopRight);
+    text(wgt, "hash < target = valid block", plotW - 6, tLabY + 11, 7, C_DIM, C_PANEL, Align::TopRight);
+
+    text(wgt, "RARER ^", G + 4, (tgtY + 3 < plotH / 2) ? tgtY + 3 : 4, 8, C_DIM, C_PANEL);
+    text(wgt, "difficulty", G + 4, ((tgtY + 3 < plotH / 2) ? tgtY + 3 : 4) + 10, 7, C_DIM, C_PANEL);
+
+    if (count < 1)
+    {
+      text(wgt, "waiting for samples...", G + (plotW - G) / 2, plotH / 2 - 6, 10, C_DIM, C_PANEL, Align::TopCenter);
+    }
+    else
+    {
+      int bestI = 0;
+      for (int i = 0; i < count; i++)
+      {
+        int x = sx0 + (i * sxSpan) / (count > 1 ? (count - 1) : 1);
+        int y = protoYDiff(protoDiffQ8FromHashQ8(snap[i]), topQ8, botQ8, plotH);
+        drawProtoX(wgt, x, y, C_BAD); // unlabeled red X
+        if (snap[i] < snap[bestI])
+          bestI = i;
+      }
+
+      // Newest: subtle outline only (no label).
+      int cx = sx0 + sxSpan;
+      int cy = protoYDiff(protoDiffQ8FromHashQ8(snap[count - 1]), topQ8, botQ8, plotH);
+      wgt.drawRect(cx - 5, cy - 5, 11, 11, C_DIM);
+
+      // Session best (real best_diff) — yellow/orange, labeled in-place.
+      if (bestQ8 != INT32_MIN)
+      {
+        int bx = sx0 + (bestI * sxSpan) / (count > 1 ? (count - 1) : 1);
+        int by = protoYDiff(bestQ8, topQ8, botQ8, plotH);
+        wgt.fillCircle(bx, by, 4, C_METER);
+        wgt.drawCircle(bx, by, 5, C_WARN);
+        char blab[32];
+        snprintf(blab, sizeof(blab), "BEST %s", av.bestDiff.c_str());
+        int lw = textW(blab, 9);
+        bool right = bx + 8 + lw < plotW - 4;
+        int ly = (by > 12) ? by - 12 : by + 8;
+        text(wgt, blab, right ? bx + 8 : bx - 8, ly, 9, C_METER, C_PANEL,
+             right ? Align::TopLeft : Align::TopRight);
+      }
+    }
+    text(wgt, "recent samples · newest ->", G + (plotW - G) / 2, plotH - 11, 8, C_DIM, C_PANEL, Align::TopCenter);
+
+    wEnd(plotX, plotY);
+    done(W_PROTO_PLOT, kbuf);
   }
 
-  // Best this session marker (from real best_diff, not from samples)
-  if (av.bestDiffRaw > 0.0)
-  {
-    int by = protoYFromLog2(bestLog, yTopLog, yBotLog, 0, plotH);
-    // Amber triangle / arrow on the left of the plot
-    wgt.fillTriangle(18, by, 10, by - 5, 10, by + 5, C_METER);
-    char blab[48];
-    snprintf(blab, sizeof(blab), "BEST %s", av.bestDiff.c_str());
-    text(wgt, blab, 22, (by > 12) ? by - 10 : by + 6, 8, C_METER, C_PANEL);
-  }
-
-  wEnd(plotX, plotY);
-  done(W_PROTO_PLOT, kbuf);
-
-  // Footer: big hashrate + attempts/sec + sampled note
+  // Footer: lightning KH/s + attempts/sec + live-sample note
   char fkey[64];
   snprintf(fkey, sizeof(fkey), "%s|%d", av.hashRate.c_str(), P ? 1 : 0);
   if (!need(W_PROTO_FOOT, fkey))
     return;
   if (!wBegin(plotW, footH, C_PANEL))
     return;
-
   float kh = av.hashRate.toFloat();
   char rateBuf[24];
   if (kh > 0)
     snprintf(rateBuf, sizeof(rateBuf), "%.0f KH/s", kh);
   else
     snprintf(rateBuf, sizeof(rateBuf), "-- KH/s");
-
-  // Lightning bolt (simple glyph)
-  int bx = 10, by = P ? 10 : 8;
+  int bx = 10, by = P ? 6 : 8;
   wgt.fillTriangle(bx, by + 14, bx + 8, by, bx + 5, by + 8, C_METER);
   wgt.fillTriangle(bx + 4, by + 6, bx + 12, by + 6, bx + 6, by + 20, C_METER);
-
-  text(wgt, rateBuf, 28, P ? 8 : 6, P ? 22 : 20, C_METER, C_PANEL);
-
+  text(wgt, rateBuf, 28, P ? 4 : 6, 20, C_METER, C_PANEL);
   char att[40];
   if (kh > 0)
     snprintf(att, sizeof(att), "~ %.0f attempts/sec", kh * 1000.0f);
   else
     snprintf(att, sizeof(att), "~ -- attempts/sec");
-  text(wgt, att, plotW - 8, P ? 12 : 10, 11, C_TEXT, C_PANEL, Align::TopRight);
-  text(wgt, "sampled view · miner hashes continuously", 28, P ? 34 : 28, 8, C_DIM, C_PANEL);
-
+  if (P)
+    text(wgt, att, 28, 27, 10, C_TEXT, C_PANEL);
+  else
+    text(wgt, att, plotW - 8, 10, 11, C_TEXT, C_PANEL, Align::TopRight);
+  text(wgt, "LIVE SAMPLE · MINING UNINTERRUPTED", 28, P ? 40 : 28, 8, C_DIM, C_PANEL);
   wEnd(plotX, footY);
   done(W_PROTO_FOOT, fkey);
 }
