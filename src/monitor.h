@@ -117,6 +117,8 @@ typedef struct {
   String blockHeight;
   String currentTime;  
   String currentDate;
+  String temp;
+  String timeMining;
 }clock_data;
 
 typedef struct {

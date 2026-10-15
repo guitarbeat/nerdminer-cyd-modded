@@ -107,19 +107,20 @@ function cydDrawHeaderPortrait(ctx,p,d){
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,240,26);
 const screenNames=['MINE','MARKET','CLOCK','PROTOCOL'];
 const title=screenNames[cydPreviewScr]||'MINE';
-ctx.fillStyle=p.text;ctx.font='bold 11px sans-serif';ctx.fillText(title,8,16);
+const wordmark=(cydPreviewScr===1||cydPreviewScr===2||cydPreviewScr===3);
+const hideTime=(cydPreviewScr===2);
+ctx.fillStyle=p.text;ctx.font='bold '+(wordmark?11:11)+'px sans-serif';ctx.fillText(title,8,16);
 const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
 const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
-if(cydPreviewScr===1){ctx.fillStyle=p.dim;ctx.fillText('|',tw+12,16);}ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+(cydPreviewScr===1?20:14),16);
-const dotW=6,dotH=3,gap=2,startX=142;
-for(let i=0;i<4;i++){
-ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
-ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
-}
-const tm=(d&&d.time)?d.time:'12:00:00';
-ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(tm,234,16);ctx.textAlign='left';
+let sx;
+if(wordmark){ctx.fillStyle=p.dim;ctx.font='bold 11px sans-serif';ctx.fillText('|',tw+10,16);ctx.fillStyle=stCol;ctx.fillText(stTxt,tw+18,16);sx=tw+18+ctx.measureText(stTxt).width+6;}
+else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
+if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
+const dotW=6,dotH=3,gap=2;let startX=hideTime?170:142;if(startX<sx+4)startX=sx+4;
+for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
+if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(tm,234,16);ctx.textAlign='left';}
 ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(6,26);ctx.lineTo(234,26);ctx.stroke();
 }
 
@@ -235,6 +236,64 @@ ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(c.v,cx,298);
 }
 }
 
+function cydDrawClockStrip(ctx,p,ls,cells){
+const sx=ls?8:6,sy=ls?198:266,sw=ls?304:228,sh=ls?38:48;
+cydDrawPanel(ctx,p,sx,sy,sw,sh,8);
+ctx.strokeStyle=p.edge;ctx.lineWidth=1;
+for(let i=1;i<3;i++){const x=Math.round(sx+sw*i/3)+.5;ctx.beginPath();ctx.moveTo(x,sy+8);ctx.lineTo(x,sy+sh-8);ctx.stroke();}
+for(let i=0;i<3;i++){
+const c=cells[i]||{l:'',v:'',col:p.text};const cx=sx+8+(sw*i)/3;
+ctx.fillStyle=p.dim;ctx.font=(ls?10:9)+'px sans-serif';ctx.fillText(c.l,cx,sy+(ls?14:14));
+ctx.fillStyle=c.col||p.text;ctx.font='bold '+(ls?14:13)+'px sans-serif';ctx.fillText(c.v,cx,sy+(ls?30:34));
+}
+}
+function cydDrawClock(ctx,p,d,ls){
+const hr=parseFloat(d.hashrate)||951.4;
+const tm=(d&&d.time?d.time:'21:47').substring(0,5);
+const date='SUN 12 OCT 2026';
+const temp=(d.temp!==undefined&&d.temp!=='')?String(d.temp):'51';
+const tC=parseInt(temp,10);const hot=(!isNaN(tC)&&tC>=70);
+const up=d.uptime?cydUpShort(d.uptime):'1d';
+const isHash=d&&(d.status==='hashing');
+const offline=d&&(d.status==='offline'||d.wifi===false);
+let link='ONLINE',linkCol=p.good;
+if(offline){link='OFFLINE';linkCol=p.bad;}
+else if(hot){link='HOT';linkCol=p.warn;}
+else if(!isHash&&d&&d.status==='connecting'){link='LINKING';linkCol=p.warn;}
+else if(!isHash&&d&&d.status&&d.status!=='hashing'){link='LINKING';linkCol=p.warn;}
+if(ls){
+cydDrawPanel(ctx,p,8,30,152,70,8);
+ctx.fillStyle=p.text;ctx.font='bold 36px sans-serif';ctx.fillText(tm,14,62);
+ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(date,14,88);
+cydDrawPanel(ctx,p,168,30,144,70,8);
+ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('CURRENT HASHRATE',176,46);
+const hv=hr>0?hr.toFixed(1):'0.0';ctx.fillStyle=p.text;ctx.font='bold 28px sans-serif';ctx.fillText(hv,176,78);
+const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-serif';ctx.fillText('KH/s',176+nw+6,78);
+cydDrawPanel(ctx,p,8,106,304,84,8);
+ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',16,120);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',304,120);ctx.textAlign='left';
+const barsX=16,barsY=128,barArea=50,slots=60,step=(288)/slots,bw=Math.max(1,step-1);
+for(let i=0;i<slots;i++){const bh=Math.max(3,Math.sin((i+5)*0.28)*16+28);ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*step,barsY+barArea-bh,bw,bh);}
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',16,182);
+}else{
+cydDrawPanel(ctx,p,6,30,228,78,8);
+ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='bold 42px sans-serif';ctx.fillText(tm,120,72);
+ctx.fillStyle=p.dim;ctx.font='12px sans-serif';ctx.fillText(date,120,98);ctx.textAlign='left';
+cydDrawPanel(ctx,p,6,114,228,52,8);
+ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('CURRENT HASHRATE',14,130);
+const hv=hr>0?hr.toFixed(1):'0.0';ctx.fillStyle=p.text;ctx.font='bold 26px sans-serif';ctx.fillText(hv,14,156);
+const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-serif';ctx.fillText('KH/s',14+nw+6,156);
+cydDrawPanel(ctx,p,6,172,228,88,8);
+ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',14,186);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',226,186);ctx.textAlign='left';
+const barsX=14,barsY=194,barArea=42,slots=60,step=216/slots,bw=Math.max(1,step-1);
+for(let i=0;i<slots;i++){const bh=Math.max(3,Math.sin((i+3)*0.28)*12+22);ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*step,barsY+barArea-bh,bw,bh);}
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',14,248);
+}
+cydDrawClockStrip(ctx,p,ls,[
+{l:'TEMP',v:temp+'°C',col:hot?p.warn:p.text},
+{l:'UPTIME',v:up,col:p.text},
+{l:'ONLINE',v:link,col:linkCol}
+]);
+}
 function cydRenderPortrait(ctx,p,d){
 cydDrawHeaderPortrait(ctx,p,d);
 const hr=parseFloat(d.hashrate)||0;
@@ -243,32 +302,7 @@ cydDrawMine(ctx,p,d,false);
 }else if(cydPreviewScr===1){
 cydDrawMarket(ctx,p,d,false);
 }else if(cydPreviewScr===2){
-cydDrawPanel(ctx,p,6,30,228,82,8);
-ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='bold 42px monospace';
-const tm2=(d&&d.time?d.time:'12:00').substring(0,5);
-ctx.fillText(tm2,120,74);
-ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('SUN 12 OCT 2026',120,98);ctx.textAlign='left';
-
-cydDrawTile(ctx,p,6,118,112,44,'BTC / USD','$68,420',p.text);
-cydDrawTile(ctx,p,122,118,112,44,'BLOCK','#884,120',p.text);
-cydDrawTile(ctx,p,6,168,228,42,'HASHRATE KH/s',(hr>0?hr.toFixed(1):'850.4'),p.good);
-
-cydDrawPanel(ctx,p,6,214,228,46,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('ROLLING 36-SLOT HASHRATE HISTORY',12,225);
-ctx.strokeStyle=p.track;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(12,255);ctx.lineTo(228,255);ctx.stroke();
-
-const barsX=14,barW=4,barGap=2;
-for(let i=0;i<35;i++){
-const bh=Math.max(3,Math.sin((i+3)*0.45)*8+14);
-ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*(barW+barGap),255-bh,barW,bh);
-}
-
-cydDrawStripPortrait(ctx,p,[
-{l:'WORKERS',v:'1'},
-{l:'POOL',v:hr>0?(hr.toFixed(0)+'K'):'--'},
-{l:'UPTIME',v:d.uptime?(d.uptime.trim().split(/\s+/)[0]+'d'):'--'},
-{l:'TEMP',v:(d.temp||'52')+'°C'}
-]);
+cydDrawClock(ctx,p,d,false);
 }else if(cydPreviewScr===3){
 cydDrawProtocol(ctx,p,d,false);
 }
@@ -278,19 +312,20 @@ function cydDrawHeaderLandscape(ctx,p,d){
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,320,26);
 const screenNames=['MINE','MARKET','CLOCK','PROTOCOL'];
 const title=screenNames[cydPreviewScr]||'MINE';
+const wordmark=(cydPreviewScr===1||cydPreviewScr===2||cydPreviewScr===3);
+const hideTime=(cydPreviewScr===2);
 ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
 const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
 const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
-if(cydPreviewScr===1){ctx.fillStyle=p.dim;ctx.fillText('|',tw+12,16);}ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+(cydPreviewScr===1?20:14),16);
-const dotW=7,dotH=3,gap=2,startX=160;
-for(let i=0;i<4;i++){
-ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;
-ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);
-}
-const tm=(d&&d.time)?d.time:'12:00:00';
-ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText(tm,314,16);ctx.textAlign='left';
+let sx;
+if(wordmark){ctx.fillStyle=p.dim;ctx.fillText('|',tw+12,16);ctx.fillStyle=stCol;ctx.font='bold 12px sans-serif';ctx.fillText(stTxt,tw+20,16);sx=tw+20+ctx.measureText(stTxt).width+6;}
+else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
+if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
+const dotW=7,dotH=3,gap=2;let startX=hideTime?220:160;if(startX<sx+4)startX=sx+4;
+for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
+if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText(tm,314,16);ctx.textAlign='left';}
 ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,26);ctx.lineTo(314,26);ctx.stroke();
 }
 
@@ -313,20 +348,7 @@ cydDrawMine(ctx,p,d,true);
 }else if(cydPreviewScr===1){
 cydDrawMarket(ctx,p,d,true);
 }else if(cydPreviewScr===2){
-cydDrawPanel(ctx,p,8,30,188,56,6);
-ctx.fillStyle=p.text;ctx.font='bold 36px monospace';
-const tm2=(d.time||'12:00').substring(0,5);
-ctx.fillText(tm2,16,70);
-ctx.font='9px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('SUN 12 OCT 2026',120,68);
-cydDrawTile(ctx,p,202,30,110,56,'BEST DIFF',d.best_diff||'0.000',p.acc);
-cydDrawPanel(ctx,p,8,92,304,98,6);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('ROLLING 48-SLOT HASHRATE HISTORY (8 MIN)',16,104);
-const barsX=16,barsY=112,barW=4,barGap=2;
-for(let i=0;i<46;i++){
-const bh=Math.max(4,Math.sin((i+5)*0.4)*20+35);
-ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*(barW+barGap),barsY+68-bh,barW,bh);
-}
-cydDrawStripLandscape(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:d.hashrate?(parseFloat(d.hashrate).toFixed(0)+' KH/s'):'--'},{l:'UPTIME',v:d.uptime||'--'},{l:'TEMP',v:(d.temp||'--')+'°C'}]);
+cydDrawClock(ctx,p,d,true);
 }else if(cydPreviewScr===3){
 cydDrawProtocol(ctx,p,d,true);
 }

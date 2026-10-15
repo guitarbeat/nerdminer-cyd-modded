@@ -6,7 +6,7 @@
 //
 //   MINE    segmented hashrate ring, stat tiles, pool strip
 //   MARKET  BTC price, block height, fees, difficulty, halving progress
-//   CLOCK   big desk clock, key numbers, hashrate history bars
+//   CLOCK   hero desk clock, current KH/s, last-60s hashrate spark
 //
 // The original theme is kept in esp23_2432s028r_classic.cpp (build the
 // ESP32-2432S028R-Classic env, or define CYD_THEME_CLASSIC).
@@ -163,9 +163,9 @@ static uint8_t segLvl[G_SEGS];
 static unsigned long shareFlashUntil = 0;
 static uint32_t lastShares = 0;
 
-// history of hashrate for the CLOCK screen
-#define HIST_N 48
-#define HIST_EVERY_MS 10000
+// history of hashrate for the CLOCK screen (last ~60 seconds)
+#define HIST_N 60
+#define HIST_EVERY_MS 1000
 static float hist[HIST_N];
 static uint8_t histCount = 0;
 static uint32_t histEpoch = 0;
@@ -566,8 +566,10 @@ static void drawHeader(const HdrV &h)
       "PROTOCOL"
   };
   const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
-  // Protocol screen: compact "PROTOCOL|HASHING" wordmark (mock).
-  const bool wordmark = (h.screen == SCR_ARCH || h.screen == SCR_MARKET);
+  // MARKET / PROTOCOL / CLOCK: compact "TITLE|HASHING" wordmark (mock).
+  // CLOCK: no top-right clock — the hero IS the time.
+  const bool wordmark = (h.screen == SCR_ARCH || h.screen == SCR_MARKET || h.screen == SCR_CLOCK);
+  const bool hideTime = (h.screen == SCR_CLOCK);
   if (wordmark)
   {
     text(wgt, title, 0, 5, 12, C_TEXT, C_BG);
@@ -599,25 +601,34 @@ static void drawHeader(const HdrV &h)
     col = C_WARN;
   }
   int sx = wm + (isPortrait() ? 8 : 12);
-  // Protocol already shows HASHING in the wordmark — skip duplicate.
+  // Wordmark already shows HASHING — skip duplicate.
   if (!wordmark)
     text(wgt, label, sx, 6, 9, col, C_BG);
   else
     sx = wm + 4;
 
-  // Time (right-aligned)
-  text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
-
-  int timeW = textW(h.time.c_str(), 13);
-  int timeLeft = (W - 4) - timeW;
-
-  // Local IP (landscape only, quiet secondary information to the left of time)
-  int gapRight = timeLeft - 8;
-  if (!isPortrait() && h.ip.length())
+  // Optional green status dot (CLOCK / hashing) after the wordmark
+  if (h.screen == SCR_CLOCK && h.status == NM_hashing)
   {
-    int ipRight = timeLeft - 14;
-    text(wgt, h.ip.c_str(), ipRight, 6, 10, C_DIM, C_BG, Align::TopRight);
-    gapRight = ipRight - textW(h.ip.c_str(), 10) - 10;
+    wgt.fillCircle(sx + 6, 13, 3, C_GOOD);
+    sx += 14;
+  }
+
+  // Time (right-aligned) — omitted on CLOCK (hero owns the clock)
+  int gapRight = W - 8;
+  if (!hideTime)
+  {
+    text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
+    int timeW = textW(h.time.c_str(), 13);
+    int timeLeft = (W - 4) - timeW;
+    gapRight = timeLeft - 8;
+    // Local IP (landscape only, quiet secondary information to the left of time)
+    if (!isPortrait() && h.ip.length())
+    {
+      int ipRight = timeLeft - 14;
+      text(wgt, h.ip.c_str(), ipRight, 6, 10, C_DIM, C_BG, Align::TopRight);
+      gapRight = ipRight - textW(h.ip.c_str(), 10) - 10;
+    }
   }
 
   // ── CarCYD-inspired nav dots: 4 tiny pills in the mid-header gap ──
@@ -1093,147 +1104,179 @@ static void paintMarket(const MarketV &m)
 }
 
 // ============================================================ CLOCK screen ==
+// Mock layout: CLOCK|HASHING wordmark (no header clock — hero IS the time),
+// CURRENT HASHRATE (KH/s only), LAST 60 SECONDS rolling hashrate bars,
+// TEMP | UPTIME | ONLINE strip. No BTC / block / workers / pool / best / shares.
 
 struct ClockV
 {
   HdrV hdr;
   String hh, mm;
   bool colon;
-  String date, price, block, hash;
+  String date, hash;
+  String temp, uptime, link; // strip cells
+  uint16_t linkCol;
+  uint16_t tempCol;
+  bool flash;
 };
 
 static void chromeClock(TFT_eSPI &d)
 {
-  if (isPortrait())
+  const bool P = isPortrait();
+  if (P)
   {
-    panel(d, 6, 214, 228, 46, 6, C_PANEL, C_EDGE, C_BG);
-    text(d, "ROLLING 36-SLOT HASHRATE HISTORY", 12, 217, 10, C_DIM, C_PANEL);
-    chromeStripCells(d);
+    panel(d, 6, 30, 228, 78, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 114, 228, 52, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 172, 228, 88, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 266, 228, 48, 8, C_PANEL, C_EDGE, C_BG);
+    for (int i = 1; i < 3; i++)
+      d.drawFastVLine(6 + (228 * i) / 3, 272, 36, C_EDGE);
   }
   else
   {
-    chromeStrip(d);
+    panel(d, 8, 30, 152, 70, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 168, 30, 144, 70, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 8, 106, 304, 84, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 8, STRIP_Y, 304, STRIP_H, 8, C_PANEL, C_EDGE, C_BG);
+    for (int i = 1; i < 3; i++)
+      d.drawFastVLine(8 + (304 * i) / 3, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
   }
 }
 
+// Rolling hashrate spark — display only; samples come from noteHashrate().
 static void drawChart()
 {
-  char k[32];
+  char k[40];
   snprintf(k, sizeof(k), "%lu|%u|%d|%d", (unsigned long)histEpoch, histCount, accentIdx, isPortrait() ? 1 : 0);
   if (!need(W_CHART, k))
     return;
-  const int W = isPortrait() ? 216 : 288, H = 30;
+  const bool P = isPortrait();
+  const int W = P ? 216 : 288;
+  const int H = P ? 52 : 50;
   if (!wBegin(W, H, C_PANEL))
     return;
-  wgt.drawFastHLine(0, H - 1, W, C_TRACK); // baseline grounding
+  text(wgt, "HASHRATE HISTORY", 0, 0, 9, C_DIM, C_PANEL);
+  text(wgt, "LAST 60 SECONDS", W - 1, 0, 9, C_DIM, C_PANEL, Align::TopRight);
+  const int baseY = H - 1;
+  wgt.drawFastHLine(0, baseY, W, C_TRACK);
   float mx = 1;
   for (int i = 0; i < histCount; i++)
     if (hist[i] > mx)
       mx = hist[i];
   mx *= 1.08f;
-  const int numSlots = isPortrait() ? 36 : HIST_N;
-  const int step = 6;
+  const int numSlots = HIST_N;
+  const int barH = H - 14;
+  const float step = (float)W / (float)numSlots;
+  const int bw = step >= 3.0f ? (int)step - 1 : 1;
   for (int i = 0; i < numSlots; i++)
   {
-    int slot = i - (numSlots - histCount); // right-align so the newest bar is on the right
-    int x = i * step;
+    int slot = i - (numSlots - histCount); // right-align newest
+    int x = (int)(i * step);
     if (slot < 0 || slot >= HIST_N)
     {
-      wgt.fillRect(x, H - 2, 5, 2, C_TRACK); // not sampled yet
+      wgt.fillRect(x, baseY - 2, bw, 2, C_TRACK);
       continue;
     }
-    int bh = (int)(H * hist[slot] / mx);
+    int bh = (int)(barH * hist[slot] / mx);
     if (bh < 2)
       bh = 2;
-    wgt.fillRect(x, H - bh, 5, bh, C_METER);
+    wgt.fillRect(x, baseY - bh, bw, bh, C_METER);
   }
-  wEnd(isPortrait() ? 12 : 16, isPortrait() ? 228 : (STRIP_Y + 4));
+  wEnd(P ? 12 : 16, P ? 186 : 118);
   done(W_CHART, k);
 }
 
 static void paintClock(const ClockV &c)
 {
   drawHeader(c.hdr);
+  const bool P = isPortrait();
 
-  if (isPortrait())
+  // Hero: large centered HH:MM + date (portrait); landscape keeps date beside
   {
-    String k = c.hh + "|P";
-    if (need(W_HH, k) && wBegin(86, 56, C_BG))
+    String k = c.hh + ":" + c.mm + "|" + String(c.colon) + "|" + c.date + (P ? "P" : "L");
+    if (need(W_HH, k))
     {
-      text(wgt, c.hh.c_str(), 84, -22, 70, C_TEXT, C_BG, Align::TopRight);
-      wEnd(16, 36);
-      done(W_HH, k);
+      int pw = P ? 220 : 144, ph = P ? 70 : 62;
+      if (wBegin(pw, ph, C_PANEL))
+      {
+        char tim[8];
+        snprintf(tim, sizeof(tim), "%s%s%s", c.hh.c_str(), c.colon ? ":" : " ", c.mm.c_str());
+        if (P)
+        {
+          text(wgt, tim, pw / 2, 4, 42, C_TEXT, C_PANEL, Align::TopCenter);
+          text(wgt, c.date.c_str(), pw / 2, 52, 12, C_DIM, C_PANEL, Align::TopCenter);
+        }
+        else
+        {
+          text(wgt, tim, 6, 6, 36, C_TEXT, C_PANEL);
+          text(wgt, c.date.c_str(), 6, 48, 10, C_DIM, C_PANEL);
+        }
+        wEnd(P ? 10 : 12, P ? 34 : 34);
+        done(W_HH, k);
+      }
     }
-    k = c.mm + "|P";
-    if (need(W_MM, k) && wBegin(86, 56, C_BG))
-    {
-      text(wgt, c.mm.c_str(), 2, -22, 70, C_TEXT, C_BG, Align::TopLeft);
-      wEnd(138, 36);
-      done(W_MM, k);
-    }
-    k = String(c.colon) + "|P";
-    if (need(W_COLON, k) && wBegin(28, 56, C_BG))
-    {
-      uint16_t dot = c.colon ? C_DIM : C_BG;
-      wgt.fillCircle(14, 18, 4, dot);
-      wgt.fillCircle(14, 38, 4, dot);
-      wEnd(106, 36);
-      done(W_COLON, k);
-    }
-
-    k = c.date + "|P";
-    if (need(W_DATE, k) && wBegin(220, 18, C_BG))
-    {
-      text(wgt, c.date.c_str(), 110, 1, 12, C_DIM, C_BG, Align::TopCenter);
-      wEnd(10, 96);
-      done(W_DATE, k);
-    }
-
-    drawTile(W_C0, 6, 120, 112, 44, btcPairLabel().c_str(), c.price.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_C1, 122, 120, 112, 44, "BLOCK", c.block.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_C2, 6, 170, 228, 44, "HASHRATE KH/s", c.hash.c_str(), C_TEXT, C_EDGE);
   }
-  else
+
+  // CURRENT HASHRATE — big KH/s only (brief share-accepted flash OK)
   {
-    String k = c.hh + "|L";
-    if (need(W_HH, k) && wBegin(112, 70, C_BG))
+    String k = c.hash + "|" + String(c.flash) + (P ? "P" : "L");
+    if (need(W_C0, k))
     {
-      text(wgt, c.hh.c_str(), 110, -31, 92, C_TEXT, C_BG, Align::TopRight);
-      wEnd(34, 32);
-      done(W_HH, k);
+      int pw = P ? 220 : 136, ph = P ? 44 : 62;
+      if (wBegin(pw, ph, C_PANEL))
+      {
+        text(wgt, "CURRENT HASHRATE", P ? 8 : 6, P ? 4 : 6, 10, C_DIM, C_PANEL);
+        uint16_t vc = c.flash ? C_GOOD : C_TEXT;
+        unsigned sz = P ? 26 : 28;
+        text(wgt, c.hash.c_str(), P ? 8 : 6, P ? 18 : 24, sz, vc, C_PANEL);
+        int nw = textW(c.hash.c_str(), sz);
+        text(wgt, "KH/s", P ? (8 + nw + 6) : (6 + nw + 4), P ? 28 : 36, 12, C_METER, C_PANEL);
+        wEnd(P ? 10 : 172, P ? 118 : 34);
+        done(W_C0, k);
+      }
     }
-    k = c.mm + "|L";
-    if (need(W_MM, k) && wBegin(112, 70, C_BG))
-    {
-      text(wgt, c.mm.c_str(), 2, -31, 92, C_TEXT, C_BG, Align::TopLeft);
-      wEnd(174, 32);
-      done(W_MM, k);
-    }
-    k = String(c.colon) + "|L";
-    if (need(W_COLON, k) && wBegin(28, 70, C_BG))
-    {
-      uint16_t dot = c.colon ? C_DIM : C_BG;
-      wgt.fillCircle(14, 22, 5, dot);
-      wgt.fillCircle(14, 47, 5, dot);
-      wEnd(146, 32);
-      done(W_COLON, k);
-    }
-
-    k = c.date + "|L";
-    if (need(W_DATE, k) && wBegin(220, 18, C_BG))
-    {
-      text(wgt, c.date.c_str(), 110, 1, 12, C_DIM, C_BG, Align::TopCenter);
-      wEnd(50, 108);
-      done(W_DATE, k);
-    }
-
-    const int y = 140, w = 98, h = 48;
-    drawTile(W_C0, 8, y, w, h, btcPairLabel().c_str(), c.price.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_C1, 111, y, w, h, "BLOCK", c.block.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_C2, 214, y, w, h, "HASHRATE KH/s", c.hash.c_str(), C_TEXT, C_EDGE);
   }
 
   drawChart();
+
+  // Optional live-sample caption under the chart (portrait: inside hist panel)
+  {
+    String k = String("live|") + (P ? "P" : "L");
+    if (need(W_C1, k))
+    {
+      int pw = P ? 216 : 288, ph = 12;
+      if (wBegin(pw, ph, C_PANEL))
+      {
+        text(wgt, "LIVE SAMPLE · MINER HASHING CONTINUOUSLY", 0, 0, 8, C_DIM, C_PANEL);
+        wEnd(P ? 12 : 16, P ? 244 : 176);
+        done(W_C1, k);
+      }
+    }
+  }
+
+  // Bottom strip: TEMP | UPTIME | ONLINE (value warns if disconnect/hot)
+  {
+    const char *labs[3] = {"TEMP", "UPTIME", "ONLINE"};
+    String vals[3] = {c.temp, c.uptime, c.link};
+    uint16_t cols[3] = {c.tempCol, C_TEXT, c.linkCol};
+    int sy = P ? 269 : (STRIP_Y + 3);
+    int cw = P ? 72 : 96;
+    int ch = P ? 42 : 32;
+    int xstep = P ? 76 : 101;
+    int x0 = P ? 10 : 12;
+    for (int i = 0; i < 3; i++)
+    {
+      String k = String(labs[i]) + "|" + vals[i] + "|" + accentIdx + (P ? "P" : "L");
+      if (!need(W_P0 + i, k))
+        continue;
+      if (!wBegin(cw, ch, C_PANEL))
+        continue;
+      text(wgt, labs[i], P ? 2 : 4, P ? 2 : 2, P ? 10 : 11, C_DIM, C_PANEL);
+      text(wgt, vals[i].c_str(), P ? 2 : 4, P ? 17 : 15, P ? 14 : 15, cols[i], C_PANEL);
+      wEnd(x0 + xstep * i, sy);
+      done(W_P0 + i, k);
+    }
+  }
 }
 
 // =================================== PROTOCOL · live difficulty scatter ==
@@ -1774,16 +1817,47 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
   ensureChrome(SCR_CLOCK);
   noteHashrate(data.currentHashRate.toFloat());
 
+  uint32_t sh = data.completedShares.toInt();
+  if (sh > lastShares && lastShares != 0)
+    shareFlashUntil = millis() + 1200;
+  lastShares = sh;
+
   ClockV c;
   c.hdr = liveHeader(data.currentTime);
   int colon = data.currentTime.indexOf(':');
   c.hh = colon > 0 ? data.currentTime.substring(0, colon) : String("--");
-  c.mm = colon > 0 ? data.currentTime.substring(colon + 1) : String("--");
+  String rest = colon > 0 ? data.currentTime.substring(colon + 1) : String("--");
+  int colon2 = rest.indexOf(':');
+  c.mm = colon2 > 0 ? rest.substring(0, colon2) : rest;
   c.colon = (millis() / 1000) & 1;
   c.date = fmtDate(data.currentDate);
-  c.price = fmtPrice(data.btcPrice);
-  c.block = commas(data.blockHeight);
   c.hash = data.currentHashRate;
+  c.flash = millis() < shareFlashUntil;
+  c.temp = data.temp.length() ? (data.temp + "°C") : String("--");
+  c.uptime = fmtUptimeShort(data.timeMining);
+  int tC = data.temp.toInt();
+  bool hot = (data.temp.length() && tC >= 70);
+  c.tempCol = hot ? C_WARN : C_TEXT;
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    c.link = "OFFLINE";
+    c.linkCol = C_BAD;
+  }
+  else if (hot)
+  {
+    c.link = "HOT";
+    c.linkCol = C_WARN;
+  }
+  else if (uiStatus() == NM_hashing)
+  {
+    c.link = "ONLINE";
+    c.linkCol = C_GOOD;
+  }
+  else
+  {
+    c.link = "LINKING";
+    c.linkCol = C_WARN;
+  }
   lastClock = c;
   haveClock = true;
   paintClock(c);
@@ -2295,10 +2369,14 @@ void cydDumpScreens(void)
     c.hh = "21";
     c.mm = "47";
     c.colon = true;
-    c.date = fmtDate("30/09/2026");
-    c.price = "$97,412";
-    c.block = "912,345";
-    c.hash = "672.4";
+    c.date = fmtDate("12/10/2026");
+    c.hash = "951.4";
+    c.flash = false;
+    c.temp = "51°C";
+    c.uptime = "1d";
+    c.link = "ONLINE";
+    c.linkCol = C_GOOD;
+    c.tempCol = C_TEXT;
     paintClock(c);
     dumpShot("clock");
   }

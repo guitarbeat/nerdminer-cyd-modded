@@ -467,6 +467,19 @@ clock_data getClockData(unsigned long mElapsed)
   data.blockHeight = getBlockHeight();
   data.currentTime = getTime();
   data.currentDate = getDate();
+  data.temp = String(temperatureRead(), 0);
+  {
+    char timeMining[15] = {0};
+    uint64_t tm = upTime;
+    int secs = tm % 60;
+    tm /= 60;
+    int mins = tm % 60;
+    tm /= 60;
+    int hours = tm % 24;
+    int days = tm / 24;
+    sprintf(timeMining, "%01d  %02d:%02d:%02d", days, hours, mins, secs);
+    data.timeMining = timeMining;
+  }
 
   return data;
 }
