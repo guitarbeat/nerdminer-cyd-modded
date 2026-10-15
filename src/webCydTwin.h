@@ -37,7 +37,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <span id='cyd-device-badge' class='cyd-badge'>Device: SCR 0 (MINE)</span>
 </div></div>
 <div class='cyd-bezel'>
-<div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>ESP32-2432S024 &bull; 2.4&quot; 240&times;320 SPI TFT (PORTRAIT)</div>
+<div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT (PORTRAIT)</div>
 <canvas id='cyd-canvas' width='240' height='320'></canvas>
 <div class='cyd-tabs'>
 <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'><span class='cyd-live-dot'></span>0 MINE</button>
@@ -66,7 +66,7 @@ const CYD_PALETTES=[
 ];
 
 function cydGetPalette(th){const idx=(typeof th==='number'&&th>=0&&th<CYD_PALETTES.length)?th:0;return CYD_PALETTES[idx];}
-function cydToggleOrientation(){cydIsPortrait=!cydIsPortrait;cydRender();}
+function cydToggleOrientation(){const af=document.getElementById('cyd-auto-follow');if(af)af.checked=false;cydAutoFollow=false;cydIsPortrait=!cydIsPortrait;cydRender();}
 function cydSelectTab(idx,isUserClick=true){
 cydPreviewScr=idx;
 if(isUserClick){const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&idx!==cydDevScr)af.checked=false;}
@@ -120,14 +120,14 @@ ctx.fillStyle=p.text;ctx.font='bold '+(wordmark?11:11)+'px sans-serif';ctx.fillT
 const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
-const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
+const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':(wordmark?'IDLE':'SETUP'));
 let sx;
 if(wordmark){ctx.fillStyle=p.dim;ctx.font='bold 11px sans-serif';ctx.fillText('|',tw+10,16);ctx.fillStyle=stCol;ctx.fillText(stTxt,tw+18,16);sx=tw+18+ctx.measureText(stTxt).width+6;}
 else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
 if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
 const dotW=6,dotH=3,gap=2;let startX=hideTime?170:142;if(startX<sx+4)startX=sx+4;
 for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
-if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(tm,234,16);ctx.textAlign='left';}
+if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='13px sans-serif';ctx.textAlign='right';ctx.fillText(tm,236,17);ctx.textAlign='left';}
 ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(6,26);ctx.lineTo(234,26);ctx.stroke();
 }
 
@@ -254,20 +254,25 @@ ctx.fillStyle=p.dim;ctx.font=(ls?10:9)+'px sans-serif';ctx.fillText(c.l,cx,sy+(l
 ctx.fillStyle=c.col||p.text;ctx.font='bold '+(ls?14:13)+'px sans-serif';ctx.fillText(c.v,cx,sy+(ls?30:34));
 }
 }
+const CYD_WD=['SUN','MON','TUE','WED','THU','FRI','SAT'],CYD_MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function cydFmtDate(s){let dt=null;const m=String(s||'').match(/^(\d+)\/(\d+)\/(\d+)$/);if(m)dt=new Date(+m[3],+m[2]-1,+m[1]);else dt=new Date();return CYD_WD[dt.getDay()]+'  '+dt.getDate()+' '+CYD_MON[dt.getMonth()]+' '+dt.getFullYear();}
+let cydHist=[],cydHistLast=0;
+function cydNoteHash(d){const now=Date.now();const h=parseFloat(d&&d.hashrate);if(!(h>=0)||now-cydHistLast<900)return;cydHistLast=now;cydHist.push(h);if(cydHist.length>60)cydHist.shift();}
+function cydDrawHist(ctx,p,x0,y0,area,slots,step,bw){let mx=1;for(const v of cydHist)if(v>mx)mx=v;mx*=1.08;const base=y0+area;const n=cydHist.length;
+for(let i=0;i<slots;i++){const slot=i-(slots-n);const x=x0+i*step;if(slot<0){ctx.fillStyle=p.track;ctx.fillRect(x,base-2,bw,2);continue;}let bh=area*cydHist[slot]/mx;if(bh<2)bh=2;ctx.fillStyle=p.meter;ctx.fillRect(x,base-bh,bw,bh);}}
 function cydDrawClock(ctx,p,d,ls){
-const hr=parseFloat(d.hashrate)||951.4;
-const tm=(d&&d.time?d.time:'21:47').substring(0,5);
-const date='SUN 12 OCT 2026';
-const temp=(d.temp!==undefined&&d.temp!=='')?String(d.temp):'51';
+const hr=parseFloat(d.hashrate)||0;
+const tm=(d&&d.time?d.time:'--:--').substring(0,5);
+const date=cydFmtDate(d.date);
+const temp=(d.temp!==undefined&&d.temp!=='')?String(d.temp):'';
 const tC=parseInt(temp,10);const hot=(!isNaN(tC)&&tC>=70);
-const up=d.uptime?cydUpShort(d.uptime):'1d';
+const up=cydUpShort(d.uptime);
 const isHash=d&&(d.status==='hashing');
 const offline=d&&(d.status==='offline'||d.wifi===false);
 let link='ONLINE',linkCol=p.good;
 if(offline){link='OFFLINE';linkCol=p.bad;}
 else if(hot){link='HOT';linkCol=p.warn;}
-else if(!isHash&&d&&d.status==='connecting'){link='LINKING';linkCol=p.warn;}
-else if(!isHash&&d&&d.status&&d.status!=='hashing'){link='LINKING';linkCol=p.warn;}
+else if(!isHash){link='LINKING';linkCol=p.warn;}
 if(ls){
 cydDrawPanel(ctx,p,8,30,152,70,8);
 ctx.fillStyle=p.text;ctx.font='bold 36px sans-serif';ctx.fillText(tm,14,62);
@@ -279,7 +284,7 @@ const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-ser
 cydDrawPanel(ctx,p,8,106,304,84,8);
 ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',16,120);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',304,120);ctx.textAlign='left';
 const barsX=16,barsY=128,barArea=50,slots=60,step=(288)/slots,bw=Math.max(1,step-1);
-for(let i=0;i<slots;i++){const bh=Math.max(3,Math.sin((i+5)*0.28)*16+28);ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*step,barsY+barArea-bh,bw,bh);}
+cydDrawHist(ctx,p,barsX,barsY,barArea,slots,step,bw);
 ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',16,182);
 }else{
 cydDrawPanel(ctx,p,6,30,228,78,8);
@@ -292,11 +297,11 @@ const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-ser
 cydDrawPanel(ctx,p,6,172,228,88,8);
 ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',14,186);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',226,186);ctx.textAlign='left';
 const barsX=14,barsY=194,barArea=42,slots=60,step=216/slots,bw=Math.max(1,step-1);
-for(let i=0;i<slots;i++){const bh=Math.max(3,Math.sin((i+3)*0.28)*12+22);ctx.fillStyle=p.meter;ctx.fillRect(barsX+i*step,barsY+barArea-bh,bw,bh);}
+cydDrawHist(ctx,p,barsX,barsY,barArea,slots,step,bw);
 ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',14,248);
 }
 cydDrawClockStrip(ctx,p,ls,[
-{l:'TEMP',v:temp+'°C',col:hot?p.warn:p.text},
+{l:'TEMP',v:temp?temp+'°C':'--',col:hot?p.warn:p.text},
 {l:'UPTIME',v:up,col:p.text},
 {l:'ONLINE',v:link,col:linkCol}
 ]);
@@ -325,14 +330,14 @@ ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
 const tw=ctx.measureText(title).width;
 const isHash=d&&(d.status==='hashing');
 const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
-const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':'SETUP');
+const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':(wordmark?'IDLE':'SETUP'));
 let sx;
 if(wordmark){ctx.fillStyle=p.dim;ctx.fillText('|',tw+12,16);ctx.fillStyle=stCol;ctx.font='bold 12px sans-serif';ctx.fillText(stTxt,tw+20,16);sx=tw+20+ctx.measureText(stTxt).width+6;}
 else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
 if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
 const dotW=7,dotH=3,gap=2;let startX=hideTime?220:160;if(startX<sx+4)startX=sx+4;
 for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
-if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText(tm,314,16);ctx.textAlign='left';}
+if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='13px sans-serif';ctx.textAlign='right';ctx.fillText(tm,316,17);const tmw=ctx.measureText(tm).width;if(d&&d.ip){ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(d.ip,316-tmw-14,16);}ctx.textAlign='left';}
 ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,26);ctx.lineTo(314,26);ctx.stroke();
 }
 
@@ -363,21 +368,20 @@ cydDrawProtocol(ctx,p,d,true);
 
 function cydRender(){
 const cvs=document.getElementById('cyd-canvas');if(!cvs)return;
-const d=cydLastStats||{};
-if(d.is_portrait!==undefined&&cydAutoFollow&&d.screen===undefined){
-cydIsPortrait=d.is_portrait;
-}
+const d=cydLastStats||{};cydNoteHash(d);
+const afEl=document.getElementById('cyd-auto-follow');cydAutoFollow=afEl?afEl.checked:true;
+if(d.is_portrait!==undefined&&cydAutoFollow){cydIsPortrait=!!d.is_portrait;}
 const lbl=document.getElementById('cyd-bezel-lbl');
 const btnOrient=document.getElementById('cyd-orient-btn');
 if(cydIsPortrait){
 cvs.width=240;cvs.height=320;
 cvs.classList.remove('landscape');
-if(lbl)lbl.innerHTML='ESP32-2432S024 &bull; 2.4&quot; 240&times;320 SPI TFT (PORTRAIT)';
+if(lbl)lbl.innerHTML='ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT (PORTRAIT)';
 if(btnOrient)btnOrient.textContent='Portrait (240×320)';
 }else{
 cvs.width=320;cvs.height=240;
 cvs.classList.add('landscape');
-if(lbl)lbl.innerHTML='ESP32-2432S024 &bull; 2.4&quot; 320&times;240 SPI TFT (LANDSCAPE)';
+if(lbl)lbl.innerHTML='ESP32-2432S028R &bull; 2.8&quot; 320&times;240 SPI TFT (LANDSCAPE)';
 if(btnOrient)btnOrient.textContent='Landscape (320×240)';
 }
 const ctx=cvs.getContext('2d');const p=cydGetPalette(d.theme);

@@ -64,6 +64,7 @@ static String formatUptimeWeb(const String &s)
   return s.length() ? s : String("--");
 }
 
+String getDate(); // monitor.cpp
 static String buildStatsJson(const mining_data &d)
 {
   String json;
@@ -88,6 +89,7 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"workers\":" + String(pData.workersCount);
   json += ",\"blocks\":" + (d.valids.length() ? d.valids : String("0"));
   json += ",\"time\":\"" + d.currentTime + "\"";
+  json += ",\"date\":\"" + getDate() + "\"";
   json += ",\"ssid\":\"" + htmlEscape(WiFi.SSID()) + "\"";
   json += ",\"rssi\":" + String(WiFi.RSSI());
   json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
