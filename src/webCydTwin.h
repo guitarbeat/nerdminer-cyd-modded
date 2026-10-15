@@ -4,47 +4,54 @@
 #include <Arduino.h>
 
 static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
-.cyd-preview-card{background:transparent;border:none;padding:0;margin-bottom:18px}
-.cyd-preview-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
-.cyd-preview-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
-.cyd-bezel{background:#12161f;border:1px solid var(--card-border);border-radius:10px;padding:14px;display:flex;flex-direction:column;align-items:center;position:relative}
-.cyd-bezel-lbl{font-size:10px;letter-spacing:1px;color:#8b949e;text-transform:uppercase;margin-bottom:10px;font-weight:600}
-#cyd-canvas{width:100%;max-width:270px;height:auto;aspect-ratio:3/4;background:#0b0e14;border:1px solid #30363d;border-radius:6px;image-rendering:pixelated;box-shadow:0 6px 18px rgba(0,0,0,0.4);transition:max-width .2s,aspect-ratio .2s}
-#cyd-canvas.landscape{max-width:440px;aspect-ratio:4/3}
-.cyd-tabs{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;justify-content:center;width:100%}
-.cyd-tab-btn{background:var(--input-bg);border:1px solid var(--card-border);color:var(--muted);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
-.cyd-tab-btn:hover{color:#fff;border-color:var(--amber)}
-.cyd-tab-btn.active{background:rgba(247,147,26,0.12);color:var(--amber);border-color:var(--amber)}
-.cyd-live-dot{width:6px;height:6px;border-radius:50%;background:#3fb950;display:inline-block;box-shadow:0 0 6px #3fb950}
-.cyd-ctrls{display:flex;gap:8px;margin-top:12px;justify-content:center;align-items:center;width:100%;max-width:480px;flex-wrap:wrap}
-.cyd-btn-switch{background:var(--amber);color:#000;border:none;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.cyd-preview-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r,6px);padding:0;margin-bottom:18px;overflow:hidden}
+.cyd-preview-hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--card-border);flex-wrap:wrap;gap:8px}
+.cyd-preview-title{font-size:11px;font-weight:800;display:flex;align-items:center;gap:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.cyd-hdr-right{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.cyd-follow{display:flex;align-items:center;gap:5px;cursor:pointer}
+.cyd-follow input{accent-color:var(--amber)}
+.cyd-badge{background:rgba(34,197,94,0.1);color:#22c55e;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.8px;border:1px solid rgba(34,197,94,0.3);font-family:ui-monospace,Menlo,monospace}
+.cyd-bezel{background:radial-gradient(ellipse at top,#121823 0%,var(--card-2,#0c1017) 70%);padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;position:relative}
+.cyd-bezel-lbl{font-size:9px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;font-weight:700;font-family:ui-monospace,Menlo,monospace;text-align:center}
+#cyd-canvas{width:100%;max-width:260px;height:auto;aspect-ratio:3/4;background:#000;border:6px solid #1a1f29;border-radius:8px;image-rendering:pixelated;box-shadow:0 0 0 1px #2a3240,0 10px 28px rgba(0,0,0,0.55);transition:max-width .2s,aspect-ratio .2s}
+#cyd-canvas.landscape{max-width:420px;aspect-ratio:4/3}
+.cyd-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:14px;width:100%;max-width:420px;border:1px solid var(--card-border);border-radius:var(--r,6px);overflow:hidden}
+.cyd-tab-btn{background:var(--input-bg);border:none;border-left:1px solid var(--card-border);color:var(--muted);padding:8px 4px;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
+.cyd-tab-btn:first-child{border-left:none}
+.cyd-tab-btn:hover{color:var(--text)}
+.cyd-tab-btn.active{background:rgba(247,147,26,0.12);color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber)}
+.cyd-live-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e;flex-shrink:0}
+.cyd-ctrls{display:flex;gap:6px;margin-top:10px;justify-content:center;align-items:center;width:100%;max-width:420px;flex-wrap:wrap}
+.cyd-btn-switch{flex:1 1 160px;background:var(--amber);color:#000;border:none;border-radius:var(--r,6px);padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer;transition:opacity .15s}
 .cyd-btn-switch:hover{opacity:.9}
-.cyd-btn-nav{background:var(--input-bg);border:1px solid var(--card-border);color:#fff;border-radius:6px;padding:7px 10px;font-size:11px;cursor:pointer}
+.cyd-btn-nav{background:var(--input-bg);border:1px solid var(--card-border);color:var(--text);border-radius:var(--r,6px);padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s}
+.cyd-btn-nav:hover{border-color:var(--amber)}
 )rawcss";
 
 static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <div class='cyd-preview-card'>
 <div class='cyd-preview-hdr'>
-<div class='cyd-preview-title'><span>📺 Hardware Screen Twin</span></div>
-<div style='display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);'>
-<label style='display:flex;align-items:center;gap:4px;cursor:pointer;'><input type='checkbox' id='cyd-auto-follow' checked> Follow Device</label>
-<span id='cyd-device-badge' style='background:rgba(63,185,80,0.15);color:#3fb950;padding:2px 8px;border-radius:12px;font-weight:600;border:1px solid rgba(63,185,80,0.3);'>Device: SCR 0 (MINE)</span>
+<div class='cyd-preview-title'><span>Screen Twin</span></div>
+<div class='cyd-hdr-right'>
+<label class='cyd-follow'><input type='checkbox' id='cyd-auto-follow' checked> Follow device</label>
+<span id='cyd-device-badge' class='cyd-badge'>Device: SCR 0 (MINE)</span>
 </div></div>
 <div class='cyd-bezel'>
 <div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>ESP32-2432S024 &bull; 2.4&quot; 240&times;320 SPI TFT (PORTRAIT)</div>
 <canvas id='cyd-canvas' width='240' height='320'></canvas>
-<div class='cyd-ctrls'>
-<button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()'>&larr; Prev</button>
-<button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>📺 Switch Device to Screen 0</button>
-<button type='button' class='cyd-btn-nav' onclick='cydNextScreen()'>Next &rarr;</button>
-<button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()'>🔄 Portrait</button>
-</div>
 <div class='cyd-tabs'>
 <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'><span class='cyd-live-dot'></span>0 MINE</button>
 <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>1 MARKET</button>
 <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
 <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 PROTOCOL</button>
-</div></div></div>
+</div>
+<div class='cyd-ctrls'>
+<button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()'>&larr; Prev</button>
+<button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Switch Device to Screen 0</button>
+<button type='button' class='cyd-btn-nav' onclick='cydNextScreen()'>Next &rarr;</button>
+<button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()'>Portrait</button>
+</div>
+</div></div>
 )rawhtml";
 
 static const char CYD_TWIN_JS[] PROGMEM = R"rawjs(
@@ -64,7 +71,7 @@ function cydSelectTab(idx,isUserClick=true){
 cydPreviewScr=idx;
 if(isUserClick){const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&idx!==cydDevScr)af.checked=false;}
 for(let i=0;i<4;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
-const btn=document.getElementById('cyd-switch-btn');if(btn)btn.textContent='📺 Switch Device to Screen '+idx;
+const btn=document.getElementById('cyd-switch-btn');if(btn)btn.textContent='Switch Device to Screen '+idx;
 cydRender();
 }
 function cydPrevScreen(){cydSelectTab((cydPreviewScr+3)%4,true);}
@@ -366,12 +373,12 @@ if(cydIsPortrait){
 cvs.width=240;cvs.height=320;
 cvs.classList.remove('landscape');
 if(lbl)lbl.innerHTML='ESP32-2432S024 &bull; 2.4&quot; 240&times;320 SPI TFT (PORTRAIT)';
-if(btnOrient)btnOrient.textContent='🔄 Portrait (240×320)';
+if(btnOrient)btnOrient.textContent='Portrait (240×320)';
 }else{
 cvs.width=320;cvs.height=240;
 cvs.classList.add('landscape');
 if(lbl)lbl.innerHTML='ESP32-2432S024 &bull; 2.4&quot; 320&times;240 SPI TFT (LANDSCAPE)';
-if(btnOrient)btnOrient.textContent='🔄 Landscape (320×240)';
+if(btnOrient)btnOrient.textContent='Landscape (320×240)';
 }
 const ctx=cvs.getContext('2d');const p=cydGetPalette(d.theme);
 ctx.fillStyle=p.bg;ctx.fillRect(0,0,cvs.width,cvs.height);
