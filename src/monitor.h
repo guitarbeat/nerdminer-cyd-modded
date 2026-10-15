@@ -73,6 +73,10 @@ extern uint32_t g_klineEpoch;             // always 0 (no feed)
 uint8_t copyKlines(Kline *out);
 // Compact JSON object with market data for the web twin (empty candle list).
 String getMarketJson(void);
+// Minutes since a new tip height was observed (-1 until a change is seen).
+int blockAgeMin(void);
+// "~Mon YYYY" estimate for `rem` blocks from now (10 min/block), "" if no NTP.
+String halvingEtaStr(unsigned long rem);
 
 typedef struct{
   String globalHash; //hexahashes
@@ -82,6 +86,8 @@ typedef struct{
   float progressPercent;
   int remainingBlocks;
   int halfHourFee;
+  int feeFast;   // fastestFee (same /fees/recommended response)
+  int feeHour;   // hourFee
 #ifdef NERDMINER_T_HMI
   int fastestFee;
   int hourFee;
@@ -139,6 +145,9 @@ typedef struct {
   String blockHeight;
   float progressPercent;
   String remainingBlocks;
+  int blockAgeMin;     // minutes since this device saw the tip change; -1 = unknown
+  int feeFast, feeHour; // 0 = unknown
+  String halvingEta;   // "~Apr 2028" (10-min block estimate) or empty without NTP
 }coin_data;
 
 typedef struct{

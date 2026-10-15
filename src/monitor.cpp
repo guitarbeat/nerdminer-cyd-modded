@@ -139,6 +139,8 @@ void updateGlobalData(void){
             deserializeJson(doc, payload);
             String temp = "";
             if (doc.containsKey("halfHourFee")) gData.halfHourFee = doc["halfHourFee"].as<int>();
+            if (doc.containsKey("fastestFee"))  gData.feeFast = doc["fastestFee"].as<int>();
+            if (doc.containsKey("hourFee"))     gData.feeHour = doc["hourFee"].as<int>();
 #ifdef SCREEN_FEES_ENABLE
             if (doc.containsKey("fastestFee"))  gData.fastestFee = doc["fastestFee"].as<int>();
             if (doc.containsKey("hourFee"))     gData.hourFee = doc["hourFee"].as<int>();
@@ -159,6 +161,24 @@ void updateGlobalData(void){
 }
 
 unsigned long mHeightUpdate = 0;
+static unsigned long g_blockSeenMs = 0;
+
+int blockAgeMin(void) {
+  if (!g_blockSeenMs) return -1;
+  return (int)((millis() - g_blockSeenMs) / 60000UL);
+}
+
+String halvingEtaStr(unsigned long rem) {
+  unsigned long now = timeClient.getEpochTime();
+  if (now < 1700000000UL || rem == 0) return "";
+  time_t t = (time_t)now + (time_t)rem * 600;
+  struct tm tmv;
+  gmtime_r(&t, &tmv);
+  static const char *const MON[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+  char b[16];
+  snprintf(b, sizeof(b), "~%s %d", MON[tmv.tm_mon % 12], tmv.tm_year + 1900);
+  return String(b);
+}
 
 String getBlockHeight(void){
     
@@ -177,7 +197,14 @@ String getBlockHeight(void){
             String payload = http.getString();
             payload.trim();
 
-            current_block = payload;
+            // Block age is local: only known once we watch the tip change
+            // (no extra request -- the poll is every UPDATE_Height_min).
+            static bool heightSeen = false;
+            if (payload.toInt() > 0) {
+                if (heightSeen && payload != current_block) g_blockSeenMs = millis();
+                heightSeen = true;
+                current_block = payload;
+            }
 
             mHeightUpdate = millis();
         }        
@@ -209,7 +236,7 @@ String getMarketJson(void) {
   unsigned long blk = current_block.toInt();
   unsigned long rem = blk ? (((blk / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - blk : 0;
   String j;
-  j.reserve(200);
+  j.reserve(300);
   j += "{\"price\":" + String(bitcoin_price);
   j += ",\"prefix\":\"" + String(cur.prefix) + "\"";
   j += ",\"cur\":\"" + String(cur.code) + "\"";
@@ -218,6 +245,10 @@ String getMarketJson(void) {
   j += ",\"diff\":\"" + gData.difficulty + "\"";
   j += ",\"net\":\"" + gData.globalHash + "\"";
   j += ",\"rem\":" + String(rem);
+  j += ",\"age\":" + String(blockAgeMin());
+  j += ",\"ffast\":" + String(gData.feeFast);
+  j += ",\"fhour\":" + String(gData.feeHour);
+  j += ",\"hdate\":\"" + halvingEtaStr(rem) + "\"";
   j += ",\"pool\":\"" + Settings.PoolAddress + "\"}";
   return j;
 }
@@ -477,6 +508,10 @@ coin_data getCoinData(unsigned long mElapsed)
   unsigned long remainingBlocks = (((currentBlock / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - currentBlock;
   data.progressPercent = (HALVING_BLOCKS - remainingBlocks) * 100 / HALVING_BLOCKS;
   data.remainingBlocks = String(remainingBlocks) + " BLOCKS";
+  data.blockAgeMin = blockAgeMin();
+  data.feeFast = gData.feeFast;
+  data.feeHour = gData.feeHour;
+  data.halvingEta = halvingEtaStr(remainingBlocks);
 
   return data;
 }

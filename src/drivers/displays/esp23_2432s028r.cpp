@@ -567,10 +567,11 @@ static void drawHeader(const HdrV &h)
   };
   const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
   // Protocol screen: compact "PROTOCOL|HASHING" wordmark (mock).
-  if (h.screen == SCR_ARCH)
+  const bool wordmark = (h.screen == SCR_ARCH || h.screen == SCR_MARKET);
+  if (wordmark)
   {
-    text(wgt, "PROTOCOL", 0, 5, 12, C_TEXT, C_BG);
-    int wm0 = textW("PROTOCOL", 12);
+    text(wgt, title, 0, 5, 12, C_TEXT, C_BG);
+    int wm0 = textW(title, 12);
     text(wgt, "|", wm0 + 1, 5, 12, C_DIM, C_BG);
     const char *lab = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE");
     uint16_t col = (h.status == NM_hashing) ? C_GOOD : (h.status == NM_Connecting ? C_WARN : C_DIM);
@@ -580,8 +581,8 @@ static void drawHeader(const HdrV &h)
   {
     text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
   }
-  int wm = (h.screen == SCR_ARCH)
-               ? (textW("PROTOCOL", 12) + 8 + textW((h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE"), 12))
+  int wm = wordmark
+               ? (textW(title, 12) + 8 + textW((h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE"), 12))
                : textW(title, 13);
 
   // Status: purely typographic indicator with no dot prefix to save space
@@ -599,7 +600,7 @@ static void drawHeader(const HdrV &h)
   }
   int sx = wm + (isPortrait() ? 8 : 12);
   // Protocol already shows HASHING in the wordmark — skip duplicate.
-  if (h.screen != SCR_ARCH)
+  if (!wordmark)
     text(wgt, label, sx, 6, 9, col, C_BG);
   else
     sx = wm + 4;
@@ -626,7 +627,7 @@ static void drawHeader(const HdrV &h)
     int totalW = nScreens * dotW + (nScreens - 1) * dotGap;
     int dotY = 12; // y of top edge, centered vertically in 26px header
 
-    int statusEnd = (h.screen == SCR_ARCH) ? sx : (sx + textW(label, 9) + 6);
+    int statusEnd = wordmark ? sx : (sx + textW(label, 9) + 6);
     int center = (statusEnd + gapRight) / 2;
     int dotX0 = center - totalW / 2;
     if (dotX0 < statusEnd + 4) dotX0 = statusEnd + 4;
@@ -701,37 +702,6 @@ static void chromeStripCells(TFT_eSPI &d)
     for (int i = 1; i < 4; i++)
       d.drawFastVLine(12 + 74 * i, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
   }
-}
-
-// Two wide centred cells (Market footer): HASHRATE | SHARES.
-static void drawStrip2(const StripV &s)
-{
-  int sy = isPortrait() ? 269 : (STRIP_Y + 3);
-  int cw = isPortrait() ? 110 : 148;
-  int ch = isPortrait() ? 42 : 32;
-  int x0 = isPortrait() ? 8 : 10;
-  int xstep = isPortrait() ? 114 : 152;
-  for (int i = 0; i < 2; i++)
-  {
-    String k = "2|" + s.l[i] + "|" + s.v[i] + "|" + accentIdx + "|" + (isPortrait() ? "P" : "L");
-    if (!need(W_P0 + i, k))
-      continue;
-    if (!wBegin(cw, ch, C_PANEL))
-      continue;
-    text(wgt, s.l[i].c_str(), cw / 2, isPortrait() ? 4 : 2, isPortrait() ? 10 : 11, C_DIM, C_PANEL, Align::TopCenter);
-    text(wgt, s.v[i].c_str(), cw / 2, isPortrait() ? 19 : 15, isPortrait() ? 16 : 15, C_TEXT, C_PANEL, Align::TopCenter);
-    wEnd(x0 + xstep * i, sy);
-    done(W_P0 + i, k);
-  }
-}
-
-static void chromeStrip2(TFT_eSPI &d)
-{
-  chromeStrip(d);
-  if (isPortrait())
-    d.drawFastVLine(120, 272, 36, C_EDGE);
-  else
-    d.drawFastVLine(160, STRIP_Y + 8, STRIP_H - 16, C_EDGE);
 }
 
 // generic stat tile (quiet uppercase label over bold value, crisp hairline border)
@@ -906,133 +876,220 @@ static void paintMine(const MineV &m)
 struct MarketV
 {
   HdrV hdr;
-  String price, block, fee, diff, net;
+  String price, block, diff, net;
+  int age;          // minutes since tip change, -1 = unknown (height only)
+  int fee, feeHour, feeFast; // sat/vB, 0 = unknown
   int pct;
-  String remaining;
-  StripV strip;
+  long remaining;
+  String eta;       // "~Apr 2028" or ""
+  long height;      // raw height (reward math)
 };
 
-// Layout (no chart since the kline fetch was removed):
-//   Portrait  : price card y=30..100, block/fee card y=106..162,
-//               halving+network card y=168..260, footer strip y=266.
-//   Landscape : price+block card y=30..90, halving+network card y=96..192,
-//               footer strip y=198.
+// Market layout (mock):
+//   Portrait : hero y=30..104, NETWORK|DIFFICULTY y=108..158, FEES y=162..218,
+//              NEXT HALVING y=222..316.
+//   Landscape: hero y=30..86, NETWORK|DIFFICULTY y=90..134, FEES y=138..178,
+//              NEXT HALVING y=182..236.
+struct MkGeom { int hx, hy, hw, hh, ry, rh, cw, fy, fh, vy, vh; };
+static MkGeom mkGeom()
+{
+  if (isPortrait()) return {6, 30, 228, 74, 108, 50, 112, 162, 56, 222, 94};
+  return {8, 30, 304, 56, 90, 44, 150, 138, 40, 182, 54};
+}
+
 static void chromeMarket(TFT_eSPI &d)
 {
-  if (isPortrait())
-  {
-    panel(d, 6, 30, 228, 70, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 14, 35, 10, C_DIM, C_PANEL);
+  MkGeom g = mkGeom();
+  panel(d, g.hx, g.hy, g.hw, g.hh, 8, C_PANEL, C_EDGE, C_BG);
+  panel(d, g.hx, g.ry, g.cw, g.rh, 8, C_PANEL, C_EDGE, C_BG);
+  panel(d, g.hx + g.hw - g.cw, g.ry, g.cw, g.rh, 8, C_PANEL, C_EDGE, C_BG);
+  panel(d, g.hx, g.fy, g.hw, g.fh, 8, C_PANEL, C_EDGE, C_BG);
+  panel(d, g.hx, g.vy, g.hw, g.vh, 8, C_PANEL, C_EDGE, C_BG);
+}
 
-    panel(d, 6, 106, 228, 56, 8, C_PANEL, C_EDGE, C_BG);
-    d.drawFastVLine(120, 114, 40, C_EDGE);
-    text(d, "BLOCK HEIGHT", 63, 113, 9, C_DIM, C_PANEL, Align::TopCenter);
-    text(d, "FEE RATE", 177, 113, 9, C_DIM, C_PANEL, Align::TopCenter);
+// classify the half-hour fee; returns nullptr when unknown
+static const char *feeClass(int fee, uint16_t &col)
+{
+  if (fee <= 0) return nullptr;
+  if (fee <= 4) { col = C_GOOD; return "LOW"; }
+  if (fee <= 20) { col = C_METER; return "NORMAL"; }
+  col = C_BAD;
+  return "BUSY";
+}
 
-    panel(d, 6, 168, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
-    d.drawFastHLine(14, 220, 212, C_EDGE);
-    d.drawFastVLine(120, 226, 28, C_EDGE);
-    text(d, "DIFFICULTY", 63, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
-    text(d, "NETWORK", 177, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
+static String fmtReward(float r)
+{
+  String s = String(r, 4);
+  while (s.endsWith("0")) s.remove(s.length() - 1);
+  if (s.endsWith(".")) s.remove(s.length() - 1);
+  return s;
+}
 
-    chromeStrip2(d);
-  }
-  else
-  {
-    panel(d, 8, 30, 304, 60, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 16, 35, 10, C_DIM, C_PANEL);
-    text(d, "LATEST BLOCK", 300, 35, 10, C_DIM, C_PANEL, Align::TopRight);
-
-    panel(d, 8, 96, 304, 96, 8, C_PANEL, C_EDGE, C_BG);
-    d.drawFastHLine(16, 146, 288, C_EDGE);
-    d.drawFastVLine(160, 152, 34, C_EDGE);
-    text(d, "DIFFICULTY", 84, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
-    text(d, "NETWORK HASHRATE", 236, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
-
-    chromeStrip2(d);
-  }
+// "3.125 -> 1.5625 BTC" right-aligned at xr, with a drawn arrow (font-safe)
+static void drawRewardRight(int xr, int y, unsigned sz, const String &a, const String &b)
+{
+  int wa = textW(a.c_str(), sz), wb = textW(b.c_str(), sz);
+  const int aw = 14;
+  int x0 = xr - (wa + aw + wb);
+  text(wgt, a.c_str(), x0, y, sz, C_DIM, C_PANEL);
+  int ax = x0 + wa + 3, ay = y + sz / 2;
+  wgt.drawFastHLine(ax, ay, 7, C_DIM);
+  wgt.fillTriangle(ax + 6, ay - 3, ax + 6, ay + 3, ax + 9, ay, C_DIM);
+  text(wgt, b.c_str(), x0 + wa + aw, y, sz, C_GOLD, C_PANEL);
 }
 
 static void paintMarket(const MarketV &m)
 {
   drawHeader(m.hdr);
   const bool P = isPortrait();
+  MkGeom g = mkGeom();
 
-  // 1. Hero price card (+ block/fee in landscape)
-  // (24h change removed: no real data feed behind it.)
-  String k = m.price + "|" + (P ? m.price : m.block + m.fee) + (P ? "P" : "L");
+  // 1. Hero: BTC / USD price + latest block
+  String bl = "BLOCK #" + m.block;
+  String ag = m.age >= 0 ? (m.age < 1 ? String("just now") : String(m.age) + "m ago") : String("");
+  String k = m.price + "|" + bl + "|" + ag + (P ? "P" : "L");
   if (need(W_PRICE, k))
   {
-    if (P)
+    int w = g.hw - 4, h = g.hh - 4;
+    if (wBegin(w, h, C_PANEL))
     {
-      if (wBegin(212, 50, C_PANEL))
+      if (P)
       {
-        text(wgt, m.price.c_str(), 106, 16, 30, C_GOLD, C_PANEL, Align::TopCenter);
-        wEnd(14, 47);
-        done(W_PRICE, k);
+        text(wgt, btcPairLabel().c_str(), 8, 4, 10, C_DIM, C_PANEL);
+        text(wgt, m.price.c_str(), w / 2, 18, m.price.length() > 9 ? 26 : 30, C_GOLD, C_PANEL, Align::TopCenter);
+        int lw = textW(bl.c_str(), 10);
+        int aw = ag.length() ? textW(ag.c_str(), 10) : 0;
+        int tw = lw + (ag.length() ? 14 + aw : 0);
+        int x0 = (w - tw) / 2;
+        text(wgt, bl.c_str(), x0, 54, 10, C_TEXT, C_PANEL);
+        if (ag.length())
+        {
+          wgt.fillCircle(x0 + lw + 7, 60, 1, C_DIM);
+          text(wgt, ag.c_str(), x0 + lw + 14, 54, 10, C_DIM, C_PANEL);
+        }
       }
-    }
-    else
-    {
-      if (wBegin(288, 38, C_PANEL))
+      else
       {
-        text(wgt, m.price.c_str(), 0, 2, 28, C_GOLD, C_PANEL);
-        text(wgt, m.block.c_str(), 284, 2, 16, C_TEXT, C_PANEL, Align::TopRight);
-        text(wgt, (m.fee + " fee").c_str(), 284, 24, 10, C_DIM, C_PANEL, Align::TopRight);
-        wEnd(16, 48);
-        done(W_PRICE, k);
+        text(wgt, btcPairLabel().c_str(), 6, 3, 10, C_DIM, C_PANEL);
+        text(wgt, m.price.c_str(), 6, 18, 28, C_GOLD, C_PANEL);
+        text(wgt, bl.c_str(), w - 6, 8, 14, C_TEXT, C_PANEL, Align::TopRight);
+        if (ag.length())
+          text(wgt, ag.c_str(), w - 6, 30, 10, C_DIM, C_PANEL, Align::TopRight);
       }
+      wEnd(g.hx + 2, g.hy + 2);
+      done(W_PRICE, k);
     }
   }
 
-  // 2. Block / fee card (portrait only)
-  if (P)
+  // 2. NETWORK | DIFFICULTY cards
+  const char *lab[2] = {"NETWORK", "DIFFICULTY"};
+  const String *val[2] = {&m.net, &m.diff};
+  uint16_t vc[2] = {C_GOOD, C_GOLD};
+  for (int i = 0; i < 2; i++)
   {
-    String bk = m.block + "|" + m.fee;
-    if (need(W_CANDLES, bk))
+    String kk = *val[i] + (P ? "P" : "L");
+    if (!need(W_M0 + i, kk))
+      continue;
+    int w = g.cw - 4, h = g.rh - 4;
+    if (!wBegin(w, h, C_PANEL))
+      continue;
+    text(wgt, lab[i], w / 2, P ? 5 : 3, 10, C_DIM, C_PANEL, Align::TopCenter);
+    text(wgt, val[i]->c_str(), w / 2, P ? 21 : 18, P ? 18 : 17, vc[i], C_PANEL, Align::TopCenter);
+    wEnd(g.hx + (i ? g.hw - g.cw : 0) + 2, g.ry + 2);
+    done(W_M0 + i, kk);
+  }
+
+  // 3. FEES (full width): half-hour fee + congestion pill + range hint
+  char fk[48];
+  snprintf(fk, sizeof(fk), "%d|%d|%d|%d", m.fee, m.feeHour, m.feeFast, P ? 1 : 0);
+  if (need(W_M2, fk))
+  {
+    int w = g.hw - 4, h = g.fh - 4;
+    if (wBegin(w, h, C_PANEL))
     {
-      if (wBegin(212, 24, C_PANEL))
+      String fv = m.fee > 0 ? String(m.fee) : String("--");
+      uint16_t pc = C_DIM;
+      const char *cls = feeClass(m.fee, pc);
+      String range;
+      if (m.feeHour > 0 && m.feeFast > 0 && m.feeFast != m.feeHour)
+        range = "range " + String(min(m.feeHour, m.feeFast)) + "-" + String(max(m.feeHour, m.feeFast)) + " sat/vB";
+      text(wgt, "HALF-HOUR FEE", 6, P ? 4 : 3, 10, C_DIM, C_PANEL);
+      unsigned vs = P ? 22 : 18;
+      int vx = 6, vy = P ? 20 : 17;
+      if (!P)
       {
-        wgt.drawFastVLine(106, 0, 24, C_EDGE);
-        text(wgt, m.block.c_str(), 49, 4, 18, C_TEXT, C_PANEL, Align::TopCenter);
-        text(wgt, m.fee.c_str(), 163, 6, 14, C_TEXT, C_PANEL, Align::TopCenter);
-        wEnd(14, 130);
-        done(W_CANDLES, bk);
+        vx = 130;
+        vy = 9;
       }
+      text(wgt, fv.c_str(), vx, vy, vs, C_TEXT, C_PANEL);
+      int fw = textW(fv.c_str(), vs);
+      text(wgt, "sat/vB", vx + fw + 4, vy + vs - 11, 10, C_DIM, C_PANEL);
+      if (cls)
+      {
+        int pw = textW(cls, 9) + 12, ph = 14;
+        int px = w - pw - 6, py = P ? 4 : 3;
+        if (!P)
+          py = 10;
+        wgt.fillRoundRect(px, py, pw, ph, 7, pc);
+        text(wgt, cls, px + pw / 2, py + 3, 9, C_BG, pc, Align::TopCenter);
+      }
+      if (range.length())
+      {
+        if (P)
+          text(wgt, range.c_str(), w - 6, h - 14, 9, C_DIM, C_PANEL, Align::TopRight);
+        else
+          text(wgt, range.c_str(), 6, h - 13, 9, C_DIM, C_PANEL);
+      }
+      wEnd(g.hx + 2, g.fy + 2);
+      done(W_M2, fk);
     }
   }
 
-  // 3. Halving progress + difficulty / network card
+  // 4. NEXT HALVING
   char kb[80];
-  snprintf(kb, sizeof(kb), "%d|%s|%s|%s|%d", m.pct, m.remaining.c_str(), m.diff.c_str(), m.net.c_str(), P ? 1 : 0);
+  snprintf(kb, sizeof(kb), "%d|%ld|%s|%ld|%d", m.pct, m.remaining, m.eta.c_str(), m.height, P ? 1 : 0);
   if (need(W_HALV, kb))
   {
-    char pc[8];
-    snprintf(pc, sizeof(pc), "%d%%", m.pct);
-    String rem = commas(m.remaining) + " blocks left";
-    const int bw = P ? 212 : 288;
-    if (wBegin(bw, 42, C_PANEL))
+    int w = g.hw - 4, h = g.vh - 4;
+    if (wBegin(w, h, C_PANEL))
     {
-      text(wgt, "HALVING #5 PROGRESS", 0, 0, 10, C_DIM, C_PANEL);
-      text(wgt, pc, bw, 0, 12, C_METER, C_PANEL, Align::TopRight);
-      wgt.fillRoundRect(0, 17, bw, 8, 4, C_TRACK);
-      int fw = (bw * m.pct) / 100;
-      if (fw > 0) wgt.fillRoundRect(0, 17, fw, 8, 4, C_METER);
-      text(wgt, rem.c_str(), bw / 2, 30, 9, C_TEXT, C_PANEL, Align::TopCenter);
-      wEnd(P ? 14 : 16, P ? 174 : 102);
-    }
-    const int hw = P ? 212 : 288, hh = P ? 16 : 18;
-    if (wBegin(hw, hh, C_PANEL))
-    {
-      wgt.drawFastVLine(hw / 2, 0, hh, C_EDGE);
-      text(wgt, m.diff.c_str(), hw / 4, 1, P ? 13 : 15, C_GOLD, C_PANEL, Align::TopCenter);
-      text(wgt, m.net.c_str(), 3 * hw / 4, 1, P ? 13 : 15, C_GOOD, C_PANEL, Align::TopCenter);
-      wEnd(P ? 14 : 16, P ? 238 : 166);
+      char pc[8];
+      snprintf(pc, sizeof(pc), "%d%%", m.pct);
+      int era = m.height > 0 ? (int)(m.height / 210000) : 4;
+      float now = 50.0f / (float)(1UL << era);
+      String r0 = fmtReward(now), r1 = fmtReward(now / 2) + " BTC";
+      String rem = m.remaining > 0 ? commas(String(m.remaining)) + " blocks left" : String("-- blocks left");
+      const int bx = 6, bw = w - 12;
+      if (P)
+      {
+        text(wgt, "NEXT HALVING", bx, 4, 10, C_DIM, C_PANEL);
+        text(wgt, pc, w - 6, 2, 16, C_METER, C_PANEL, Align::TopRight);
+        wgt.fillRoundRect(bx, 24, bw, 10, 5, C_TRACK);
+        int fw = (bw * m.pct) / 100;
+        if (fw > 0) wgt.fillRoundRect(bx, 24, fw, 10, 5, C_METER);
+        text(wgt, rem.c_str(), bx, 42, 11, C_TEXT, C_PANEL);
+        if (m.eta.length())
+          text(wgt, m.eta.c_str(), w - 6, 42, 11, C_DIM, C_PANEL, Align::TopRight);
+        wgt.drawFastHLine(bx, 60, bw, C_EDGE);
+        text(wgt, "BLOCK REWARD", bx, 68, 9, C_DIM, C_PANEL);
+        drawRewardRight(w - 6, 66, 12, r0, r1);
+      }
+      else
+      {
+        text(wgt, "NEXT HALVING", bx, 3, 10, C_DIM, C_PANEL);
+        text(wgt, pc, bx + textW("NEXT HALVING", 10) + 8, 1, 13, C_METER, C_PANEL);
+        drawRewardRight(w - 6, 2, 11, r0, r1);
+        wgt.fillRoundRect(bx, 20, bw, 8, 4, C_TRACK);
+        int fw = (bw * m.pct) / 100;
+        if (fw > 0) wgt.fillRoundRect(bx, 20, fw, 8, 4, C_METER);
+        text(wgt, rem.c_str(), bx, 33, 10, C_TEXT, C_PANEL);
+        if (m.eta.length())
+          text(wgt, m.eta.c_str(), w - 6, 33, 10, C_DIM, C_PANEL, Align::TopRight);
+      }
+      wEnd(g.hx + 2, g.vy + 2);
       done(W_HALV, kb);
     }
   }
-
-  drawStrip2(m.strip);
 }
 
 // ============================================================ CLOCK screen ==
@@ -1692,17 +1749,17 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   MarketV m;
   m.hdr = liveHeader(data.currentTime);
   m.price = fmtPrice(data.btcPrice);
+  m.height = data.blockHeight.toInt();
   m.block = commas(data.blockHeight);
-  m.fee = data.halfHourFee.startsWith("0 ") ? String("--") : data.halfHourFee;
+  m.age = data.blockAgeMin;
+  m.fee = data.halfHourFee.toInt();
+  m.feeHour = data.feeHour;
+  m.feeFast = data.feeFast;
   m.diff = data.netwrokDifficulty.length() ? data.netwrokDifficulty : String("--");
   m.net = data.globalHashRate.length() ? data.globalHashRate + " EH/s" : String("--");
   m.pct = (int)data.progressPercent;
-  m.remaining = String(data.remainingBlocks.toInt());
-  // Footer: hashrate / shares (same sources as the MINE screen)
-  m.strip.l[0] = "HASHRATE";
-  m.strip.v[0] = String(data.currentHashRate.toFloat(), 0) + " KH/s";
-  m.strip.l[1] = "SHARES";
-  m.strip.v[1] = commas(data.completedShares);
+  m.remaining = data.remainingBlocks.toInt();
+  m.eta = data.halvingEta;
   lastMarket = m;
   haveMarket = true;
   paintMarket(m);
@@ -2217,15 +2274,16 @@ void cydDumpScreens(void)
     k.hdr = h;
     k.price = "$97,412";
     k.block = "912,345";
-    k.fee = "12 sat/vB";
+    k.height = 912345;
+    k.age = 4;
+    k.fee = 12;
+    k.feeHour = 9;
+    k.feeFast = 15;
     k.diff = "146.72T";
     k.net = "912 EH/s";
-    k.pct = 47;
-    k.remaining = "111,655";
-    k.strip.l[0] = "HASHRATE";
-    k.strip.v[0] = "950 KH/s";
-    k.strip.l[1] = "SHARES";
-    k.strip.v[1] = "1,284";
+    k.pct = 34;
+    k.remaining = 137655;
+    k.eta = "~Apr 2028";
     paintMarket(k);
     dumpShot("market");
 
