@@ -22,6 +22,7 @@
 #define DEFAULT_BRIGHTNESS	250
 #define DEFAULT_FLIPDISPLAY	false
 #define DEFAULT_CURRENCY	"usd"
+#define DEFAULT_MEMPOOLHOST	"mempool.space"	// public mempool; may be a local node e.g. "http://umbrel.local:3006"
 
 // JSON config files
 #define JSON_CONFIG_FILE	"/config.json"
@@ -54,6 +55,7 @@
 #define JSON_SPIFFS_KEY_ROTATION	"screenRotation"
 #define JSON_SPIFFS_KEY_THEME		"displayTheme"
 #define JSON_SPIFFS_KEY_CURRENCY	"currency"
+#define JSON_SPIFFS_KEY_MEMPOOL	"mempoolHost"
 #define JSON_SPIFFS_KEY_FBPOOL		"fallbackPool"
 #define JSON_SPIFFS_KEY_FBPORT		"fallbackPort"
 
@@ -76,6 +78,7 @@ struct TSettings
 	int screenRotation{ 1 };	// 0=Portrait (USB bottom), 1=Landscape (USB right), 2=Portrait Inv (USB top), 3=Landscape Inv (USB left)
 	int displayTheme{ 0 };	// 0=Instrument Amber, 1=Matrix Green, 2=Cyber Amber, 3=Arcade Neon, 4=Ice Blue, 5=Monochrome
 	String Currency{ DEFAULT_CURRENCY };	// fiat currency for the BTC price (CoinGecko vs_currency code)
+	String MempoolHost{ DEFAULT_MEMPOOLHOST };	// mempool API host for block/fee/difficulty stats
 };
 
 #endif // _STORAGE_H_

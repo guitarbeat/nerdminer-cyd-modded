@@ -21,13 +21,14 @@
 #define UPDATE_BTC_min   1
 
 //API Block height
-#define getHeightAPI "https://mempool.space/api/blocks/tip/height"
+#define getHeightAPI "/api/blocks/tip/height"   // path on mempoolUrl()
 #define UPDATE_Height_min 2
 
 //APIs Global Stats
-#define getGlobalHash "https://mempool.space/api/v1/mining/hashrate/3d"
-#define getDifficulty "https://mempool.space/api/v1/difficulty-adjustment"
-#define getFees "https://mempool.space/api/v1/fees/recommended"
+// Paths appended to mempoolUrl() (Settings.MempoolHost, default mempool.space)
+#define getGlobalHash "/api/v1/mining/hashrate/3d"
+#define getDifficulty "/api/v1/difficulty-adjustment"
+#define getFees "/api/v1/fees/recommended"
 #define UPDATE_Global_min 2
 
 //API public-pool.io
@@ -164,5 +165,7 @@ pool_data getPoolData(void);
 
 clock_data_t getClockData_t(unsigned long mElapsed);
 String getPoolAPIUrl(void);
+// Full URL for a mempool API path on the user-configured host.
+String mempoolUrl(const char *path);
 
 #endif //MONITOR_API_H

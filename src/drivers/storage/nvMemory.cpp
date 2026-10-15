@@ -28,7 +28,7 @@ bool nvMemory::saveConfig(TSettings* Settings)
         Serial.println(F("SPIFS: Saving configuration."));
 
         // Create a JSON document
-        StaticJsonDocument<768> json;
+        StaticJsonDocument<1024> json;
         json[JSON_SPIFFS_KEY_POOLURL] = Settings->PoolAddress;
         json[JSON_SPIFFS_KEY_POOLPORT] = Settings->PoolPort;
         json[JSON_SPIFFS_KEY_POOLPASS] = Settings->PoolPassword;
@@ -43,6 +43,7 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_ROTATION] = Settings->screenRotation;
         json[JSON_SPIFFS_KEY_THEME] = Settings->displayTheme;
         json[JSON_SPIFFS_KEY_CURRENCY] = Settings->Currency;
+        json[JSON_SPIFFS_KEY_MEMPOOL] = Settings->MempoolHost;
 
         // Open config file
         File configFile = SPIFFS.open(JSON_CONFIG_FILE, "w");
@@ -131,6 +132,8 @@ bool nvMemory::loadConfig(TSettings* Settings)
                         Settings->displayTheme = 0;
                     }
                     Settings->Currency = json[JSON_SPIFFS_KEY_CURRENCY] | DEFAULT_CURRENCY;
+                    Settings->MempoolHost = json[JSON_SPIFFS_KEY_MEMPOOL] | DEFAULT_MEMPOOLHOST;
+                    if (Settings->MempoolHost.length() == 0) Settings->MempoolHost = DEFAULT_MEMPOOLHOST;
                     return true;
                 }
                 else

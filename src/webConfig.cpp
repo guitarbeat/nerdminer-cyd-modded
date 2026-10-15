@@ -740,7 +740,8 @@ static void handleRoot()
       page += " selected";
     page += ">" + String(kCurrencies[i].label) + "</option>";
   }
-  page += F("</select>."
+  page += F("</select>. Read block, fee and difficulty stats from mempool host <input type='text' name='mempool' class='blank-input' style='width:190px' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
+  page += htmlEscape(Settings.MempoolHost) + F("'> (use your own node, e.g. <code>http://umbrel.local:3006</code>)."
             "<div style='margin-top:10px;'>"
             "<label class='checkbox-label'>"
             "<input type='checkbox' name='savestats'");
@@ -975,6 +976,12 @@ static void handleSave()
     Settings.Timezone = webCfgServer.arg("tz").toInt();
   if (webCfgServer.hasArg("currency"))
     Settings.Currency = currencyFor(webCfgServer.arg("currency")).code;
+  if (webCfgServer.hasArg("mempool"))
+  {
+    String mh = webCfgServer.arg("mempool");
+    mh.trim();
+    Settings.MempoolHost = mh.length() ? mh : String(DEFAULT_MEMPOOLHOST);
+  }
   Settings.saveStats = webCfgServer.hasArg("savestats");
 
   if (webCfgServer.hasArg("theme"))

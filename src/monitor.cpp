@@ -81,6 +81,18 @@ void setup_monitor(void){
 // block height, fees, difficulty and network hashrate empty.
 unsigned long mGlobalUpdate =0;
 
+// Settings.MempoolHost may be a bare host ("mempool.space"), host:port, or a
+// full base URL ("http://umbrel.local:3006"). Bare hosts default to https.
+String mempoolUrl(const char *path){
+    String h = Settings.MempoolHost;
+    h.trim();
+    if (h.length() == 0) h = DEFAULT_MEMPOOLHOST;
+    while (h.endsWith("/")) h.remove(h.length() - 1);
+    if (h.endsWith("/api")) h.remove(h.length() - 4);
+    if (!h.startsWith("http://") && !h.startsWith("https://")) h = "https://" + h;
+    return h + path;
+}
+
 void updateGlobalData(void){
     
     if((mGlobalUpdate == 0) || (millis() - mGlobalUpdate > UPDATE_Global_min * 60 * 1000)){
@@ -91,7 +103,7 @@ void updateGlobalData(void){
         HTTPClient http;
         http.setTimeout(10000);
         try {
-        http.begin(getGlobalHash);
+        http.begin(mempoolUrl(getGlobalHash));
         int httpCode;
         { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
 
@@ -117,7 +129,7 @@ void updateGlobalData(void){
 
       
         //Make third API call to get fees
-        http.begin(getFees);
+        http.begin(mempoolUrl(getFees));
         { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
 
         if (httpCode == HTTP_CODE_OK) {
@@ -157,7 +169,7 @@ String getBlockHeight(void){
         HTTPClient http;
         http.setTimeout(10000);
         try {
-        http.begin(getHeightAPI);
+        http.begin(mempoolUrl(getHeightAPI));
         int httpCode;
         { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
 

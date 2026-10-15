@@ -230,6 +230,9 @@ void init_WifiManager()
   sprintf(charZone, "%d", Settings.Timezone);
   WiFiManagerParameter time_text_box_num("TimeZone", "TimeZone fromUTC (-12/+12)", charZone, 3);
 
+  // Mempool API host for block height / fees / difficulty (local node friendly)
+  WiFiManagerParameter mempool_text_box("MempoolHost", "Mempool host (e.g. mempool.space or http://umbrel.local:3006)", Settings.MempoolHost.c_str(), 80);
+
   WiFiManagerParameter features_html("<hr><br><label style=\"font-weight: bold;margin-bottom: 25px;display: inline-block;\">Features</label>");
 
   char checkboxParams[24] = "type=\"checkbox\"";
@@ -247,6 +250,7 @@ void init_WifiManager()
   wm.addParameter(&password_text_box);
   wm.addParameter(&addr_text_box);
   wm.addParameter(&time_text_box_num);
+  wm.addParameter(&mempool_text_box);
   wm.addParameter(&features_html);
   wm.addParameter(&save_stats_to_nvs);
   #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
@@ -293,6 +297,7 @@ void init_WifiManager()
             strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
             strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
             Settings.Timezone = atoi(time_text_box_num.getValue());
+            if (strlen(mempool_text_box.getValue())) Settings.MempoolHost = mempool_text_box.getValue();
             //Serial.println(save_stats_to_nvs.getValue());
             Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
             #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
@@ -327,6 +332,7 @@ void init_WifiManager()
                 strncpy(Settings.PoolPassword, password_text_box.getValue(), sizeof(Settings.PoolPassword));
                 strncpy(Settings.BtcWallet, addr_text_box.getValue(), sizeof(Settings.BtcWallet));
                 Settings.Timezone = atoi(time_text_box_num.getValue());
+                if (strlen(mempool_text_box.getValue())) Settings.MempoolHost = mempool_text_box.getValue();
                 // Serial.println(save_stats_to_nvs.getValue());
                 Settings.saveStats = (strncmp(save_stats_to_nvs.getValue(), "T", 1) == 0);
                 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
@@ -377,6 +383,7 @@ void init_WifiManager()
 
         //Convert the number value
         Settings.Timezone = atoi(time_text_box_num.getValue());
+        if (strlen(mempool_text_box.getValue())) Settings.MempoolHost = mempool_text_box.getValue();
         Serial.print("TimeZone fromUTC: ");
         Serial.println(Settings.Timezone);
 
@@ -423,6 +430,7 @@ void init_WifiManager()
 
     //Convert the number value
     Settings.Timezone = atoi(time_text_box_num.getValue());
+    if (strlen(mempool_text_box.getValue())) Settings.MempoolHost = mempool_text_box.getValue();
     Serial.print("TimeZone fromUTC: ");
     Serial.println(Settings.Timezone);
 
