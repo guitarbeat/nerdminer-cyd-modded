@@ -138,7 +138,7 @@ ctx.fillStyle=p.text;ctx.font='bold '+(ls?14:15)+'px sans-serif';ctx.fillText(c.
 ctx.textAlign='left';
 }
 
-function cydHashLog2Q8FromDiff(d){if(!(d>0))return 0xFF00;const log2True=223.999978314;let exp=0;let m=d;while(m>=2){m*=0.5;exp++;}while(m<1&&m>0){m*=2;exp--;}const z=2*m-1;const log2m=-1+(z-0.5*z*z+(z*z*z)/3)/0.69314718056;let log2h=log2True-(exp+log2m);if(log2h<0)log2h=0;if(log2h>255.996)log2h=255.996;return (log2h*256)|0;}
+function cydHashLog2Q8FromDiff(d){if(!(d>0))return 0xFF00;const log2True=223.999978314;let exp=0;let m=d;while(m>=1){m*=0.5;exp++;}while(m>0&&m<0.5){m*=2;exp--;}const u=2*m;const z=u-1;const log2m=-1+(z-0.5*z*z+(z*z*z)/3)/0.69314718056;let log2h=log2True-(exp+log2m);if(log2h<0)log2h=0;if(log2h>255.996)log2h=255.996;return (log2h*256)|0;}
 function cydSynthSamples(n,tgtLog){const out=[];for(let i=0;i<n;i++){const bits=248+((Math.random()*8)|0)-((Math.random()<0.08)?((Math.random()*30)|0):0);const frac=(Math.random()*255)|0;out.push(((Math.max(0,Math.min(255,bits))<<8)|frac));}return out;}
 function cydProtoY(log2q8,yTop,yBot,plotY,plotH){const span=yTop-yBot;if(span<=0)return plotY+(plotH>>1);let v=yTop-log2q8;if(v<0)v=0;if(v>span)v=span;return plotY+((v*(plotH-1))/span)|0;}
 function cydDrawProtoX(ctx,x,y,col){ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-2.5,y-2.5);ctx.lineTo(x+2.5,y+2.5);ctx.moveTo(x-2.5,y+2.5);ctx.lineTo(x+2.5,y-2.5);ctx.stroke();}
