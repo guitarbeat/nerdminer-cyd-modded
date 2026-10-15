@@ -761,11 +761,10 @@ static void chromeMarket(TFT_eSPI &d)
   {
     // Hero Price Card (y=30..84, h=54)
     panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BTC / USDT • BINANCE", 14, 33, 10, C_DIM, C_PANEL);
+    text(d, btcPairLabel().c_str(), 14, 33, 10, C_DIM, C_PANEL);
 
     // Candlestick Container (y=88..206, h=118)
     panel(d, 6, 88, 228, 118, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, "BTC/USDT 1H CANDLES", 14, 92, 10, C_DIM, C_PANEL);
 
     // Halving & Network Card (y=210..260, h=50)
     panel(d, 6, 210, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
@@ -788,90 +787,93 @@ static void chromeMarket(TFT_eSPI &d)
   }
 }
 
-static void drawCandlesticks(int x, int y, int w, int h)
+// Compact "$68.4K" style price tag for chart labels.
+static void fmtK(char *buf, size_t n, const char *prefix, float v)
 {
-  if (!wBegin(w, h, C_PANEL))
+  if (v >= 10000.0f)
+    snprintf(buf, n, "%s$%.1fK", prefix, v / 1000.0f);
+  else
+    snprintf(buf, n, "%s$%.0f", prefix, v);
+}
+
+// OHLC candlestick chart with MA-7 overlay and High/Low tags, drawn into any
+// TFT_eSPI surface (the screen or the scratch sprite) at (x,y,w,h).
+// Price -> pixel: Y = y + h - ((price - min) / range) * h, with 5% padding.
+static void drawCandlestickChart(TFT_eSPI &d, int x, int y, int w, int h, Kline *klines, int count)
+{
+  d.fillRect(x, y, w, h, C_PANEL);
+  text(d, "BTC/USDT " KLINE_INTERVAL_LABEL, x + 4, y + 2, 9, C_DIM, C_PANEL);
+  text(d, "MA7", x + w / 2, y + 2, 9, C_GOLD, C_PANEL, Align::TopCenter);
+
+  const int plotX = x + 4, plotY = y + 14, plotW = w - 8, plotH = h - 26;
+  for (int i = 0; i <= 3; i++) // subtle grid
+    d.drawFastHLine(plotX, plotY + (plotH * i) / 3, plotW, C_TRACK);
+
+  if (klines == nullptr || count <= 0)
+  {
+    text(d, "WAITING FOR MARKET DATA", x + w / 2, plotY + plotH / 2 - 5, 9, C_DIM, C_PANEL, Align::TopCenter);
     return;
+  }
+  if (count > KLINE_POINTS)
+    count = KLINE_POINTS;
 
-  // Background grid lines (3 dotted/subtle rules)
-  const int plotX = 4, plotY = 16, plotW = w - 8, plotH = h - 26;
-  for (int i = 0; i < 3; i++)
+  float minP = klines[0].low, maxP = klines[0].high;
+  for (int i = 1; i < count; i++)
   {
-    int gy = plotY + (plotH / 3) * i;
-    wgt.drawFastHLine(plotX, gy, plotW, C_TRACK);
+    if (klines[i].low < minP) minP = klines[i].low;
+    if (klines[i].high > maxP) maxP = klines[i].high;
+  }
+  const float rawLo = minP, rawHi = maxP;
+  float pad = (maxP - minP) * 0.05f;
+  if (pad < 1.0f) pad = 1.0f;
+  minP -= pad;
+  maxP += pad;
+  const float rng = maxP - minP;
+  auto py = [&](float p) -> int {
+    int v = plotY + plotH - (int)(((p - minP) / rng) * plotH);
+    return v < plotY ? plotY : (v > plotY + plotH ? plotY + plotH : v);
+  };
+
+  const float step = (float)plotW / count;
+  int cW = (int)step - 2;
+  if (cW < 2) cW = 2;
+  float ma[KLINE_POINTS];
+
+  for (int i = 0; i < count; i++)
+  {
+    const Kline &k = klines[i];
+    float sum = 0;
+    int n = 0;
+    for (int j = (i >= 6 ? i - 6 : 0); j <= i; j++, n++)
+      sum += klines[j].close;
+    ma[i] = sum / n;
+
+    uint16_t col = k.close >= k.open ? C_GOOD : C_BAD;
+    int cx = plotX + (int)(i * step + step / 2);
+    int yHi = py(k.high), yLo = py(k.low);
+    d.drawFastVLine(cx, yHi, (yLo - yHi) > 0 ? (yLo - yHi) : 1, col); // wick
+    int yO = py(k.open), yC = py(k.close);
+    int top = yO < yC ? yO : yC;
+    int bh = abs(yC - yO);
+    if (bh < 1) bh = 1;
+    d.fillRect(cx - cW / 2, top, cW, bh, col); // body
   }
 
-  // Use live Binance US klines if available, otherwise simulated realistic curve
-  int n = g_klineCount > 0 ? g_klineCount : 22;
-  float minP = 1e9f, maxP = -1e9f;
-
-  for (int i = 0; i < n; i++)
+  for (int i = 1; i < count; i++) // MA-7 trend line
   {
-    float low = g_klineCount > 0 ? g_btcKlines[i].l : (66200.0f + (sinf(i * 0.35f) * 1400.0f) - 300.0f);
-    float high = g_klineCount > 0 ? g_btcKlines[i].h : (66200.0f + (sinf(i * 0.35f) * 1400.0f) + 400.0f);
-    if (low < minP) minP = low;
-    if (high > maxP) maxP = high;
-  }
-  float rng = (maxP - minP) > 1.0f ? (maxP - minP) : 100.0f;
-
-  // Draw Timeframe Badge + High / Low Labels
-  char hBuf[16], lBuf[16];
-  snprintf(hBuf, sizeof(hBuf), "H: %.1fK", maxP / 1000.0f);
-  snprintf(lBuf, sizeof(lBuf), "L: %.1fK", minP / 1000.0f);
-  text(wgt, hBuf, w - 6, 2, 9, C_GOLD, C_PANEL, Align::TopRight);
-  text(wgt, lBuf, 6, h - 11, 9, C_DIM, C_PANEL);
-  text(wgt, "1H [MA7]", w / 2, 2, 9, C_METER, C_PANEL, Align::TopCenter);
-
-  // Candlesticks
-  float ma7[24] = {0};
-  int step = plotW / n;
-  int cW = step > 4 ? step - 2 : 3;
-
-  for (int i = 0; i < n; i++)
-  {
-    float o = g_klineCount > 0 ? g_btcKlines[i].o : (66200.0f + sinf(i * 0.35f) * 1400.0f);
-    float c = g_klineCount > 0 ? g_btcKlines[i].c : (66200.0f + sinf((i + 1) * 0.35f) * 1400.0f);
-    float hi = g_klineCount > 0 ? g_btcKlines[i].h : (fmaxf(o, c) + 350.0f);
-    float lo = g_klineCount > 0 ? g_btcKlines[i].l : (fminf(o, c) - 250.0f);
-
-    // Running MA-7
-    float sum = 0; int cnt = 0;
-    for (int j = (i >= 6 ? i - 6 : 0); j <= i; j++)
-    {
-      sum += (g_klineCount > 0 ? g_btcKlines[j].c : (66200.0f + sinf((j + 1) * 0.35f) * 1400.0f));
-      cnt++;
-    }
-    ma7[i] = sum / cnt;
-
-    bool isBull = c >= o;
-    uint16_t col = isBull ? C_GOOD : C_BAD;
-    int cx = plotX + i * step + step / 2;
-    int yHi = plotY + plotH - (int)(((hi - minP) / rng) * plotH);
-    int yLo = plotY + plotH - (int)(((lo - minP) / rng) * plotH);
-    int yOp = plotY + plotH - (int)(((o - minP) / rng) * plotH);
-    int yCl = plotY + plotH - (int)(((c - minP) / rng) * plotH);
-
-    // Wick
-    wgt.drawFastVLine(cx, yHi, yLo - yHi > 0 ? yLo - yHi : 1, col);
-
-    // Body
-    int yTop = yOp < yCl ? yOp : yCl;
-    int bH = abs(yCl - yOp);
-    if (bH < 2) bH = 2;
-    wgt.fillRect(cx - cW / 2, yTop, cW, bH, col);
+    int x0 = plotX + (int)((i - 1) * step + step / 2);
+    int x1 = plotX + (int)(i * step + step / 2);
+    d.drawLine(x0, py(ma[i - 1]), x1, py(ma[i]), C_GOLD);
   }
 
-  // Draw MA-7 Smoothed Line
-  for (int i = 1; i < n; i++)
-  {
-    int x0 = plotX + (i - 1) * step + step / 2;
-    int y0 = plotY + plotH - (int)(((ma7[i - 1] - minP) / rng) * plotH);
-    int x1 = plotX + i * step + step / 2;
-    int y1 = plotY + plotH - (int)(((ma7[i] - minP) / rng) * plotH);
-    wgt.drawLine(x0, y0, x1, y1, C_GOLD);
-  }
-
-  wEnd(x, y);
+  char hb[16], lb[16];
+  fmtK(hb, sizeof(hb), "H ", rawHi);
+  fmtK(lb, sizeof(lb), "L ", rawLo);
+  text(d, hb, x + w - 4, y + 2, 9, C_GOOD, C_PANEL, Align::TopRight);
+  text(d, lb, x + 4, y + h - 11, 9, C_BAD, C_PANEL);
+  char last[16];
+  fmtK(last, sizeof(last), "", klines[count - 1].close);
+  text(d, last, x + w - 4, y + h - 11, 9, C_TEXT, C_PANEL, Align::TopRight);
 }
 
 static void paintMarket(const MarketV &m)
@@ -907,21 +909,26 @@ static void paintMarket(const MarketV &m)
         snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%%", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
         text(wgt, chgBuf, 120, 4, 11, g_btc24hChange >= 0 ? C_GOOD : C_BAD, C_PANEL);
         text(wgt, m.block.c_str(), 288, 2, 14, C_TEXT, C_PANEL, Align::TopRight);
+        text(wgt, (m.fee + " fee").c_str(), 288, 20, 10, C_DIM, C_PANEL, Align::TopRight);
         wEnd(14, 44);
         done(W_PRICE, k);
       }
     }
   }
 
-  // 2. Candlesticks
-  String ck = String(g_klineCount) + "|" + (g_klineCount > 0 ? String(g_btcKlines[g_klineCount - 1].c, 0) : "0") + "|" + (isPortrait() ? "P" : "L");
+  // 2. Candlesticks (re-drawn only when a new batch lands or layout changes)
+  String ck = String(g_klineEpoch) + "|" + String(g_klineCount) + "|" + (isPortrait() ? "P" : "L");
   if (need(W_CANDLES, ck))
   {
-    if (isPortrait())
-      drawCandlesticks(10, 92, 220, 110);
-    else
-      drawCandlesticks(12, 90, 296, 60);
-    done(W_CANDLES, ck);
+    static Kline snap[KLINE_POINTS];
+    int n = copyKlines(snap);
+    const int cw = isPortrait() ? 220 : 296, ch = isPortrait() ? 110 : 62;
+    if (wBegin(cw, ch, C_PANEL))
+    {
+      drawCandlestickChart(wgt, 0, 0, cw, ch, snap, n);
+      wEnd(isPortrait() ? 10 : 12, isPortrait() ? 92 : 89);
+      done(W_CANDLES, ck);
+    }
   }
 
   // 3. Halving Progress Card
@@ -1576,6 +1583,20 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
 
+// Short pool name for the market footer: "public-pool.io" -> "public-pool".
+static String marketPoolLabel()
+{
+  String h = Settings.PoolAddress;
+  int dot = h.lastIndexOf('.');
+  if (dot > 0)
+    h = h.substring(0, dot);
+  if (h.startsWith("pool."))
+    h = h.substring(5);
+  if (h.length() > 9)
+    h = h.substring(0, 9);
+  return h.length() ? h : String("--");
+}
+
 void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 {
   coin_data data = getCoinData(mElapsed);
@@ -1593,14 +1614,15 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.net = data.globalHashRate.length() ? data.globalHashRate + " EH/s" : String("--");
   m.pct = (int)data.progressPercent;
   m.remaining = String(data.remainingBlocks.toInt());
-  m.strip.l[0] = "WORKERS";
-  m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
-  m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
-  m.strip.v[2] = pData.bestDifficulty;
-  m.strip.l[3] = "SHARES";
-  m.strip.v[3] = commas(data.completedShares);
+  // Footer per ticker layout: pair / interval / pool / time
+  m.strip.l[0] = "PAIR";
+  m.strip.v[0] = "BTC/USDT";
+  m.strip.l[1] = "INTERVAL";
+  m.strip.v[1] = KLINE_INTERVAL_LABEL;
+  m.strip.l[2] = "POOL";
+  m.strip.v[2] = marketPoolLabel();
+  m.strip.l[3] = "TIME";
+  m.strip.v[3] = data.currentTime.substring(0, 5);
   lastMarket = m;
   haveMarket = true;
   paintMarket(m);
@@ -2036,9 +2058,14 @@ void cydDumpScreens(void)
     k.net = "912 EH/s";
     k.pct = 47;
     k.remaining = "111,655";
-    k.strip = m.strip;
-    k.strip.l[3] = "SHARES";
-    k.strip.v[3] = "1,284";
+    k.strip.l[0] = "PAIR";
+    k.strip.v[0] = "BTC/USDT";
+    k.strip.l[1] = "INTERVAL";
+    k.strip.v[1] = KLINE_INTERVAL_LABEL;
+    k.strip.l[2] = "POOL";
+    k.strip.v[2] = "public-po";
+    k.strip.l[3] = "TIME";
+    k.strip.v[3] = "21:47";
     paintMarket(k);
     dumpShot("market");
 
