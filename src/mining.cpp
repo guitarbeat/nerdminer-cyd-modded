@@ -156,6 +156,11 @@ void hashSamplePushDigest(const uint8_t hash[32])
   if (g_hashSampleCount < HASH_SAMPLE_N)
     g_hashSampleCount++;
   g_hashSampleLatest = v;
+  // Every plotted sample is a real hash: keep best_diff >= any plotted point
+  // so BEST is always the top of the scatter (diff = 2^(224 - log2 hash)).
+  double d = ldexp(1.0, 224 - (int)(v >> 8)) / (1.0 + (double)(v & 0xFF) / 256.0);
+  if (d > best_diff)
+    best_diff = d;
 }
 
 uint16_t hashLog2Q8FromDifficulty(double difficulty)
@@ -1896,9 +1901,24 @@ void minerWorkerHw(void * task_id)
           uint32_t nonce_n = job->nonce_start + n;
           if ((nonce_n & HASH_SAMPLE_MASK) == 0)
           {
-            // Force a full digest read for the display sample (rare).
+            // Force a full digest read for the display sample (rare). The HW
+            // TEXT regs hold big-endian words: byte-swap like _swap_if does so
+            // byte 31 is the numeric MSB (was unswapped -> bogus sample diff).
             nerd_sha_ll_read_digest(hash);
+            for (int w = 0; w < 8; w++)
+              ((uint32_t *)hash)[w] = __builtin_bswap32(((uint32_t *)hash)[w]);
             hashSamplePushDigest(hash);
+            // Same share filter as _swap_if: sample nonces must still count.
+            if (hash[31] == 0 && hash[30] == 0)
+            {
+              double diff_hash = diff_from_target(hash);
+              if (diff_hash > result->difficulty && isSha256Valid(hash))
+              {
+                result->difficulty = diff_hash;
+                result->nonce = nonce_n;
+                memcpy(result->hash, hash, sizeof(hash));
+              }
+            }
           }
           else if (nerd_sha_ll_read_digest_swap_if(hash))
           {

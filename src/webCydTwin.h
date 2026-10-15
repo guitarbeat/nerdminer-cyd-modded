@@ -140,41 +140,41 @@ ctx.textAlign='left';
 
 function cydHashLog2Q8FromDiff(d){if(!(d>0))return 0xFF00;const log2True=223.999978314;let exp=0;let m=d;while(m>=1){m*=0.5;exp++;}while(m>0&&m<0.5){m*=2;exp--;}const u=2*m;const z=u-1;const log2m=-1+(z-0.5*z*z+(z*z*z)/3)/0.69314718056;let log2h=log2True-(exp+log2m);if(log2h<0)log2h=0;if(log2h>255.996)log2h=255.996;return (log2h*256)|0;}
 function cydDiffQ8FromHashQ8(h){return (224<<8)-h;}
-function cydSynthSamples(n){const out=[];for(let i=0;i<n;i++){const bits=248+((Math.random()*8)|0)-((Math.random()<0.08)?((Math.random()*30)|0):0);const frac=(Math.random()*255)|0;out.push(((Math.max(0,Math.min(255,bits))<<8)|frac));}return out;}
+function cydSynthSamples(n){const out=[];for(let i=0;i<n;i++){const bits=255-((Math.random()*3)|0)-((Math.random()<0.1)?((Math.random()*12)|0):0);const frac=(Math.random()*255)|0;out.push((bits<<8)|frac);}return out;}
+function cydParseDiff(v){if(typeof v==='number')return v;const m=String(v||'').trim().match(/^([0-9.]+)\s*([KMGTPE]?)/i);if(!m)return 0;const k={'':1,K:1e3,M:1e6,G:1e9,T:1e12,P:1e15,E:1e18}[m[2].toUpperCase()]||1;return parseFloat(m[1])*k;}
 function cydProtoYDiff(dq8,topQ8,botQ8,plotY,plotH){const span=topQ8-botQ8;if(span<=0)return plotY+(plotH>>1);let v=topQ8-dq8;if(v<0)v=0;if(v>span)v=span;return plotY+2+(((v*(plotH-5))/span)|0);}
 function cydDrawProtoX(ctx,x,y,col){ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-2.5,y-2.5);ctx.lineTo(x+2.5,y+2.5);ctx.moveTo(x-2.5,y+2.5);ctx.lineTo(x+2.5,y-2.5);ctx.stroke();}
 function cydFmtDiffShort(n){n=Number(n)||0;if(n>=1e12)return (n/1e12>=100?(n/1e12).toFixed(0):(n/1e12).toFixed(1))+'T';if(n>=1e9)return (n/1e9).toFixed(1)+'G';if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'K';if(n>=1)return n.toFixed(1);if(n>0)return n.toExponential(1);return '--';}
 function cydDrawProtocol(ctx,p,d,ls){
 const W=ls?320:240,H=ls?240:320;const plotX=ls?8:6,plotY=28,plotW=W-(ls?16:12);const footH=ls?44:52,footY=H-footH-4,plotH=footY-plotY-4;
 const hr=parseFloat(d.hashrate)||0;const netDiff=(d.net_diff&&d.net_diff>0)?Number(d.net_diff):133e12;
-const best=parseFloat(d.best_diff)||0;
-const tgtQ8=cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(netDiff));
-const bestQ8=best>0?cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(best)):null;
-const topQ8=tgtQ8+(4<<8),botQ8=-(32<<8);
-ctx.font='8px sans-serif';const G=Math.ceil(ctx.measureText('1T').width)+8,sx0=G+8,sxSpan=plotW-sx0-14;
 let samples=Array.isArray(d.hash_samples)?d.hash_samples.slice():null;
 if(!samples||!samples.length)samples=cydSynthSamples(40);
+const best=(d.best_diff_raw>0)?Number(d.best_diff_raw):cydParseDiff(d.best_diff);
+const tgtQ8=cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(netDiff));
+let bestQ8=best>0?cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(best)):null;
+const topQ8=tgtQ8,botQ8=0;const n=samples.length;
+let bestI=-1,maxQ=-1e9;for(let i=0;i<n;i++){const q=cydDiffQ8FromHashQ8(samples[i]);if(q>maxQ){maxQ=q;bestI=i;}}
+if(bestQ8==null||maxQ>bestQ8)bestQ8=maxQ;const bestIsSample=bestI>=0&&maxQ>=bestQ8-8;
+ctx.font='8px sans-serif';const G=Math.ceil(ctx.measureText('1G').width)+8,sx0=G+10,sxSpan=plotW-sx0-14;
+const yTop=plotY+2,yBot=plotY+plotH-16;
+const Y=q=>{const span=topQ8-botQ8;let v=topQ8-q;if(v<0)v=0;if(v>span)v=span;return yTop+Math.round(v*(yBot-yTop)/span);};
 cydDrawPanel(ctx,p,plotX,plotY,plotW,plotH,6);
-const tgtY=cydProtoYDiff(tgtQ8,topQ8,botQ8,plotY,plotH);
-if(tgtY>plotY+2){ctx.fillStyle='rgba(52,211,153,0.10)';ctx.fillRect(plotX+G,plotY+1,plotW-G-1,tgtY-plotY-1);}
-const ticks=['1','1K','1M','1G','1T'];
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.textAlign='right';
-for(let t=0;t<5;t++){const q=(t*10)<<8;if(q>=topQ8-(3<<8))break;const ty=cydProtoYDiff(q,topQ8,botQ8,plotY,plotH);ctx.fillStyle=p.edge||'#30363d';for(let x=plotX+G+2;x<plotX+plotW-4;x+=4)ctx.fillRect(x,ty,1,1);ctx.fillStyle=p.dim;ctx.fillText(ticks[t],plotX+G-4,ty+3);}
-ctx.textAlign='left';ctx.strokeStyle=p.edge||'#334155';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(plotX+G+0.5,plotY+4);ctx.lineTo(plotX+G+0.5,plotY+plotH-4);ctx.stroke();
-ctx.strokeStyle=p.meter;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(plotX+G+2,tgtY+0.5);ctx.lineTo(plotX+plotW-6,tgtY+0.5);ctx.stroke();ctx.setLineDash([]);
-const netLab=(d.market&&d.market.diff)?d.market.diff:cydFmtDiffShort(netDiff);
-const tLabY=(tgtY+14<plotY+plotH-28)?tgtY+12:tgtY-8;
-ctx.fillStyle=p.meter;ctx.font='bold 8px sans-serif';ctx.textAlign='right';ctx.fillText('BLOCK TARGET \u00b7 '+netLab,plotX+plotW-6,tLabY);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('hash < target = valid block',plotX+plotW-6,tLabY+11);ctx.textAlign='left';
-const rarerY=(tgtY+14<plotY+plotH/2)?tgtY+12:plotY+12;
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('RARER \u2191',plotX+G+4,rarerY);
-ctx.font='7px sans-serif';ctx.fillText('difficulty',plotX+G+4,rarerY+10);
-const n=samples.length;
-let bestI=0;
-for(let i=0;i<n;i++){const x=plotX+sx0+((i*sxSpan)/Math.max(1,n-1));const y=cydProtoYDiff(cydDiffQ8FromHashQ8(samples[i]),topQ8,botQ8,plotY,plotH);cydDrawProtoX(ctx,x,y,p.bad||'#f87171');if(samples[i]<samples[bestI])bestI=i;}
-if(n>0){const cx=plotX+sx0+(((n-1)*sxSpan)/Math.max(1,n-1));const cy=cydProtoYDiff(cydDiffQ8FromHashQ8(samples[n-1]),topQ8,botQ8,plotY,plotH);ctx.strokeStyle=p.dim;ctx.lineWidth=1;ctx.strokeRect(cx-5,cy-5,11,11);}
-if(bestQ8!=null){const bx=plotX+sx0+((bestI*sxSpan)/Math.max(1,n-1));const by=cydProtoYDiff(bestQ8,topQ8,botQ8,plotY,plotH);ctx.fillStyle=p.meter;ctx.beginPath();ctx.arc(bx,by,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle=p.warn||'#d29922';ctx.lineWidth=1;ctx.beginPath();ctx.arc(bx,by,5,0,Math.PI*2);ctx.stroke();const blab='BEST '+(d.best_diff||cydFmtDiffShort(best));ctx.font='bold 9px sans-serif';ctx.fillStyle=p.meter;const lw=ctx.measureText(blab).width;const right=bx+8+lw<plotX+plotW-4;ctx.textAlign=right?'left':'right';ctx.fillText(blab,right?bx+8:bx-8,by>plotY+14?by-8:by+14);ctx.textAlign='left';}
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.textAlign='center';ctx.fillText('recent samples \u00b7 newest \u2192',plotX+G+(plotW-G)/2,plotY+plotH-8);ctx.textAlign='left';
+const ticks=['1K','1M','1G'];ctx.textAlign='right';
+for(let t=0;t<3;t++){const q=((t+1)*10)<<8;if(q>=topQ8-(4<<8))break;const ty=Y(q);ctx.fillStyle=p.edge||'#30363d';for(let x=plotX+G+2;x<plotX+plotW-4;x+=4)ctx.fillRect(x,ty,1,1);ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText(ticks[t],plotX+G-4,ty+3);}
+ctx.strokeStyle=p.edge||'#334155';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(plotX+G+0.5,yTop);ctx.lineTo(plotX+G+0.5,yBot);ctx.lineTo(plotX+plotW-4,yBot+0.5);ctx.stroke();
+ctx.fillStyle=p.dim;ctx.fillText('<1',plotX+G-4,yBot+3);
+const warn=p.warn||'#f59e0b';const netLab=(d.market&&d.market.diff)?d.market.diff:cydFmtDiffShort(netDiff);
+ctx.fillStyle=warn;ctx.fillRect(plotX+G,yTop,plotW-G-4,2);ctx.fillText(netLab,plotX+G-4,yTop+6);
+ctx.font='bold 8px sans-serif';ctx.fillText('BLOCK THRESHOLD \u00b7 '+netLab+' diff',plotX+plotW-6,yTop+12);
+ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('hash < target \u2192 valid block',plotX+plotW-6,yTop+22);
+ctx.textAlign='left';ctx.font='8px sans-serif';ctx.fillText('RARER \u2191',plotX+G+4,yTop+12);
+const xAt=i=>plotX+sx0+((i*sxSpan)/Math.max(1,n-1));
+for(let i=0;i<n;i++){if(bestIsSample&&i===bestI)continue;cydDrawProtoX(ctx,xAt(i),Y(cydDiffQ8FromHashQ8(samples[i])),p.bad||'#f87171');}
+if(n>0){ctx.strokeStyle=p.dim;ctx.lineWidth=1;ctx.beginPath();ctx.arc(xAt(n-1),Y(cydDiffQ8FromHashQ8(samples[n-1])),5,0,Math.PI*2);ctx.stroke();}
+if(bestQ8!=null){const bx=bestIsSample?xAt(bestI):plotX+sx0,by=Y(bestQ8);ctx.fillStyle=p.meter;ctx.beginPath();ctx.arc(bx,by,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle=warn;ctx.beginPath();ctx.arc(bx,by,5,0,Math.PI*2);ctx.stroke();
+const bv=bestIsSample?Math.pow(2,maxQ/256):best;const blab='\u2605 BEST '+((!bestIsSample&&d.best_diff)?d.best_diff:cydFmtDiffShort(bv));ctx.font='bold 9px sans-serif';const lw=ctx.measureText(blab).width;const right=bx+8+lw<plotX+plotW-4;ctx.textAlign=right?'left':'right';ctx.fillText(blab,right?bx+8:bx-8,by>yTop+30?by-6:by+14);ctx.textAlign='left';}
+ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.textAlign='center';ctx.fillText('recent samples \u00b7 newest \u2192',plotX+G+(plotW-G)/2,plotY+plotH-4);ctx.textAlign='left';
 cydDrawPanel(ctx,p,plotX,footY,plotW,footH,6);
 ctx.fillStyle=p.meter;ctx.beginPath();ctx.moveTo(plotX+10,footY+(ls?22:24));ctx.lineTo(plotX+18,footY+(ls?8:10));ctx.lineTo(plotX+15,footY+(ls?16:18));ctx.fill();ctx.beginPath();ctx.moveTo(plotX+14,footY+(ls?14:16));ctx.lineTo(plotX+22,footY+(ls?14:16));ctx.lineTo(plotX+16,footY+(ls?28:30));ctx.fill();
 ctx.fillStyle=p.meter;ctx.font='bold 20px sans-serif';ctx.fillText((hr>0?hr.toFixed(0):'--')+' KH/s',plotX+28,footY+(ls?26:21));

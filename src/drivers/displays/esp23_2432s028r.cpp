@@ -1169,8 +1169,21 @@ static void paintProtocolPlot(const ArchitectureV &av)
   int32_t bestQ8 = av.bestDiffRaw > 0
                        ? protoDiffQ8FromHashQ8(protoLog2Q8FromDiff(av.bestDiffRaw))
                        : INT32_MIN;
-  const int32_t topQ8 = tgtQ8 + (4 << 8);
-  const int32_t botQ8 = -(32 << 8);
+  // Fixed meaning: top edge = live network difficulty (block threshold),
+  // bottom baseline = diff 1 ("<1": nearly every hash lands here).
+  const int32_t topQ8 = tgtQ8;
+  const int32_t botQ8 = 0;
+  // Highest plotted sample; BEST must never sit below a plotted point.
+  int bestI = -1;
+  int32_t maxSampQ8 = INT32_MIN;
+  for (int i = 0; i < count; i++)
+  {
+    int32_t q = protoDiffQ8FromHashQ8(snap[i]);
+    if (q > maxSampQ8) { maxSampQ8 = q; bestI = i; }
+  }
+  if (maxSampQ8 > bestQ8)
+    bestQ8 = maxSampQ8; // race guard (best_diff also tracks samples)
+  const bool bestIsSample = (bestI >= 0 && maxSampQ8 >= bestQ8 - 8);
 
   char kbuf[96];
   snprintf(kbuf, sizeof(kbuf), "%u|%u|%ld|%ld|%s|%d",
@@ -1178,38 +1191,42 @@ static void paintProtocolPlot(const ArchitectureV &av)
            av.bestDiff.c_str(), P ? 1 : 0);
   if (need(W_PROTO_PLOT, kbuf) && wBegin(plotW, plotH, C_PANEL))
   {
-    // Left gutter: rarity ticks (1 … 1T) + RARER ^ / difficulty cue.
-    const int G = textW("1T", 8) + 8;
-    const int sx0 = G + 8;
+    const int G = textW("1G", 8) + 8;
+    const int sx0 = G + 10;
     const int sxSpan = plotW - sx0 - 14;
-    static const char *tk[] = {"1", "1K", "1M", "1G", "1T"};
-    for (int t = 0; t < 5; t++)
+    const int yTop = 2, yBot = plotH - 16; // leave room for x caption
+    auto Y = [&](int32_t q) -> int {
+      int32_t span = topQ8 - botQ8;
+      if (span <= 0) return (yTop + yBot) / 2;
+      int32_t v = topQ8 - q;
+      if (v < 0) v = 0;
+      if (v > span) v = span;
+      return yTop + (int)((v * (yBot - yTop)) / span);
+    };
+    // Mid ticks: 1K, 1M, 1G (log2 ≈ 10/20/30 bits) when below the top.
+    static const char *tk[] = {"1K", "1M", "1G"};
+    for (int t = 0; t < 3; t++)
     {
-      int32_t q = (int32_t)(t * 10) << 8; // log2(10^t)≈3.32t; use decade≈10 bits
-      if (q >= topQ8 - (3 << 8))
-        break;
-      int ty = protoYDiff(q, topQ8, botQ8, plotH);
+      int32_t q = (int32_t)((t + 1) * 10) << 8;
+      if (q >= topQ8 - (4 << 8)) break;
+      int ty = Y(q);
       for (int x = G + 2; x < plotW - 4; x += 4)
         wgt.drawPixel(x, ty, C_EDGE);
       text(wgt, tk[t], G - 4, ty - 4, 8, C_DIM, C_PANEL, Align::TopRight);
     }
-    wgt.drawFastVLine(G, 2, plotH - 4, C_EDGE);
-
-    // Block-target threshold near top (higher difficulty = rarer).
-    int tgtY = protoYDiff(tgtQ8, topQ8, botQ8, plotH);
-    if (tgtY > 2)
-      wgt.fillRect(G + 1, 1, plotW - G - 2, tgtY - 1, mix565(C_PANEL, C_GOOD, 28));
-    for (int x = G + 2; x < plotW - 4; x += 6)
-      wgt.drawFastHLine(x, tgtY, 3, C_METER);
-
-    char tlab[44];
-    snprintf(tlab, sizeof(tlab), "BLOCK TARGET · %s", av.netDiff.c_str());
-    int tLabY = (tgtY + 3 < plotH - 28) ? tgtY + 3 : tgtY - 20;
-    text(wgt, tlab, plotW - 6, tLabY, 8, C_METER, C_PANEL, Align::TopRight);
-    text(wgt, "hash < target = valid block", plotW - 6, tLabY + 11, 7, C_DIM, C_PANEL, Align::TopRight);
-
-    text(wgt, "RARER ^", G + 4, (tgtY + 3 < plotH / 2) ? tgtY + 3 : 4, 8, C_DIM, C_PANEL);
-    text(wgt, "difficulty", G + 4, ((tgtY + 3 < plotH / 2) ? tgtY + 3 : 4) + 10, 7, C_DIM, C_PANEL);
+    wgt.drawFastVLine(G, yTop, yBot - yTop + 1, C_EDGE);
+    // Baseline "<1".
+    wgt.drawFastHLine(G, yBot, plotW - G - 4, C_EDGE);
+    text(wgt, "<1", G - 4, yBot - 4, 8, C_DIM, C_PANEL, Align::TopRight);
+    // Top: orange BLOCK THRESHOLD at live network difficulty.
+    wgt.drawFastHLine(G, yTop, plotW - G - 4, C_WARN);
+    wgt.drawFastHLine(G, yTop + 1, plotW - G - 4, C_WARN);
+    text(wgt, av.netDiff.c_str(), G - 4, yTop, 8, C_WARN, C_PANEL, Align::TopRight);
+    char tlab[48];
+    snprintf(tlab, sizeof(tlab), "BLOCK THRESHOLD · %s diff", av.netDiff.c_str());
+    text(wgt, tlab, plotW - 6, yTop + 4, 8, C_WARN, C_PANEL, Align::TopRight);
+    text(wgt, "hash < target -> valid block", plotW - 6, yTop + 15, 7, C_DIM, C_PANEL, Align::TopRight);
+    text(wgt, "RARER ^", G + 4, yTop + 4, 8, C_DIM, C_PANEL);
 
     if (count < 1)
     {
@@ -1217,36 +1234,32 @@ static void paintProtocolPlot(const ArchitectureV &av)
     }
     else
     {
-      int bestI = 0;
       for (int i = 0; i < count; i++)
       {
+        if (bestIsSample && i == bestI) continue;
         int x = sx0 + (i * sxSpan) / (count > 1 ? (count - 1) : 1);
-        int y = protoYDiff(protoDiffQ8FromHashQ8(snap[i]), topQ8, botQ8, plotH);
-        drawProtoX(wgt, x, y, C_BAD); // unlabeled red X
-        if (snap[i] < snap[bestI])
-          bestI = i;
+        drawProtoX(wgt, x, Y(protoDiffQ8FromHashQ8(snap[i])), C_BAD);
       }
-
-      // Newest: subtle outline only (no label).
+      // Newest: thin outline only.
       int cx = sx0 + sxSpan;
-      int cy = protoYDiff(protoDiffQ8FromHashQ8(snap[count - 1]), topQ8, botQ8, plotH);
-      wgt.drawRect(cx - 5, cy - 5, 11, 11, C_DIM);
-
-      // Session best (real best_diff) — yellow/orange, labeled in-place.
-      if (bestQ8 != INT32_MIN)
-      {
-        int bx = sx0 + (bestI * sxSpan) / (count > 1 ? (count - 1) : 1);
-        int by = protoYDiff(bestQ8, topQ8, botQ8, plotH);
-        wgt.fillCircle(bx, by, 4, C_METER);
-        wgt.drawCircle(bx, by, 5, C_WARN);
-        char blab[32];
-        snprintf(blab, sizeof(blab), "BEST %s", av.bestDiff.c_str());
-        int lw = textW(blab, 9);
-        bool right = bx + 8 + lw < plotW - 4;
-        int ly = (by > 12) ? by - 12 : by + 8;
-        text(wgt, blab, right ? bx + 8 : bx - 8, ly, 9, C_METER, C_PANEL,
-             right ? Align::TopLeft : Align::TopRight);
-      }
+      int cy = Y(protoDiffQ8FromHashQ8(snap[count - 1]));
+      wgt.drawCircle(cx, cy, 5, C_DIM);
+    }
+    // BEST: the highest plotted point, labeled in place. If it came from a
+    // share (not in the 48-sample ring) it is pinned at the left edge.
+    if (bestQ8 != INT32_MIN)
+    {
+      int bx = bestIsSample ? sx0 + (bestI * sxSpan) / (count > 1 ? (count - 1) : 1) : sx0;
+      int by = Y(bestQ8);
+      wgt.fillCircle(bx, by, 4, C_METER);
+      wgt.drawCircle(bx, by, 5, C_WARN);
+      char blab[32];
+      snprintf(blab, sizeof(blab), "* BEST %s", av.bestDiff.c_str());
+      int lw = textW(blab, 9);
+      bool right = bx + 8 + lw < plotW - 4;
+      int ly = (by > yTop + 30) ? by - 12 : by + 7;
+      text(wgt, blab, right ? bx + 8 : bx - 8, ly, 9, C_METER, C_PANEL,
+           right ? Align::TopLeft : Align::TopRight);
     }
     text(wgt, "recent samples · newest ->", G + (plotW - G) / 2, plotH - 11, 8, C_DIM, C_PANEL, Align::TopCenter);
 

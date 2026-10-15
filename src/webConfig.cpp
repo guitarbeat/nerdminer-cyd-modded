@@ -81,6 +81,7 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"hashrate\":\"" + d.currentHashRate + "\"";
   json += ",\"shares\":" + (d.completedShares.length() ? d.completedShares : String("0"));
   json += ",\"best_diff\":\"" + d.bestDiff + "\"";
+  json += ",\"best_diff_raw\":" + String(best_diff, 6);
   json += ",\"mhashes\":" + (d.totalMHashes.length() ? d.totalMHashes : String("0"));
   json += ",\"uptime\":\"" + d.timeMining + "\"";
   json += ",\"temp\":\"" + d.temp + "\"";
