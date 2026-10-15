@@ -66,7 +66,7 @@ static String formatUptimeWeb(const String &s)
 static String buildStatsJson(const mining_data &d)
 {
   String json;
-  json.reserve(576);
+  json.reserve(1792);
   json += "{";
   json += "\"status\":";
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
@@ -96,6 +96,7 @@ static String buildStatsJson(const mining_data &d)
   bool isPort = (Settings.screenRotation == 0 || Settings.screenRotation == 2);
   json += ",\"is_portrait\":" + String(isPort ? "true" : "false");
   json += ",\"rotation\":" + String(Settings.screenRotation);
+  json += ",\"market\":" + getMarketJson();
   json += "}";
   return json;
 }

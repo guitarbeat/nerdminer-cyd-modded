@@ -314,6 +314,37 @@ void fetchKlines(void) {
   // else: keep the cached candles on screen.
 }
 
+// Market snapshot for the web twin (Screen 1). Uses cached values only --
+// never triggers a network fetch from the web server task.
+String getMarketJson(void) {
+  static Kline snap[KLINE_POINTS];
+  uint8_t n = copyKlines(snap);
+  const CurrencyInfo &cur = currencyFor(Settings.Currency);
+  unsigned long blk = current_block.toInt();
+  unsigned long rem = blk ? (((blk / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - blk : 0;
+  String j;
+  j.reserve(160 + n * 40);
+  j += "{\"price\":" + String(bitcoin_price);
+  j += ",\"prefix\":\"" + String(cur.prefix) + "\"";
+  j += ",\"chg\":" + String(g_btc24hChange, 2);
+  j += ",\"block\":" + String(blk);
+  j += ",\"fee\":" + String(gData.halfHourFee);
+  j += ",\"diff\":\"" + gData.difficulty + "\"";
+  j += ",\"net\":\"" + gData.globalHash + "\"";
+  j += ",\"rem\":" + String(rem);
+  j += ",\"pool\":\"" + Settings.PoolAddress + "\"";
+  j += ",\"iv\":\"" KLINE_INTERVAL_LABEL "\"";
+  j += ",\"k\":[";
+  char buf[64];
+  for (uint8_t i = 0; i < n; i++) {
+    snprintf(buf, sizeof(buf), "%s[%.1f,%.1f,%.1f,%.1f]", i ? "," : "",
+             snap[i].open, snap[i].high, snap[i].low, snap[i].close);
+    j += buf;
+  }
+  j += "]}";
+  return j;
+}
+
 String getBTCprice(void){
     const CurrencyInfo &cur = currencyFor(Settings.Currency);
     static char price_buffer[24];
