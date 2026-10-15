@@ -135,10 +135,11 @@ static inline bool isPortrait()
   return (r == 0 || r == 2);
 }
 
-static inline int gCX() { return isPortrait() ? 120 : 92; }
-static inline int gCY() { return isPortrait() ? 104 : 110; }
-static inline int gR()  { return isPortrait() ? 72 : 78; }
-static inline int gRI() { return isPortrait() ? 62 : 67; }
+// Mine ring owns most of the upper screen (portrait) / left column (landscape).
+static inline int gCX() { return isPortrait() ? 120 : 100; }
+static inline int gCY() { return isPortrait() ? 128 : 116; }
+static inline int gR()  { return isPortrait() ? 98 : 86; }
+static inline int gRI() { return isPortrait() ? 84 : 74; }
 
 // Hashrate ring
 #define G_CX (gCX())
@@ -413,6 +414,40 @@ static String fmtDate(const String &s)
   int dow = (yy + yy / 4 - yy / 100 + yy / 400 + t[m - 1] + d) % 7;
   char b[32];
   snprintf(b, sizeof(b), "%s  %d %s %d", wd[dow], d, mon[m - 1], y);
+  return String(b);
+}
+
+// "233.8B" style humanised count of total hashes (input in MH).
+static String fmtHashCount(const String &mhashes)
+{
+  double h = mhashes.toDouble() * 1e6;
+  static const char *u[] = {"", "K", "M", "B", "T", "Q"};
+  int i = 0;
+  while (h >= 1000.0 && i < 5)
+  {
+    h /= 1000.0;
+    i++;
+  }
+  char b[24];
+  if (i == 0)
+    snprintf(b, sizeof(b), "%.0f", h);
+  else
+    snprintf(b, sizeof(b), h >= 100 ? "%.1f%s" : "%.2f%s", h, u[i]);
+  return String(b);
+}
+
+// compact uptime: "2d", "5h", "12m"
+static String fmtUptimeShort(const String &s)
+{
+  int d = 0, h = 0, m = 0, sec = 0;
+  sscanf(s.c_str(), "%d %d:%d:%d", &d, &h, &m, &sec);
+  char b[12];
+  if (d > 0)
+    snprintf(b, sizeof(b), "%dd", d);
+  else if (h > 0)
+    snprintf(b, sizeof(b), "%dh", h);
+  else
+    snprintf(b, sizeof(b), "%dm", m);
   return String(b);
 }
 
@@ -726,75 +761,144 @@ struct MineV
   String hash, shares, best, tmpl, blocks, total;
   float kh;
   bool flash;
-  StripV strip;
+  StripV strip; // 3 cells: v = big value, l = trailing label ("1" "worker")
 };
 
-static const int TILE_Y[4] = {32, 72, 112, 152};
+// Mine layout (mock): big ring + hero, two equal cards, 3-cell footer strip.
+//   Portrait : ring cy=128 r=98, cards y=222..264, strip y=270..314
+//   Landscape: ring left cx=100 cy=116 r=86, cards right column, strip y=198
+#define MINE_CARD_PY 222
+#define MINE_CARD_PH 42
+#define MINE_STRIP_PY 270
+#define MINE_STRIP_PH 44
+
+static void mineStripGeom(int &x, int &y, int &w, int &h)
+{
+  if (isPortrait()) { x = 6; y = MINE_STRIP_PY; w = 228; h = MINE_STRIP_PH; }
+  else { x = 8; y = STRIP_Y; w = 304; h = STRIP_H; }
+}
 
 static void chromeMine(TFT_eSPI &d)
 {
   memset(segLvl, 0xFF, sizeof(segLvl));
   gaugeDraw(d, gaugeShown);
-  chromeStripCells(d);
+  int x, y, w, h;
+  mineStripGeom(x, y, w, h);
+  panel(d, x, y, w, h, 8, C_PANEL, C_EDGE, C_BG);
+  for (int i = 1; i < 3; i++)
+    d.drawFastVLine(x + (w * i) / 3, y + 8, h - 16, C_EDGE);
+}
+
+// small 5-point star filled into the wgt sprite
+static void wStar(int cx, int cy, int r, uint16_t col)
+{
+  float ox[5], oy[5], ix[5], iy[5];
+  for (int i = 0; i < 5; i++)
+  {
+    float a = -PI / 2 + i * 2 * PI / 5;
+    ox[i] = cx + r * cosf(a);
+    oy[i] = cy + r * sinf(a);
+    ix[i] = cx + r * 0.42f * cosf(a + PI / 5);
+    iy[i] = cy + r * 0.42f * sinf(a + PI / 5);
+  }
+  for (int i = 0; i < 5; i++)
+  {
+    wgt.fillTriangle(cx, cy, ox[i], oy[i], ix[i], iy[i], col);
+    wgt.fillTriangle(cx, cy, ix[i], iy[i], ox[(i + 1) % 5], oy[(i + 1) % 5], col);
+  }
+}
+
+static void drawMineCard(int id, int x, int y, int w, int h, const char *label, const char *value,
+                         uint16_t valCol, bool star)
+{
+  char k[64];
+  snprintf(k, sizeof(k), "mc|%s|%s|%u|%d", label, value, valCol, accentIdx);
+  if (!need(id, k))
+    return;
+  if (!wBegin(w, h, C_BG))
+    return;
+  wgt.fillRect(0, 0, w, h, C_PANEL);
+  wgt.drawRect(0, 0, w, h, C_EDGE);
+  int lw = textW(label, 10) + (star ? 12 : 0);
+  int lx = (w - lw) / 2;
+  if (star)
+  {
+    wStar(lx + 4, 9, 5, C_GOLD);
+    lx += 12;
+  }
+  text(wgt, label, lx, 4, 10, C_DIM, C_PANEL);
+  unsigned vs = h >= 60 ? 24 : 20;
+  if (strlen(value) > 8)
+    vs -= 4;
+  text(wgt, value, w / 2, h >= 60 ? 26 : 17, vs, valCol, C_PANEL, Align::TopCenter);
+  wEnd(x, y);
+  done(id, k);
+}
+
+static void drawMineStrip(const StripV &s)
+{
+  int x, y, w, h;
+  mineStripGeom(x, y, w, h);
+  int cw = w / 3 - 4, ch = h - 6;
+  for (int i = 0; i < 3; i++)
+  {
+    String k = "m3|" + s.l[i] + "|" + s.v[i] + "|" + (isPortrait() ? "P" : "L");
+    if (!need(W_P0 + i, k))
+      continue;
+    if (!wBegin(cw, ch, C_PANEL))
+      continue;
+    unsigned vs = isPortrait() ? 16 : 15, ls = isPortrait() ? 10 : 11;
+    int wv = textW(s.v[i].c_str(), vs), wl = textW(s.l[i].c_str(), ls);
+    int x0 = (cw - (wv + 4 + wl)) / 2;
+    int ty = (ch - vs) / 2;
+    text(wgt, s.v[i].c_str(), x0, ty, vs, C_TEXT, C_PANEL);
+    text(wgt, s.l[i].c_str(), x0 + wv + 4, ty + (vs - ls) - 1, ls, C_DIM, C_PANEL);
+    wEnd(x + (w * i) / 3 + 2, y + 3);
+    done(W_P0 + i, k);
+  }
 }
 
 static void paintMine(const MineV &m)
 {
   drawHeader(m.hdr);
 
+  const bool P = isPortrait();
   int cx = G_CX;
   int cy = G_CY;
 
-  // hero readout inside the ring
-  String k = m.hash + "|" + (isPortrait() ? "P" : "L");
+  // hero readout inside the ring: HASHRATE / value / KH/s / hashes attempted
+  String k = m.hash + "|" + m.total + "|" + (P ? "P" : "L");
   if (need(W_HERO, k))
   {
-    if (wBegin(104, 74, C_BG))
+    // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
+    const int hw = P ? 124 : 110, hh = P ? 112 : 100;
+    if (wBegin(hw, hh, C_BG))
     {
-      text(wgt, "HASHRATE", 52, 4, 9, C_DIM, C_BG, Align::TopCenter);
-      unsigned sz = m.hash.length() <= 5 ? 36 : (m.hash.length() == 6 ? 30 : 26);
-      text(wgt, m.hash.c_str(), 52, 15, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", 52, 56, 11, C_DIM, C_BG, Align::TopCenter);
-      wEnd(cx - 52, cy - 38);
+      int c = hw / 2;
+      text(wgt, "HASHRATE", c, 2, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      unsigned sz = P ? (m.hash.length() <= 5 ? 40 : 34) : (m.hash.length() <= 5 ? 34 : 28);
+      text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 62 : 54, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
+      String att = fmtHashCount(m.total) + " hashes attempted";
+      text(wgt, att.c_str(), c, P ? 90 : 80, P ? 10 : 9, C_DIM, C_BG, Align::TopCenter);
+      wEnd(cx - c, cy - (P ? 44 : 40));
       done(W_HERO, k);
     }
   }
 
-  // lifetime hashes, in the gap at the bottom of the ring
-  k = m.total + "|" + (isPortrait() ? "P" : "L");
-  if (need(W_TOTAL, k))
-  {
-    int tw = isPortrait() ? 92 : 120;
-    if (wBegin(tw, 16, C_BG))
-    {
-      textPair(wgt, tw / 2, 1, commas(m.total).c_str(), "MH TOTAL", isPortrait() ? 10 : 11, C_TEXT, C_DIM, C_BG);
-      wEnd(cx - (tw / 2), isPortrait() ? 158 : 171);
-      done(W_TOTAL, k);
-    }
-  }
-
-  bool found = m.blocks.toInt() > 0;
   uint16_t sharesCol = m.flash ? C_GOOD : C_TEXT;
-  uint16_t blocksCol = found ? C_GOLD : C_TEXT;
-
-  if (isPortrait())
+  if (P)
   {
-    const int tw = 112, th = 36;
-    drawTile(W_T0, 6, 180, tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
-    drawTile(W_T1, 122, 180, tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T2, 6, 222, tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T3, 122, 222, tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
+    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "SHARES", m.shares.c_str(), sharesCol, false);
+    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "BEST", m.best.c_str(), C_GOLD, true);
   }
   else
   {
-    const int tx = 184, tw = 128, th = 36;
-    drawTile(W_T0, tx, TILE_Y[0], tw, th, "SHARES", m.shares.c_str(), sharesCol, C_EDGE);
-    drawTile(W_T1, tx, TILE_Y[1], tw, th, "BEST DIFF", m.best.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T2, tx, TILE_Y[2], tw, th, "TEMPLATES", m.tmpl.c_str(), C_TEXT, C_EDGE);
-    drawTile(W_T3, tx, TILE_Y[3], tw, th, "BLOCKS FOUND", m.blocks.c_str(), blocksCol, C_EDGE);
+    drawMineCard(W_T0, 198, 34, 114, 76, "SHARES", m.shares.c_str(), sharesCol, false);
+    drawMineCard(W_T1, 198, 116, 114, 76, "BEST", m.best.c_str(), C_GOLD, true);
   }
 
-  drawStrip(m.strip);
+  drawMineStrip(m.strip);
 }
 
 // ========================================================== MARKET screen ==
@@ -1564,14 +1668,12 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.total = data.totalMHashes;
   m.kh = kh;
   m.flash = millis() < shareFlashUntil;
-  m.strip.l[0] = "WORKERS";
   m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[1] = isPortrait() ? "POOL" : "POOL RATE";
-  m.strip.v[1] = pData.workersHash;
-  m.strip.l[2] = isPortrait() ? "BEST" : "POOL BEST";
-  m.strip.v[2] = pData.bestDifficulty;
-  m.strip.l[3] = "UPTIME";
-  m.strip.v[3] = fmtUptime(data.timeMining);
+  m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
+  m.strip.v[1] = fmtUptimeShort(data.timeMining);
+  m.strip.l[1] = "uptime";
+  m.strip.v[2] = data.valids;
+  m.strip.l[2] = data.valids.toInt() == 1 ? "block" : "blocks";
   lastMine = m;
   haveMine = true;
   paintMine(m);
@@ -2097,14 +2199,12 @@ void cydDumpScreens(void)
     m.total = "58213";
     m.kh = 672.4f;
     m.flash = acc == 1;
-    m.strip.l[0] = "WORKERS";
-    m.strip.v[0] = "3";
-    m.strip.l[1] = "POOL RATE";
-    m.strip.v[1] = "1.92M";
-    m.strip.l[2] = "POOL BEST";
-    m.strip.v[2] = "412.6M";
-    m.strip.l[3] = "UPTIME";
-    m.strip.v[3] = "3d 07h";
+    m.strip.v[0] = "1";
+    m.strip.l[0] = "worker";
+    m.strip.v[1] = "2d";
+    m.strip.l[1] = "uptime";
+    m.strip.v[2] = "0";
+    m.strip.l[2] = "blocks";
     paintMine(m);
     dumpShot(acc == 0 ? "mine" : "mine_alt");
     if (acc == 1)

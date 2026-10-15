@@ -182,6 +182,30 @@ ctx.fillStyle=p.text;const attT='\u2248 '+(hr>0?(hr*1000).toFixed(0):'--')+' att
 ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE \u00b7 MINING UNINTERRUPTED',plotX+28,footY+(ls?36:47));
 }
 
+function cydHumanHashes(mh){let h=(Number(mh)||0)*1e6;const u=['','K','M','B','T','Q'];let i=0;while(h>=1000&&i<5){h/=1000;i++;}return i?(h>=100?h.toFixed(1):h.toFixed(2))+u[i]:h.toFixed(0);}
+function cydUpShort(s){const m=String(s||'').match(/^(\d+)\s+(\d+):(\d+)/);if(!m)return '--';const d=+m[1],h=+m[2],mi=+m[3];return d>0?d+'d':(h>0?h+'h':mi+'m');}
+function cydStar(ctx,cx,cy,r,col){ctx.fillStyle=col;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*0.42:r;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();ctx.fill();}
+function cydMineCard(ctx,p,x,y,w,h,lbl,val,col,star){cydDrawPanel(ctx,p,x,y,w,h,4);ctx.font='10px sans-serif';const lw=ctx.measureText(lbl).width+(star?12:0);let lx=x+(w-lw)/2;if(star){cydStar(ctx,lx+4,y+10,5,p.gold);lx+=12;}
+ctx.fillStyle=p.dim;ctx.textAlign='left';ctx.fillText(lbl,lx,y+14);ctx.textAlign='center';ctx.fillStyle=col;ctx.font='bold '+(h>=60?22:18)+'px sans-serif';ctx.fillText(val,x+w/2,y+(h>=60?50:35));ctx.textAlign='left';}
+function cydDrawMine(ctx,p,d,ls){
+const hr=parseFloat(d.hashrate)||0;const cx=ls?100:120,cy=ls?116:128,R=ls?86:98,Ri=ls?74:84,segs=30;
+const filled=Math.round(Math.min(hr/1200,1)*segs);const base=Math.PI/2;
+for(let i=0;i<segs;i++){const a0=base+(45+i*9)*Math.PI/180,a1=base+(45+i*9+7)*Math.PI/180;let col=(i>=27)?'#3a1010':p.track;if(i<filled)col=(i>=27)?p.bad:(i>=24?p.warn:p.meter);
+ctx.lineWidth=R-Ri;ctx.strokeStyle=col;ctx.beginPath();ctx.arc(cx,cy,(R+Ri)/2,a0,a1);ctx.stroke();}
+ctx.textAlign='center';ctx.fillStyle=p.dim;ctx.font=(ls?10:11)+'px sans-serif';ctx.fillText('HASHRATE',cx,cy-(ls?30:33));
+ctx.fillStyle=p.text;ctx.font='bold '+(ls?32:38)+'px sans-serif';ctx.fillText(hr>0?hr.toFixed(1):'0.0',cx,cy+(ls?6:6));
+ctx.fillStyle=p.meter;ctx.font=(ls?12:13)+'px sans-serif';ctx.fillText('KH/s',cx,cy+(ls?24:28));
+ctx.fillStyle=p.dim;ctx.font=(ls?8:10)+'px sans-serif';ctx.fillText(cydHumanHashes(d.mhashes)+' hashes attempted',cx,cy+(ls?48:56));ctx.textAlign='left';
+const sh=(parseInt(d.shares)||0).toLocaleString('en-US'),best=d.best_diff||'--';
+if(ls){cydMineCard(ctx,p,198,34,114,76,'SHARES',sh,p.text,false);cydMineCard(ctx,p,198,116,114,76,'BEST',best,p.gold,true);}
+else{cydMineCard(ctx,p,6,222,112,42,'SHARES',sh,p.text,false);cydMineCard(ctx,p,122,222,112,42,'BEST',best,p.gold,true);}
+const sx=ls?8:6,sy=ls?198:270,sw=ls?304:228,shh=ls?38:44;cydDrawPanel(ctx,p,sx,sy,sw,shh,6);
+const wk=(d.workers!==undefined)?+d.workers:1,bl=parseInt(d.blocks)||0;
+const cells=[[String(wk),wk===1?'worker':'workers'],[cydUpShort(d.uptime),'uptime'],[String(bl),bl===1?'block':'blocks']];
+ctx.strokeStyle=p.edge;ctx.lineWidth=1;for(let i=1;i<3;i++){const x=Math.round(sx+sw*i/3)+.5;ctx.beginPath();ctx.moveTo(x,sy+8);ctx.lineTo(x,sy+shh-8);ctx.stroke();}
+for(let i=0;i<3;i++){const ccx=sx+sw*(i+0.5)/3,by=sy+shh/2+6;ctx.font='bold '+(ls?15:16)+'px sans-serif';const wv=ctx.measureText(cells[i][0]).width;ctx.font='10px sans-serif';const wl=ctx.measureText(cells[i][1]).width;const x0=ccx-(wv+4+wl)/2;
+ctx.fillStyle=p.text;ctx.font='bold '+(ls?15:16)+'px sans-serif';ctx.fillText(cells[i][0],x0,by);ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(cells[i][1],x0+wv+4,by);}
+}
 function cydMktCells(d){const hr=d&&d.hashrate?parseFloat(d.hashrate):0;return [{l:'HASHRATE',v:hr.toFixed(0)+' KH/s'},{l:'SHARES',v:(parseInt((d&&d.shares)||0)||0).toLocaleString('en-US')}];}
 function cydDrawStripPortrait(ctx,p,cells){
 cydDrawPanel(ctx,p,6,266,228,48,8);
@@ -198,32 +222,7 @@ function cydRenderPortrait(ctx,p,d){
 cydDrawHeaderPortrait(ctx,p,d);
 const hr=parseFloat(d.hashrate)||0;
 if(cydPreviewScr===0){
-const gCx=120,gCy=104,gR=70,gRi=60,segs=30;
-const valFrac=Math.min(hr/1200,1.0),filledSegs=Math.round(valFrac*segs);
-const baseOffset=90*(Math.PI/180);
-for(let i=0;i<segs;i++){
-const a0=baseOffset+(45+i*9)*(Math.PI/180),a1=baseOffset+(45+i*9+7)*(Math.PI/180);
-let col=(i>=27)?'#3a1010':p.track;
-if(i<filledSegs){col=(i>=27)?p.bad:(i>=24?p.warn:p.meter);}
-ctx.lineWidth=gR-gRi;ctx.strokeStyle=col;ctx.beginPath();ctx.arc(gCx,gCy,(gR+gRi)/2,a0,a1);ctx.stroke();
-}
-ctx.textAlign='center';ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('HASHRATE',gCx,gCy-16);
-ctx.fillStyle=p.text;ctx.font='bold 24px sans-serif';ctx.fillText(hr>0?hr.toFixed(1):'0.0',gCx,gCy+8);
-ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('KH/s',gCx,gCy+22);
-const mhVal=d.mhashes?Number(d.mhashes).toLocaleString():'143,274';
-ctx.font='10px sans-serif';ctx.fillStyle=p.dim;ctx.fillText(mhVal+' MH TOTAL',gCx,160);ctx.textAlign='left';
-
-cydDrawTile(ctx,p,6,178,112,38,'SHARES',(d.shares||0).toLocaleString(),p.text);
-cydDrawTile(ctx,p,122,178,112,38,'BEST DIFF',d.best_diff||'0.000',p.acc);
-cydDrawTile(ctx,p,6,222,112,38,'TEMPLATES','4,210',p.text);
-cydDrawTile(ctx,p,122,222,112,38,'BLOCKS FOUND',String(d.blocks||0),p.good);
-
-cydDrawStripPortrait(ctx,p,[
-{l:'WORKERS',v:'1'},
-{l:'POOL',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},
-{l:'BEST',v:d.best_diff||'--'},
-{l:'UPTIME',v:d.uptime?(d.uptime.trim().split(/\s+/)[0]+'d'):'--'}
-]);
+cydDrawMine(ctx,p,d,false);
 }else if(cydPreviewScr===1){
 const m=cydMkt(d);
 cydDrawPanel(ctx,p,6,30,228,70,8);
@@ -311,22 +310,7 @@ function cydRenderLandscape(ctx,p,d){
 cydDrawHeaderLandscape(ctx,p,d);
 const hr=parseFloat(d.hashrate)||0;
 if(cydPreviewScr===0){
-const gCx=92,gCy=110,gR=76,gRi=66,segs=30;
-const valFrac=Math.min(hr/1200,1.0),filledSegs=Math.round(valFrac*segs);
-for(let i=0;i<segs;i++){
-const a0=(45+i*9)*(Math.PI/180),a1=(45+i*9+7)*(Math.PI/180);
-let col=p.track;
-if(i<filledSegs){col=(i>=27)?p.bad:(i>=24?p.warn:p.meter);}
-ctx.lineWidth=gR-gRi;ctx.strokeStyle=col;ctx.beginPath();ctx.arc(gCx,gCy,(gR+gRi)/2,a0,a1);ctx.stroke();
-}
-ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='bold 22px sans-serif';
-ctx.fillText(hr>0?hr.toFixed(1):'0.0',gCx,gCy+4);
-ctx.font='9px sans-serif';ctx.fillStyle=p.dim;ctx.fillText('KH/s',gCx,gCy+18);ctx.textAlign='left';
-cydDrawTile(ctx,p,196,32,116,36,'SHARES',(d.shares||0).toLocaleString(),p.text);
-cydDrawTile(ctx,p,196,72,116,36,'BEST DIFF',d.best_diff||'0.000',p.acc);
-cydDrawTile(ctx,p,196,112,116,36,'TEMPLATES','4,210',p.text);
-cydDrawTile(ctx,p,196,152,116,36,'BLOCKS FOUND',String(d.blocks||0),p.good);
-cydDrawStripLandscape(ctx,p,[{l:'WORKERS',v:'1'},{l:'POOL RATE',v:hr>0?(hr.toFixed(0)+' KH/s'):'--'},{l:'POOL BEST',v:d.best_diff||'--'},{l:'UPTIME',v:d.uptime||'--'}]);
+cydDrawMine(ctx,p,d,true);
 }else if(cydPreviewScr===1){
 const m=cydMkt(d);
 cydDrawPanel(ctx,p,8,30,304,60,8);

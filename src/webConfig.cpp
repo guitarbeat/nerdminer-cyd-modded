@@ -85,6 +85,7 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"mhashes\":" + (d.totalMHashes.length() ? d.totalMHashes : String("0"));
   json += ",\"uptime\":\"" + d.timeMining + "\"";
   json += ",\"temp\":\"" + d.temp + "\"";
+  json += ",\"workers\":" + String(pData.workersCount);
   json += ",\"blocks\":" + (d.valids.length() ? d.valids : String("0"));
   json += ",\"time\":\"" + d.currentTime + "\"";
   json += ",\"ssid\":\"" + htmlEscape(WiFi.SSID()) + "\"";
