@@ -180,109 +180,133 @@ String getBlockHeight(void){
 }
 
 unsigned long mBTCUpdate = 0;
-unsigned long mKlineUpdate = 0;
-
-BTCKline g_btcKlines[KLINE_POINTS] = {0};
+Kline g_btcKlines[KLINE_POINTS] = {};
 uint8_t g_klineCount = 0;
+uint8_t g_klineHead = 0;
+uint32_t g_klineEpoch = 0;
 float g_btc24hChange = 0.0f;
+// Readers run on other tasks (display/web); a spinlock keeps the swap atomic.
+static portMUX_TYPE s_klineMux = portMUX_INITIALIZER_UNLOCKED;
+static unsigned long mKlineNextFetch = 0;
 
-void updateBTCKlines(void) {
+uint8_t copyKlines(Kline *out) {
+  portENTER_CRITICAL(&s_klineMux);
+  uint8_t n = g_klineCount;
+  for (uint8_t i = 0; i < n; i++)
+    out[i] = g_btcKlines[(g_klineHead + i) % KLINE_POINTS];
+  portEXIT_CRITICAL(&s_klineMux);
+  return n;
+}
+
+// Publish a freshly parsed, oldest-first batch into the ring buffer.
+static void commitKlines(const Kline *in, uint8_t n) {
+  if (n == 0) return;
+  portENTER_CRITICAL(&s_klineMux);
+  for (uint8_t i = 0; i < n; i++)
+    g_btcKlines[i] = in[i];
+  g_klineHead = 0;
+  g_klineCount = n;
+  if (in[0].open > 0.0f)
+    g_btc24hChange = ((in[n - 1].close - in[0].open) / in[0].open) * 100.0f;
+  g_klineEpoch++;
+  portEXIT_CRITICAL(&s_klineMux);
+}
+
+// One HTTPS GET + filtered stream parse. The TLS handshake uses the hardware
+// SHA engine, so the request is serialised with the miner via g_hwShaMutex
+// (same as every other fetch in this file). The body is parsed straight off
+// the socket with an ArduinoJson filter so only the OHLC fields are kept --
+// no full payload String in RAM. Returns number of candles parsed.
+static uint8_t klineRequest(const String &url, bool kraken, Kline *out) {
+  HTTPClient http;
+  http.setTimeout(6000);
+  http.setConnectTimeout(5000);
+  http.useHTTP10(true);   // no chunked encoding, so getStream() is raw JSON
+  uint8_t count = 0;
+  if (!http.begin(url)) return 0;
+  int httpCode;
+  {
+    HW_SHA_REQUEST();
+    std::lock_guard<std::mutex> shaLock(g_hwShaMutex);
+    httpCode = http.GET();
+  }
+  if (httpCode == HTTP_CODE_OK) {
+    // Each candle row is [time, open, high, low, close, ...]; keep 0..4.
+    StaticJsonDocument<128> row;
+    for (int i = 0; i < 5; i++) row[0][i] = true;
+    StaticJsonDocument<192> filter;
+    if (kraken) filter["result"]["XXBTZUSD"] = row.as<JsonArray>();
+    else filter.set(row.as<JsonArray>());
+
+    DynamicJsonDocument doc(kraken ? 12288 : 6144);
+    DeserializationError err = deserializeJson(doc, http.getStream(),
+                                               DeserializationOption::Filter(filter));
+    if (!err) {
+      JsonArray arr = kraken ? doc["result"]["XXBTZUSD"].as<JsonArray>() : doc.as<JsonArray>();
+      if (!arr.isNull()) {
+        int total = arr.size();
+        int start = total > KLINE_POINTS ? total - KLINE_POINTS : 0;   // newest N
+        for (int i = start; i < total && count < KLINE_POINTS; i++) {
+          JsonArray c = arr[i];
+          uint64_t t = c[0].as<uint64_t>();
+          Kline k;
+          k.timestamp = (uint32_t)(kraken ? t : t / 1000ULL);   // binance: ms
+          k.open  = c[1].as<float>();   // ArduinoJson converts "123.4" strings
+          k.high  = c[2].as<float>();
+          k.low   = c[3].as<float>();
+          k.close = c[4].as<float>();
+          if (k.high <= 0.0f || k.low <= 0.0f) continue;
+          out[count++] = k;
+        }
+      }
+    } else {
+      Serial.printf("[klines] parse error: %s\n", err.c_str());
+    }
+  } else {
+    Serial.printf("[klines] %s HTTP %d\n", kraken ? "kraken" : "binance.us", httpCode);
+  }
+  http.end();
+  return count;
+}
+
+void fetchKlines(void) {
+  unsigned long now = millis();
+  if (mKlineNextFetch != 0 && (long)(now - mKlineNextFetch) < 0)
+    return;
+  // Schedule the next attempt up front: when offline/failing we back off a
+  // full interval instead of retrying on every monitor tick.
+  mKlineNextFetch = now + KLINE_RETRY_ms;
   if (WiFi.status() != WL_CONNECTED)
     return;
-  if (mKlineUpdate != 0 && (millis() - mKlineUpdate < 60000))
-    return;
 
-  HTTPClient http;
-  http.setTimeout(8000);
-  bool ok = false;
+  static Kline batch[KLINE_POINTS];
+  uint8_t n = 0;
   try {
-    // Primary: Binance US (no geo-block in US, completely free, no API key)
-    http.begin("https://api.binance.us/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=22");
-    int httpCode;
-    {
-      HW_SHA_REQUEST();
-      std::lock_guard<std::mutex> shaLock(g_hwShaMutex);
-      httpCode = http.GET();
+    n = klineRequest(F("https://api.binance.us/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=" "24"), false, batch);
+    if (n == 0) {
+      // Kraken returns up to 720 rows; ask only for the last ~25h so the
+      // stream (and parse time with the SHA engine idle) stays small.
+      String url = F("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60");
+      unsigned long epoch = timeClient.getEpochTime() - (unsigned long)(3600 * Settings.Timezone);
+      if (epoch > 1600000000UL)
+        url += "&since=" + String(epoch - (KLINE_POINTS + 1) * 3600UL);
+      n = klineRequest(url, true, batch);
     }
-    if (httpCode == HTTP_CODE_OK) {
-      String payload = http.getString();
-      DynamicJsonDocument doc(6144);
-      DeserializationError err = deserializeJson(doc, payload);
-      if (!err && doc.is<JsonArray>()) {
-        JsonArray arr = doc.as<JsonArray>();
-        uint8_t count = 0;
-        for (JsonArray candle : arr) {
-          if (count >= KLINE_POINTS) break;
-          g_btcKlines[count].o = candle[1].as<String>().toFloat();
-          g_btcKlines[count].h = candle[2].as<String>().toFloat();
-          g_btcKlines[count].l = candle[3].as<String>().toFloat();
-          g_btcKlines[count].c = candle[4].as<String>().toFloat();
-          count++;
-        }
-        g_klineCount = count;
-        if (count > 0 && g_btcKlines[0].o > 0.0f) {
-          float firstOpen = g_btcKlines[0].o;
-          float lastClose = g_btcKlines[count - 1].c;
-          g_btc24hChange = ((lastClose - firstOpen) / firstOpen) * 100.0f;
-        }
-        ok = true;
-        mKlineUpdate = millis();
-      }
-    }
-    http.end();
-  } catch(...) {
-    http.end();
+  } catch (...) {
+    n = 0;
   }
-
-  // Fallback: If Binance US failed, try Kraken public OHLC
-  if (!ok) {
-    try {
-      http.begin("https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60");
-      int httpCode;
-      {
-        HW_SHA_REQUEST();
-        std::lock_guard<std::mutex> shaLock(g_hwShaMutex);
-        httpCode = http.GET();
-      }
-      if (httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
-        DynamicJsonDocument doc(8192);
-        DeserializationError err = deserializeJson(doc, payload);
-        if (!err && doc.containsKey("result") && doc["result"].containsKey("XXBTZUSD")) {
-          JsonArray arr = doc["result"]["XXBTZUSD"].as<JsonArray>();
-          int total = arr.size();
-          int start = total > KLINE_POINTS ? total - KLINE_POINTS : 0;
-          uint8_t count = 0;
-          for (int i = start; i < total; i++) {
-            JsonArray candle = arr[i];
-            if (count >= KLINE_POINTS) break;
-            g_btcKlines[count].o = candle[1].as<String>().toFloat();
-            g_btcKlines[count].h = candle[2].as<String>().toFloat();
-            g_btcKlines[count].l = candle[3].as<String>().toFloat();
-            g_btcKlines[count].c = candle[4].as<String>().toFloat();
-            count++;
-          }
-          g_klineCount = count;
-          if (count > 0 && g_btcKlines[0].o > 0.0f) {
-            float firstOpen = g_btcKlines[0].o;
-            float lastClose = g_btcKlines[count - 1].c;
-            g_btc24hChange = ((lastClose - firstOpen) / firstOpen) * 100.0f;
-          }
-          mKlineUpdate = millis();
-        }
-      }
-      http.end();
-    } catch(...) {
-      http.end();
-    }
+  if (n > 0) {
+    commitKlines(batch, n);
+    mKlineNextFetch = now + UPDATE_KLINE_ms;
   }
+  // else: keep the cached candles on screen.
 }
 
 String getBTCprice(void){
     const CurrencyInfo &cur = currencyFor(Settings.Currency);
     static char price_buffer[24];
 
-    updateBTCKlines();
+    fetchKlines();
 
     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
 

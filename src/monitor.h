@@ -53,18 +53,34 @@ typedef struct{
   NMState NerdStatus;
 }monitor_data;
 
-#define KLINE_POINTS 22
-
-struct BTCKline {
-  float o;
-  float h;
-  float l;
-  float c;
+// ---- BTC/USDT 1h candlestick feed (Screen 1 MARKET) -----------------------
+// Fetched from Binance US (Kraken fallback) once a minute by the monitor task.
+// Stored in a fixed ring buffer so a refresh never reallocates; readers take a
+// linear, oldest-first snapshot with copyKlines() so they never see a
+// half-written update.
+struct Kline {
+  float open, high, low, close;
+  uint32_t timestamp;   // candle open time, unix seconds (UTC)
 };
 
-extern BTCKline g_btcKlines[KLINE_POINTS];
-extern uint8_t g_klineCount;
-extern float g_btc24hChange;
+#define KLINE_POINTS 24
+#define KLINE_INTERVAL_LABEL "1H"
+#define UPDATE_KLINE_ms (60UL * 1000UL)
+#define KLINE_RETRY_ms  (60UL * 1000UL)   // back-off after a failed fetch (offline)
+
+extern Kline g_btcKlines[KLINE_POINTS];   // ring storage, see g_klineHead
+extern uint8_t g_klineCount;              // valid entries (0..KLINE_POINTS)
+extern uint8_t g_klineHead;               // index of the oldest entry
+extern uint32_t g_klineEpoch;             // bumps on every successful refresh
+extern float g_btc24hChange;              // % change across the buffered window
+
+// Copies up to KLINE_POINTS candles, oldest first, into out[]; returns count.
+uint8_t copyKlines(Kline *out);
+// Refresh the kline buffer if due. Safe to call often: returns immediately
+// unless a minute has elapsed; keeps cached candles on any failure.
+void fetchKlines(void);
+// Compact JSON object with market data + candles for the web twin.
+String getMarketJson(void);
 
 typedef struct{
   String globalHash; //hexahashes
