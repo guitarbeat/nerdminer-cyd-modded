@@ -54,12 +54,10 @@ typedef struct{
   NMState NerdStatus;
 }monitor_data;
 
-// ---- BTC/USDT 1h candlestick feed (Screen 1 MARKET) -----------------------
-// Fetched from Binance US (Kraken fallback) once a minute by its own low-priority
-// "Klines" task (startKlineTask), never from the Monitor loop.
-// Stored in a fixed ring buffer so a refresh never reallocates; readers take a
-// linear, oldest-first snapshot with copyKlines() so they never see a
-// half-written update.
+// ---- BTC/USDT candlestick chart (Screen 1 MARKET) -------------------------
+// The live candle feed was removed (its HTTPS fetch had to pause mining via
+// g_hwShaMutex). copyKlines() always returns 0, so the chart shows its empty
+// "waiting for market data" state.
 struct Kline {
   float open, high, low, close;
   uint32_t timestamp;   // candle open time, unix seconds (UTC)
@@ -67,23 +65,14 @@ struct Kline {
 
 #define KLINE_POINTS 24
 #define KLINE_INTERVAL_LABEL "1H"
-#define UPDATE_KLINE_ms (60UL * 1000UL)
-#define KLINE_RETRY_ms  (60UL * 1000UL)   // back-off after a failed fetch (offline)
 
-extern Kline g_btcKlines[KLINE_POINTS];   // ring storage, see g_klineHead
-extern uint8_t g_klineCount;              // valid entries (0..KLINE_POINTS)
-extern uint8_t g_klineHead;               // index of the oldest entry
-extern uint32_t g_klineEpoch;             // bumps on every successful refresh
-extern float g_btc24hChange;              // % change across the buffered window
+extern uint8_t g_klineCount;              // always 0 (no feed)
+extern uint32_t g_klineEpoch;             // always 0 (no feed)
+extern float g_btc24hChange;              // always 0 (no feed)
 
-// Copies up to KLINE_POINTS candles, oldest first, into out[]; returns count.
+// Copies candles into out[]; returns count (always 0 now).
 uint8_t copyKlines(Kline *out);
-// Refresh the kline buffer if due. Safe to call often: returns immediately
-// unless a minute has elapsed; keeps cached candles on any failure.
-void fetchKlines(void);
-// Spawns the dedicated low-priority "Klines" task that calls fetchKlines().
-void startKlineTask(void);
-// Compact JSON object with market data + candles for the web twin.
+// Compact JSON object with market data for the web twin (empty candle list).
 String getMarketJson(void);
 
 typedef struct{
