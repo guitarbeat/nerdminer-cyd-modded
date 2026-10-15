@@ -755,228 +755,127 @@ struct MarketV
   StripV strip;
 };
 
+// Layout (no chart since the kline fetch was removed):
+//   Portrait  : price card y=30..100, block/fee card y=106..162,
+//               halving+network card y=168..260, footer strip y=266.
+//   Landscape : price+block card y=30..90, halving+network card y=96..192,
+//               footer strip y=198.
 static void chromeMarket(TFT_eSPI &d)
 {
   if (isPortrait())
   {
-    // Hero Price Card (y=30..84, h=54)
-    panel(d, 6, 30, 228, 54, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 14, 33, 10, C_DIM, C_PANEL);
+    panel(d, 6, 30, 228, 70, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, btcPairLabel().c_str(), 14, 35, 10, C_DIM, C_PANEL);
 
-    // Candlestick Container (y=88..206, h=118)
-    panel(d, 6, 88, 228, 118, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 106, 228, 56, 8, C_PANEL, C_EDGE, C_BG);
+    d.drawFastVLine(120, 114, 40, C_EDGE);
+    text(d, "BLOCK HEIGHT", 63, 113, 9, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "FEE RATE", 177, 113, 9, C_DIM, C_PANEL, Align::TopCenter);
 
-    // Halving & Network Card (y=210..260, h=50)
-    panel(d, 6, 210, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 168, 228, 92, 8, C_PANEL, C_EDGE, C_BG);
+    d.drawFastHLine(14, 220, 212, C_EDGE);
+    d.drawFastVLine(120, 226, 28, C_EDGE);
+    text(d, "DIFFICULTY", 63, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "NETWORK", 177, 225, 9, C_DIM, C_PANEL, Align::TopCenter);
 
     chromeStripCells(d);
   }
   else
   {
-    panel(d, 8, 30, 304, 52, 8, C_PANEL, C_EDGE, C_BG);
-    text(d, btcPairLabel().c_str(), 16, 34, 10, C_DIM, C_PANEL);
-    text(d, "LATEST BLOCK", 300, 34, 10, C_DIM, C_PANEL, Align::TopRight);
+    panel(d, 8, 30, 304, 60, 8, C_PANEL, C_EDGE, C_BG);
+    text(d, btcPairLabel().c_str(), 16, 35, 10, C_DIM, C_PANEL);
+    text(d, "LATEST BLOCK", 300, 35, 10, C_DIM, C_PANEL, Align::TopRight);
 
-    // Candlesticks (y=86..150, h=64)
-    panel(d, 8, 86, 304, 68, 6, C_PANEL, C_EDGE, C_BG);
-
-    // Halving Card (y=158..192)
-    panel(d, 8, 158, 304, 36, 6, C_PANEL, C_EDGE, C_BG);
+    panel(d, 8, 96, 304, 96, 8, C_PANEL, C_EDGE, C_BG);
+    d.drawFastHLine(16, 146, 288, C_EDGE);
+    d.drawFastVLine(160, 152, 34, C_EDGE);
+    text(d, "DIFFICULTY", 84, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "NETWORK HASHRATE", 236, 152, 9, C_DIM, C_PANEL, Align::TopCenter);
 
     chromeStripCells(d);
   }
-}
-
-// Compact "$68.4K" style price tag for chart labels.
-static void fmtK(char *buf, size_t n, const char *prefix, float v)
-{
-  if (v >= 10000.0f)
-    snprintf(buf, n, "%s$%.1fK", prefix, v / 1000.0f);
-  else
-    snprintf(buf, n, "%s$%.0f", prefix, v);
-}
-
-// OHLC candlestick chart with MA-7 overlay and High/Low tags, drawn into any
-// TFT_eSPI surface (the screen or the scratch sprite) at (x,y,w,h).
-// Price -> pixel: Y = y + h - ((price - min) / range) * h, with 5% padding.
-static void drawCandlestickChart(TFT_eSPI &d, int x, int y, int w, int h, Kline *klines, int count)
-{
-  d.fillRect(x, y, w, h, C_PANEL);
-  text(d, "BTC/USDT " KLINE_INTERVAL_LABEL, x + 4, y + 2, 9, C_DIM, C_PANEL);
-  text(d, "MA7", x + w / 2, y + 2, 9, C_GOLD, C_PANEL, Align::TopCenter);
-
-  const int plotX = x + 4, plotY = y + 14, plotW = w - 8, plotH = h - 26;
-  for (int i = 0; i <= 3; i++) // subtle grid
-    d.drawFastHLine(plotX, plotY + (plotH * i) / 3, plotW, C_TRACK);
-
-  if (klines == nullptr || count <= 0)
-  {
-    text(d, "WAITING FOR MARKET DATA", x + w / 2, plotY + plotH / 2 - 5, 9, C_DIM, C_PANEL, Align::TopCenter);
-    return;
-  }
-  if (count > KLINE_POINTS)
-    count = KLINE_POINTS;
-
-  float minP = klines[0].low, maxP = klines[0].high;
-  for (int i = 1; i < count; i++)
-  {
-    if (klines[i].low < minP) minP = klines[i].low;
-    if (klines[i].high > maxP) maxP = klines[i].high;
-  }
-  const float rawLo = minP, rawHi = maxP;
-  float pad = (maxP - minP) * 0.05f;
-  if (pad < 1.0f) pad = 1.0f;
-  minP -= pad;
-  maxP += pad;
-  const float rng = maxP - minP;
-  auto py = [&](float p) -> int {
-    int v = plotY + plotH - (int)(((p - minP) / rng) * plotH);
-    return v < plotY ? plotY : (v > plotY + plotH ? plotY + plotH : v);
-  };
-
-  const float step = (float)plotW / count;
-  int cW = (int)step - 2;
-  if (cW < 2) cW = 2;
-  float ma[KLINE_POINTS];
-
-  for (int i = 0; i < count; i++)
-  {
-    const Kline &k = klines[i];
-    float sum = 0;
-    int n = 0;
-    for (int j = (i >= 6 ? i - 6 : 0); j <= i; j++, n++)
-      sum += klines[j].close;
-    ma[i] = sum / n;
-
-    uint16_t col = k.close >= k.open ? C_GOOD : C_BAD;
-    int cx = plotX + (int)(i * step + step / 2);
-    int yHi = py(k.high), yLo = py(k.low);
-    d.drawFastVLine(cx, yHi, (yLo - yHi) > 0 ? (yLo - yHi) : 1, col); // wick
-    int yO = py(k.open), yC = py(k.close);
-    int top = yO < yC ? yO : yC;
-    int bh = abs(yC - yO);
-    if (bh < 1) bh = 1;
-    d.fillRect(cx - cW / 2, top, cW, bh, col); // body
-  }
-
-  for (int i = 1; i < count; i++) // MA-7 trend line
-  {
-    int x0 = plotX + (int)((i - 1) * step + step / 2);
-    int x1 = plotX + (int)(i * step + step / 2);
-    d.drawLine(x0, py(ma[i - 1]), x1, py(ma[i]), C_GOLD);
-  }
-
-  char hb[16], lb[16];
-  fmtK(hb, sizeof(hb), "H ", rawHi);
-  fmtK(lb, sizeof(lb), "L ", rawLo);
-  text(d, hb, x + w - 4, y + 2, 9, C_GOOD, C_PANEL, Align::TopRight);
-  text(d, lb, x + 4, y + h - 11, 9, C_BAD, C_PANEL);
-  char last[16];
-  fmtK(last, sizeof(last), "", klines[count - 1].close);
-  text(d, last, x + w - 4, y + h - 11, 9, C_TEXT, C_PANEL, Align::TopRight);
 }
 
 static void paintMarket(const MarketV &m)
 {
   drawHeader(m.hdr);
+  const bool P = isPortrait();
 
-  // 1. Hero Card: Price & Stats
-  String k = m.price + "|" + String(g_btc24hChange, 1) + "|" + (isPortrait() ? "P" : "L");
+  // 1. Hero price card (+ block/fee in landscape)
+  char chgBuf[20];
+  snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%% 24h", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
+  const uint16_t cCol = g_btc24hChange >= 0 ? C_GOOD : C_BAD;
+  String k = m.price + "|" + String(g_btc24hChange, 2) + "|" + (P ? m.price : m.block + m.fee) + (P ? "P" : "L");
   if (need(W_PRICE, k))
   {
-    if (isPortrait())
+    if (P)
     {
-      if (wBegin(216, 38, C_PANEL))
+      if (wBegin(212, 50, C_PANEL))
       {
-        text(wgt, m.price.c_str(), 2, 0, 22, C_GOLD, C_PANEL);
-        char chgBuf[16];
-        snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%% 24h", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
-        uint16_t cCol = g_btc24hChange >= 0 ? C_GOOD : C_BAD;
-        text(wgt, chgBuf, 212, 1, 10, cCol, C_PANEL, Align::TopRight);
-
-        text(wgt, m.block.c_str(), 212, 14, 12, C_TEXT, C_PANEL, Align::TopRight);
-        text(wgt, (m.fee + " fee").c_str(), 212, 26, 10, C_DIM, C_PANEL, Align::TopRight);
-        wEnd(12, 44);
+        text(wgt, chgBuf, 210, 0, 10, cCol, C_PANEL, Align::TopRight);
+        text(wgt, m.price.c_str(), 106, 16, 30, C_GOLD, C_PANEL, Align::TopCenter);
+        wEnd(14, 47);
         done(W_PRICE, k);
       }
     }
     else
     {
-      if (wBegin(292, 34, C_PANEL))
+      if (wBegin(288, 38, C_PANEL))
       {
-        text(wgt, m.price.c_str(), 4, 0, 24, C_GOLD, C_PANEL);
-        char chgBuf[16];
-        snprintf(chgBuf, sizeof(chgBuf), "%s%.2f%%", g_btc24hChange >= 0 ? "+" : "", g_btc24hChange);
-        text(wgt, chgBuf, 120, 4, 11, g_btc24hChange >= 0 ? C_GOOD : C_BAD, C_PANEL);
-        text(wgt, m.block.c_str(), 288, 2, 14, C_TEXT, C_PANEL, Align::TopRight);
-        text(wgt, (m.fee + " fee").c_str(), 288, 20, 10, C_DIM, C_PANEL, Align::TopRight);
-        wEnd(14, 44);
+        text(wgt, m.price.c_str(), 0, 2, 28, C_GOLD, C_PANEL);
+        text(wgt, chgBuf, 0 + textW(m.price.c_str(), 28) + 8, 14, 11, cCol, C_PANEL);
+        text(wgt, m.block.c_str(), 284, 2, 16, C_TEXT, C_PANEL, Align::TopRight);
+        text(wgt, (m.fee + " fee").c_str(), 284, 24, 10, C_DIM, C_PANEL, Align::TopRight);
+        wEnd(16, 48);
         done(W_PRICE, k);
       }
     }
   }
 
-  // 2. Candlesticks (re-drawn only when a new batch lands or layout changes)
-  String ck = String(g_klineEpoch) + "|" + String(g_klineCount) + "|" + (isPortrait() ? "P" : "L");
-  if (need(W_CANDLES, ck))
+  // 2. Block / fee card (portrait only)
+  if (P)
   {
-    static Kline snap[KLINE_POINTS];
-    int n = copyKlines(snap);
-    const int cw = isPortrait() ? 220 : 296, ch = isPortrait() ? 110 : 62;
-    if (wBegin(cw, ch, C_PANEL))
+    String bk = m.block + "|" + m.fee;
+    if (need(W_CANDLES, bk))
     {
-      drawCandlestickChart(wgt, 0, 0, cw, ch, snap, n);
-      wEnd(isPortrait() ? 10 : 12, isPortrait() ? 92 : 89);
-      done(W_CANDLES, ck);
+      if (wBegin(212, 24, C_PANEL))
+      {
+        wgt.drawFastVLine(106, 0, 24, C_EDGE);
+        text(wgt, m.block.c_str(), 49, 4, 18, C_TEXT, C_PANEL, Align::TopCenter);
+        text(wgt, m.fee.c_str(), 163, 6, 14, C_TEXT, C_PANEL, Align::TopCenter);
+        wEnd(14, 130);
+        done(W_CANDLES, bk);
+      }
     }
   }
 
-  // 3. Halving Progress Card
-  char kb[64];
-  snprintf(kb, sizeof(kb), "%d|%s|%s|%s|%d", m.pct, m.remaining.c_str(), m.diff.c_str(), m.net.c_str(), isPortrait() ? 1 : 0);
+  // 3. Halving progress + difficulty / network card
+  char kb[80];
+  snprintf(kb, sizeof(kb), "%d|%s|%s|%s|%d", m.pct, m.remaining.c_str(), m.diff.c_str(), m.net.c_str(), P ? 1 : 0);
   if (need(W_HALV, kb))
   {
-    if (isPortrait())
+    char pc[8];
+    snprintf(pc, sizeof(pc), "%d%%", m.pct);
+    String rem = commas(m.remaining) + " blocks left";
+    const int bw = P ? 212 : 288;
+    if (wBegin(bw, 42, C_PANEL))
     {
-      if (wBegin(216, 44, C_PANEL))
-      {
-        text(wgt, "HALVING #5 PROGRESS", 2, 1, 10, C_DIM, C_PANEL);
-        char pc[8];
-        snprintf(pc, sizeof(pc), "%d%%", m.pct);
-        text(wgt, pc, 116, 1, 10, C_METER, C_PANEL);
-        String rem = commas(m.remaining) + " blk left";
-        text(wgt, rem.c_str(), 212, 1, 9, C_TEXT, C_PANEL, Align::TopRight);
-
-        // Bar
-        wgt.fillRect(2, 13, 212, 6, C_TRACK);
-        int fw = (212 * m.pct) / 100;
-        if (fw > 0) wgt.fillRect(2, 13, fw, 6, C_METER);
-
-        // Subline: Difficulty & Hashrate
-        text(wgt, ("Diff: " + m.diff).c_str(), 2, 23, 10, C_GOLD, C_PANEL);
-        text(wgt, ("Net: " + m.net).c_str(), 212, 23, 10, C_GOOD, C_PANEL, Align::TopRight);
-
-        wEnd(12, 213);
-        done(W_HALV, kb);
-      }
+      text(wgt, "HALVING #5 PROGRESS", 0, 0, 10, C_DIM, C_PANEL);
+      text(wgt, pc, bw, 0, 12, C_METER, C_PANEL, Align::TopRight);
+      wgt.fillRoundRect(0, 17, bw, 8, 4, C_TRACK);
+      int fw = (bw * m.pct) / 100;
+      if (fw > 0) wgt.fillRoundRect(0, 17, fw, 8, 4, C_METER);
+      text(wgt, rem.c_str(), bw / 2, 30, 9, C_TEXT, C_PANEL, Align::TopCenter);
+      wEnd(P ? 14 : 16, P ? 174 : 102);
     }
-    else
+    const int hw = P ? 212 : 288, hh = P ? 16 : 18;
+    if (wBegin(hw, hh, C_PANEL))
     {
-      if (wBegin(288, 30, C_PANEL))
-      {
-        text(wgt, "HALVING #5", 2, 1, 10, C_DIM, C_PANEL);
-        char pc[8];
-        snprintf(pc, sizeof(pc), "%d%%", m.pct);
-        text(wgt, pc, 72, 1, 10, C_METER, C_PANEL);
-        text(wgt, ("Diff: " + m.diff + " | Net: " + m.net).c_str(), 284, 1, 10, C_TEXT, C_PANEL, Align::TopRight);
-
-        wgt.fillRect(2, 15, 284, 6, C_TRACK);
-        int fw = (284 * m.pct) / 100;
-        if (fw > 0) wgt.fillRect(2, 15, fw, 6, C_METER);
-
-        wEnd(16, 160);
-        done(W_HALV, kb);
-      }
+      wgt.drawFastVLine(hw / 2, 0, hh, C_EDGE);
+      text(wgt, m.diff.c_str(), hw / 4, 1, P ? 13 : 15, C_GOLD, C_PANEL, Align::TopCenter);
+      text(wgt, m.net.c_str(), 3 * hw / 4, 1, P ? 13 : 15, C_GOOD, C_PANEL, Align::TopCenter);
+      wEnd(P ? 14 : 16, P ? 238 : 166);
+      done(W_HALV, kb);
     }
   }
 
