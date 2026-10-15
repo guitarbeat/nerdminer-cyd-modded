@@ -1,3 +1,4 @@
+#include "version.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -68,6 +69,7 @@ static String buildStatsJson(const mining_data &d)
   String json;
   json.reserve(1792);
   json += "{";
+  json += "\"fw\":\"" FW_GIT "\",";
   json += "\"status\":";
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
   if (isHashing)
@@ -577,7 +579,7 @@ static void handleRoot()
             "<header>"
             "<div class='brand'>"
             "<div class='logo-box' id='site-logo'>&#8383;</div>"
-            "<div><div class='brand-title'>NerdMiner CYD</div><div class='brand-subtitle'>v1.6.3 &bull; ");
+            "<div><div class='brand-title'>NerdMiner CYD</div><div class='brand-subtitle'>v1.6.3 (" FW_GIT ") &bull; ");
 
   page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>"
             "<div class='status-badge'>"

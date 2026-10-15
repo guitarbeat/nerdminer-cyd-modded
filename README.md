@@ -259,3 +259,7 @@ This project merges and builds upon the fantastic work of the open-source commun
 ## 📜 License
 
 This project is open-source and licensed under the [MIT License](LICENSE), matching the upstream NerdMiner_v2 foundation by BitMaker and Valerio Vaccaro. See [LICENSE](LICENSE) for full details.
+
+## Firmware version
+
+Every build embeds the git short hash (`-dirty` if built from uncommitted changes). Read it from the serial boot banner (`Firmware git: <hash>`), the `fw` field of `http://<device-ip>/api/stats`, or the web UI subtitle. Match it against `git log --oneline` on main.

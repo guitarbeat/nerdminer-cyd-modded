@@ -1,3 +1,4 @@
+#include "version.h"
 
 #include <Wire.h>
 
@@ -127,6 +128,7 @@ void setup()
 
   /******** INIT NERDMINER ************/
   Serial.println("NerdMiner v2 starting......");
+  Serial.println("Firmware git: " FW_GIT);
 
   /******** INIT DISPLAY ************/
   initDisplay();
