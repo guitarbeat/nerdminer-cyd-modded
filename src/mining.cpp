@@ -1987,11 +1987,23 @@ void restoreStat() {
   if(!Settings.saveStats) return;
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    Serial.printf("[MONITOR] NVS partition is full or has invalid version, erasing...\n");
-    nvs_flash_init();
+    Serial.printf("[MONITOR] NVS init failed (%s), erasing NVS partition...\n", esp_err_to_name(ret));
+    esp_err_t er = nvs_flash_erase();
+    if (er != ESP_OK) {
+      Serial.printf("[MONITOR] nvs_flash_erase failed: %s\n", esp_err_to_name(er));
+    }
+    ret = nvs_flash_init();
+  }
+  if (ret != ESP_OK) {
+    Serial.printf("[MONITOR] nvs_flash_init failed: %s - stats not restored\n", esp_err_to_name(ret));
+    return;
   }
 
   ret = nvs_open("state", NVS_READWRITE, &stat_handle);
+  if (ret != ESP_OK) {
+    Serial.printf("[MONITOR] nvs_open(\"state\") failed: %s - stats not restored\n", esp_err_to_name(ret));
+    return;
+  }
 
   size_t required_size = sizeof(double);
   nvs_get_blob(stat_handle, "best_diff", &best_diff, &required_size);
