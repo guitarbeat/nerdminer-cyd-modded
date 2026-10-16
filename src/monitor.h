@@ -170,4 +170,10 @@ String getPoolAPIUrl(void);
 // Full URL for a mempool API path on the user-configured host.
 String mempoolUrl(const char *path);
 
+void requestCurrencyChange(const char *code);
+String currencySetting(void);
+void poolSettingsChanged(void);
+void applyPendingSettings(void);
+
 #endif //MONITOR_API_H
+

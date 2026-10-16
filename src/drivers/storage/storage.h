@@ -58,6 +58,10 @@
 #define JSON_SPIFFS_KEY_MEMPOOL	"mempoolHost"
 #define JSON_SPIFFS_KEY_FBPOOL		"fallbackPool"
 #define JSON_SPIFFS_KEY_FBPORT		"fallbackPort"
+#define JSON_SPIFFS_KEY_FBPASS		"fallbackPass"
+#define JSON_SPIFFS_KEY_BACKUPPOOLURL	"backupPoolString"
+#define JSON_SPIFFS_KEY_BACKUPPOOLPORT	"backupPortNumber"
+#define JSON_SPIFFS_KEY_BACKUPPOOLPASS	"backupPoolPassword"
 
 // settings
 struct TSettings
@@ -70,6 +74,7 @@ struct TSettings
 	int PoolPort{ DEFAULT_POOLPORT };
 	String FallbackPoolAddress{ DEFAULT_FALLBACK_POOL };
 	int FallbackPoolPort{ DEFAULT_FALLBACK_PORT };
+	char FallbackPoolPassword[80]{ DEFAULT_POOLPASS };
 	int Timezone{ DEFAULT_TIMEZONE };
 	bool saveStats{ DEFAULT_SAVESTATS };
 	bool invertColors{ DEFAULT_INVERTCOLORS };

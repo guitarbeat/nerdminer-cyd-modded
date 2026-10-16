@@ -6,9 +6,11 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 #include <list>
+#include <atomic>
 #include "mining.h"
 #include "utils.h"
 #include "monitor.h"
+#include "wManager.h"
 #include "drivers/storage/storage.h"
 #include "drivers/devices/device.h"
 #include "currency.h"
@@ -58,6 +60,11 @@ int poolApiStyle = POOL_API_PUBLICPOOL;
 // public-pool default and ask the wrong pool for stats).
 static std::mutex s_poolApiMutex;
 
+// Changes from the LAN settings page that applyPendingSettings() applies on
+// this task (see monitor.h).
+static int s_appliedTimezone = DEFAULT_TIMEZONE;      // offset timeClient has
+static const char *s_newCurrency = nullptr; // a kCurrencies code; g_settingsMutex
+static std::atomic<bool> s_poolChanged{false};
 
 void setup_monitor(void){
     /******** TIME ZONE SETTING *****/
@@ -65,8 +72,8 @@ void setup_monitor(void){
     timeClient.begin();
     
     // Adjust offset depending on your zone
-    // GMT +2 in seconds (zona horaria de Europa Central)
-    timeClient.setTimeOffset(3600 * Settings.Timezone);
+    s_appliedTimezone = Settings.Timezone;
+    timeClient.setTimeOffset(3600 * s_appliedTimezone);
 
     Serial.println("TimeClient setup done");
 #ifdef SCREEN_WORKERS_ENABLE
@@ -621,65 +628,44 @@ static bool heliosJudgeAnswer(int httpCode, int workers) {
 
 String getPoolAPIUrl(void) {
     std::lock_guard<std::mutex> lock(s_poolApiMutex);
+    const String& pool = activePoolAddress();
+    const int poolPort = activePoolPort();
     int style = POOL_API_PUBLICPOOL;
     String url = String(getPublicPool);
-    if (Settings.PoolAddress == "public-pool.io") {
+    if (pool == "public-pool.io") {
         url = "https://public-pool.io:40557/api/client/";
     }
-    else if (Settings.PoolAddress.indexOf("hmpool.io") >= 0) {
-        // hmpool runs one pool per coin (btc.hmpool.io, bch.hmpool.io,
-        // digi.hmpool.io), each with its own stats API: asking the btc one
-        // about a DGB address answers 200 with an empty worker list. Within
-        // a coin the regional stratum endpoints (eu.btc.hmpool.io,
-        // eu.digi.hmpool.io, ...) share one set of stats -- confirmed live
-        // on both btc and digi -- so the region prefix is dropped.
+    else if (pool.indexOf("hmpool.io") >= 0) {
         String coin = "btc";
-        const int coinEnd = Settings.PoolAddress.indexOf(".hmpool.io");
+        const int coinEnd = pool.indexOf(".hmpool.io");
         if (coinEnd > 0)
-            coin = Settings.PoolAddress.substring(Settings.PoolAddress.lastIndexOf('.', coinEnd - 1) + 1, coinEnd);
+            coin = pool.substring(pool.lastIndexOf('.', coinEnd - 1) + 1, coinEnd);
         if (coin == "btc") {
-            // GET https://btc.hmpool.io/api/miner/<address>: hmpool's own
-            // schema. It groups workers by name, so several miners sharing
-            // one worker name count as one.
             url = "https://btc.hmpool.io/api/miner/";
             style = POOL_API_HMPOOL;
         } else {
-            // The digi and bch pools also answer the public-pool schema at
-            // /api/client/<address> (btc has no such route: 404). It lists
-            // one entry per live connection, so every miner is counted even
-            // when they share a worker name, and it is a fraction of the
-            // size of /api/miner.
             url = "https://" + coin + ".hmpool.io/api/client/";
         }
     }
-    else if (Settings.PoolAddress.indexOf("heliospool.") >= 0) {
-        // heliospool.com/heliospool-api: each region's server publishes its
-        // own stats at https://api-{coin}-{region}.heliospool.com/users/<address>
-        // (the old btc.heliospool.{com,eu,asia}/api/users path is gone -- those
-        // hosts are now stratum-only and 443 just times out).
+    else if (pool.indexOf("heliospool.") >= 0) {
         url = "https://api-btc-" + getHeliosRegion() + ".heliospool.com/users/";
         style = POOL_API_CKPOOL;
     }
     else {
-        if (Settings.PoolAddress == "pool.nerdminers.org") {
-            // Runs a ckpool-solo fork (golden-guy/ckpool-solo@nerdminer_v2);
-            // its per-user JSON at this same /users/<address> path uses the
-            // same hashrate1hr/workers/bestever fields as heliospool.
+        if (pool == "pool.nerdminers.org") {
             url = "https://pool.nerdminers.org/users/";
             style = POOL_API_CKPOOL;
         }
         else {
-            switch (Settings.PoolPort) {
+            switch (poolPort) {
                 case 3333:
-                    if (Settings.PoolAddress == "pool.sethforprivacy.com")
+                    if (pool == "pool.sethforprivacy.com")
                         url = "https://pool.sethforprivacy.com/api/client/";
-                    if (Settings.PoolAddress == "pool.solomining.de")
+                    if (pool == "pool.solomining.de")
                         url = "https://pool.solomining.de/api/client/";
-                    // Add more cases for other addresses with port 3333 if needed
                     break;
                 case 2018:
-                    // Local instance of public-pool.io on Umbrel or Start9
-                    url = "http://" + Settings.PoolAddress + ":2019/api/client/";
+                    url = "http://" + pool + ":2019/api/client/";
                     break;
                 default:
                     url = String(getPublicPool);
@@ -696,29 +682,16 @@ pool_data getPoolData(void){
     //pool_data pData;    
     if((mPoolUpdate == 0) || (millis() - mPoolUpdate > UPDATE_POOL_min * 60 * 1000)){      
         if (WiFi.status() != WL_CONNECTED) return pData;
-        //Make first API call to get global hash and current difficulty
-        // Explicit, freshly-constructed WiFiClientSecure per call (rather
-        // than letting HTTPClient manage an internal one implicitly) --
-        // some pool servers' TLS 1.3 setups were consistently rejecting
-        // the 2nd+ call in a session with a fatal alert while the 1st
-        // always succeeded, which points at stale session/socket state
-        // being reused across calls. A fresh client + explicit stop()
-        // avoids that.
         WiFiClientSecure client;
         client.setInsecure();
         HTTPClient http;
         http.setTimeout(10000);
         try {
           String btcWallet = Settings.BtcWallet;
-          // Serial.println(btcWallet);
           if (btcWallet.indexOf(".")>0) btcWallet = btcWallet.substring(0,btcWallet.indexOf("."));
           int apiStyle = POOL_API_PUBLICPOOL;
 #ifdef SCREEN_WORKERS_ENABLE
-          // setup_monitor() runs before the stratum connection exists (and
-          // may not have run at all yet), and that connection can move to
-          // another region's server later: work the URL out again whenever
-          // it is missing or heliospool's region isn't current.
-          const bool heliosPool = Settings.PoolAddress.indexOf("heliospool.") >= 0;
+          const bool heliosPool = activePoolAddress().indexOf("heliospool.") >= 0;
           String apiUrl;
           {
               std::lock_guard<std::mutex> lock(s_poolApiMutex);
@@ -875,3 +848,56 @@ pool_data getPoolData(void){
     }
     return pData;
 }
+
+void requestCurrencyChange(const char *code) {
+    std::lock_guard<std::mutex> lock(g_settingsMutex);
+    s_newCurrency = code;
+}
+
+String currencySetting(void) {
+    std::lock_guard<std::mutex> lock(g_settingsMutex);
+    return s_newCurrency ? String(s_newCurrency) : Settings.Currency;
+}
+
+void poolSettingsChanged(void) {
+    s_poolChanged = true;
+}
+
+void applyPendingSettings(void) {
+    const int tz = Settings.Timezone;
+    if (tz != s_appliedTimezone) {
+        if (initialTime != 0)
+            initialTime += (long)(tz - s_appliedTimezone) * 3600;
+        timeClient.setTimeOffset(3600 * tz);
+        s_appliedTimezone = tz;
+    }
+
+    bool currencyChanged = false;
+    {
+        std::lock_guard<std::mutex> lock(g_settingsMutex);
+        if (s_newCurrency) {
+            Settings.Currency = s_newCurrency;
+            s_newCurrency = nullptr;
+            currencyChanged = true;
+        }
+    }
+    if (currencyChanged) {
+        bitcoin_price = 0;
+        mBTCUpdate = 0;
+    }
+
+    if (s_poolChanged.exchange(false)) {
+        {
+            std::lock_guard<std::mutex> lock(s_poolApiMutex);
+            poolAPIUrl = "";
+            poolApiStyle = POOL_API_PUBLICPOOL;
+        }
+        heliosRegion = "";
+        heliosRegionInHost = false;
+        heliosRegionSure = false;
+        heliosMisses = 0;
+        pData = pool_data();
+        mPoolUpdate = 0;
+    }
+}
+

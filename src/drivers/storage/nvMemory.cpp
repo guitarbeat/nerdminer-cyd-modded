@@ -28,13 +28,17 @@ bool nvMemory::saveConfig(TSettings* Settings)
         Serial.println(F("SPIFS: Saving configuration."));
 
         // Create a JSON document
-        StaticJsonDocument<1024> json;
+        DynamicJsonDocument json(2048);
         json[JSON_SPIFFS_KEY_POOLURL] = Settings->PoolAddress;
         json[JSON_SPIFFS_KEY_POOLPORT] = Settings->PoolPort;
         json[JSON_SPIFFS_KEY_POOLPASS] = Settings->PoolPassword;
         json[JSON_SPIFFS_KEY_WALLETID] = Settings->BtcWallet;
         json[JSON_SPIFFS_KEY_FBPOOL] = Settings->FallbackPoolAddress;
         json[JSON_SPIFFS_KEY_FBPORT] = Settings->FallbackPoolPort;
+        json[JSON_SPIFFS_KEY_FBPASS] = Settings->FallbackPoolPassword;
+        json[JSON_SPIFFS_KEY_BACKUPPOOLURL] = Settings->FallbackPoolAddress;
+        json[JSON_SPIFFS_KEY_BACKUPPOOLPORT] = Settings->FallbackPoolPort;
+        json[JSON_SPIFFS_KEY_BACKUPPOOLPASS] = Settings->FallbackPoolPassword;
         json[JSON_SPIFFS_KEY_TIMEZONE] = Settings->Timezone;
         json[JSON_SPIFFS_KEY_STATS2NV] = Settings->saveStats;
         json[JSON_SPIFFS_KEY_INVCOLOR] = Settings->invertColors;
@@ -90,7 +94,7 @@ bool nvMemory::loadConfig(TSettings* Settings)
             if (configFile)
             {
                 Serial.println("SPIFS: Loading config file");
-                StaticJsonDocument<768> json;
+                DynamicJsonDocument json(2048);
                 DeserializationError error = deserializeJson(json, configFile);
                 configFile.close();
                 serializeJsonPretty(json, Serial);
@@ -104,8 +108,16 @@ bool nvMemory::loadConfig(TSettings* Settings)
                         Settings->PoolPort = json[JSON_SPIFFS_KEY_POOLPORT].as<int>();
                     if (json.containsKey(JSON_SPIFFS_KEY_FBPOOL))
                         Settings->FallbackPoolAddress = json[JSON_SPIFFS_KEY_FBPOOL].as<String>();
+                    else if (json.containsKey(JSON_SPIFFS_KEY_BACKUPPOOLURL))
+                        Settings->FallbackPoolAddress = json[JSON_SPIFFS_KEY_BACKUPPOOLURL].as<String>();
                     if (json.containsKey(JSON_SPIFFS_KEY_FBPORT))
                         Settings->FallbackPoolPort = json[JSON_SPIFFS_KEY_FBPORT].as<int>();
+                    else if (json.containsKey(JSON_SPIFFS_KEY_BACKUPPOOLPORT))
+                        Settings->FallbackPoolPort = json[JSON_SPIFFS_KEY_BACKUPPOOLPORT].as<int>();
+                    if (json.containsKey(JSON_SPIFFS_KEY_FBPASS))
+                        strncpy(Settings->FallbackPoolPassword, json[JSON_SPIFFS_KEY_FBPASS] | Settings->FallbackPoolPassword, sizeof(Settings->FallbackPoolPassword) - 1);
+                    else if (json.containsKey(JSON_SPIFFS_KEY_BACKUPPOOLPASS))
+                        strncpy(Settings->FallbackPoolPassword, json[JSON_SPIFFS_KEY_BACKUPPOOLPASS] | Settings->FallbackPoolPassword, sizeof(Settings->FallbackPoolPassword) - 1);
                     if (json.containsKey(JSON_SPIFFS_KEY_TIMEZONE))
                         Settings->Timezone = json[JSON_SPIFFS_KEY_TIMEZONE].as<int>();
                     if (json.containsKey(JSON_SPIFFS_KEY_STATS2NV))

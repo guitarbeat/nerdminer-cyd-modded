@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <ArduinoJson.h>
 #include "webConfig.h"
 #include "wManager.h"
 #include "drivers/storage/storage.h"
@@ -15,6 +16,10 @@
 extern TSettings Settings;
 extern monitor_data mMonitor;
 extern pool_data pData;
+extern uint32_t templates, hashes, Mhashes;
+extern uint64_t upTime;
+extern volatile uint32_t shares, valids;
+extern double best_diff;
 mining_data getMiningData(unsigned long mElapsed);
 
 static WebServer webCfgServer(80);
@@ -379,7 +384,15 @@ function pollReboot(){let s=8;document.getElementById('overlay').style.display='
 const t=setInterval(()=>{s--;if(s>=0)document.getElementById('cd').textContent=s;
 if(s<=0){clearInterval(t);checkBack();}},1000);}
 function checkBack(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(checkBack,1000));}
-document.getElementById('cfg-form').addEventListener('submit',()=>setTimeout(pollReboot,100));
+document.getElementById('cfg-form').addEventListener('submit',function(e){
+const r=document.querySelector("select[name='rot']");
+const inv=document.querySelector("input[name='invert']");
+const initR=this.dataset.initRot;
+const initInv=(this.dataset.initInv==='1');
+if((r&&r.value!==initR)||(inv&&inv.checked!==initInv)){
+setTimeout(pollReboot,100);
+}
+});
 function rebootDevice(){if(confirm('Reboot the miner now?')){fetch('/restart',{method:'POST'}).then(pollReboot).catch(pollReboot);}}
 function uploadOta(){
 const fi=document.getElementById('ota-file');
@@ -594,8 +607,23 @@ function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN
 function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}
 )rawjs";
 
+// The settings as the page should show them: what is in use, or what was
+// saved and is still waiting for the stratum or monitor task to apply it.
+static TSettings currentSettings()
+{
+  TSettings s;
+  {
+    std::lock_guard<std::mutex> lock(g_settingsMutex);
+    s = Settings;
+  }
+  readPoolSettings(s);
+  s.Currency = currencySetting();
+  return s;
+}
+
 static void handleRoot()
 {
+  const TSettings Settings = currentSettings(); // shadows global Settings with live/pending
   mining_data d = getMiningData(0);
   String fullWallet = String(Settings.BtcWallet);
   String cleanWallet = getCleanWallet(fullWallet);
@@ -660,11 +688,11 @@ static void handleRoot()
               "View Worker on Public-Pool.io &#8599;</a></div>");
   }
 
-  page += F("<form method='POST' action='/save' id='cfg-form'>"
-            "<div class='cfg-story'>"
+  page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "' data-init-inv='" + String(Settings.invertColors ? "1" : "0") + "'>";
+  page += F("<div class='cfg-story'>"
             "<div class='cfg-story-hdr'>"
             "<span class='cfg-title'>Settings</span>"
-            "<span class='cfg-tag'>Saved to flash on restart</span>"
+            "<span class='cfg-tag'>Applied live (reboots only on orientation/inversion change)</span>"
             "</div>"
             "<div class='cfg-flow'>"
             "<!-- 1. Solo Pool & Stratum -->"
@@ -677,9 +705,13 @@ static void handleRoot()
   page += htmlEscape(String(Settings.PoolPassword));
   page += F("'>. If the primary pool is unreachable after 3 attempts, automatically fail over to fallback pool <input type='text' id='f-fbpool' class='blank-input' style='min-width:140px' name='fbpool' value='");
   page += htmlEscape(Settings.FallbackPoolAddress);
-  page += F("'> on port <input type='number' id='f-fbport' class='blank-input' style='width:68px' name='fbport' value='");
+  page += F("' placeholder='pool.nerdminers.org'> on port <input type='number' id='f-fbport' class='blank-input' style='width:68px' name='fbport' value='");
   page += String(Settings.FallbackPoolPort);
-  page += F("'>."
+  page += F("'> with password <input type='text' id='f-fbpass' class='blank-input' style='width:50px' name='fbpass' value='");
+  page += htmlEscape(String(Settings.FallbackPoolPassword));
+  page += F("'> (now mining on <b>");
+  page += (onBackupPool() ? F("fallback pool") : F("primary pool"));
+  page += F("</b>)."
             "<div class='preset-pills'>"
             "<span style='font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);align-self:center;'>PRESETS</span>"
             "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"Public-Pool.io (port 3333) is the official recommended Stratum V1 port for ESP32 miners.\")'>Public-Pool (3333 &bull; Recommended)</button>"
@@ -789,7 +821,7 @@ static void handleRoot()
             "</label></div></div>"
             "</div></div>"
             "<div class='actions'>"
-            "<button type='submit' class='btn-save'>Save &amp; Restart NerdMiner</button>"
+            "<button type='submit' class='btn-save'>Save Settings</button>"
             "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
             "</div>"
             "</form>"
@@ -999,64 +1031,105 @@ static void handleRoot()
 
 static void handleSave()
 {
+  const TSettings before = currentSettings();
+  TSettings next = before;
+
   if (webCfgServer.hasArg("pool"))
-    Settings.PoolAddress = webCfgServer.arg("pool");
+    next.PoolAddress = webCfgServer.arg("pool");
   if (webCfgServer.hasArg("port"))
-    Settings.PoolPort = webCfgServer.arg("port").toInt();
+    next.PoolPort = webCfgServer.arg("port").toInt();
   if (webCfgServer.hasArg("fbpool"))
-    Settings.FallbackPoolAddress = webCfgServer.arg("fbpool");
+  {
+    next.FallbackPoolAddress = webCfgServer.arg("fbpool");
+    next.FallbackPoolAddress.trim();
+  }
   if (webCfgServer.hasArg("fbport"))
-    Settings.FallbackPoolPort = webCfgServer.arg("fbport").toInt();
+    next.FallbackPoolPort = constrain(webCfgServer.arg("fbport").toInt(), 0, 65535);
+  if (webCfgServer.hasArg("fbpass"))
+    strncpy(next.FallbackPoolPassword, webCfgServer.arg("fbpass").c_str(), sizeof(next.FallbackPoolPassword) - 1);
   if (webCfgServer.hasArg("poolpass"))
-    strncpy(Settings.PoolPassword, webCfgServer.arg("poolpass").c_str(), sizeof(Settings.PoolPassword) - 1);
+    strncpy(next.PoolPassword, webCfgServer.arg("poolpass").c_str(), sizeof(next.PoolPassword) - 1);
   if (webCfgServer.hasArg("wallet"))
-    strncpy(Settings.BtcWallet, webCfgServer.arg("wallet").c_str(), sizeof(Settings.BtcWallet) - 1);
+    strncpy(next.BtcWallet, webCfgServer.arg("wallet").c_str(), sizeof(next.BtcWallet) - 1);
   if (webCfgServer.hasArg("tz"))
-    Settings.Timezone = webCfgServer.arg("tz").toInt();
+    next.Timezone = webCfgServer.arg("tz").toInt();
   if (webCfgServer.hasArg("currency"))
-    Settings.Currency = currencyFor(webCfgServer.arg("currency")).code;
+    next.Currency = currencyFor(webCfgServer.arg("currency")).code;
   if (webCfgServer.hasArg("mempool"))
   {
     String mh = webCfgServer.arg("mempool");
     mh.trim();
-    Settings.MempoolHost = mh.length() ? mh : String(DEFAULT_MEMPOOLHOST);
+    next.MempoolHost = mh.length() ? mh : String(DEFAULT_MEMPOOLHOST);
   }
-  Settings.saveStats = webCfgServer.hasArg("savestats");
+  next.saveStats = webCfgServer.hasArg("savestats");
 
   if (webCfgServer.hasArg("theme"))
-  {
-    Settings.displayTheme = webCfgServer.arg("theme").toInt();
-    setDisplayTheme(Settings.displayTheme);
-  }
+    next.displayTheme = webCfgServer.arg("theme").toInt();
 
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
-  Settings.invertColors = webCfgServer.hasArg("invert");
+  next.invertColors = webCfgServer.hasArg("invert");
   if (webCfgServer.hasArg("rot"))
   {
-    Settings.screenRotation = webCfgServer.arg("rot").toInt();
-    Settings.flipDisplay = (Settings.screenRotation == 3);
+    next.screenRotation = webCfgServer.arg("rot").toInt();
+    next.flipDisplay = (next.screenRotation == 3);
   }
   else if (webCfgServer.hasArg("flip"))
   {
-    Settings.flipDisplay = true;
-    Settings.screenRotation = 3;
+    next.flipDisplay = true;
+    next.screenRotation = 3;
   }
   else
   {
-    Settings.flipDisplay = false;
-    Settings.screenRotation = 1;
+    next.flipDisplay = false;
+    next.screenRotation = 1;
   }
   if (webCfgServer.hasArg("brightness"))
-    Settings.Brightness = webCfgServer.arg("brightness").toInt();
+    next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
 #endif
 #if defined(ES3C35P) || defined(ESP32_4IN_ST7796)
-  Settings.invertColors = webCfgServer.hasArg("invert");
-  Settings.flipDisplay = webCfgServer.hasArg("flip");
+  next.invertColors = webCfgServer.hasArg("invert");
+  next.flipDisplay = webCfgServer.hasArg("flip");
   if (webCfgServer.hasArg("brightness"))
-    Settings.Brightness = webCfgServer.arg("brightness").toInt();
+    next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
 #endif
 
-  saveSettingsToFlash();
+  saveSettingsToFlash(&next);
+
+  const bool restart = next.invertColors != before.invertColors || next.screenRotation != before.screenRotation || next.flipDisplay != before.flipDisplay;
+  if (!restart)
+  {
+    const bool poolChanged = next.PoolAddress != before.PoolAddress || next.PoolPort != before.PoolPort ||
+                             strcmp(next.BtcWallet, before.BtcWallet) != 0 ||
+                             strcmp(next.PoolPassword, before.PoolPassword) != 0;
+    const bool backupChanged = next.FallbackPoolAddress != before.FallbackPoolAddress ||
+                               next.FallbackPoolPort != before.FallbackPoolPort ||
+                               strcmp(next.FallbackPoolPassword, before.FallbackPoolPassword) != 0;
+    if (poolChanged || backupChanged)
+      requestPoolChange(next);
+
+    if (!next.Currency.equalsIgnoreCase(before.Currency))
+      requestCurrencyChange(currencyFor(next.Currency).code);
+
+    Settings.Timezone = next.Timezone;
+    Settings.MempoolHost = next.MempoolHost;
+    Settings.saveStats = next.saveStats;
+    Settings.displayTheme = next.displayTheme;
+    setDisplayTheme(Settings.displayTheme);
+    Settings.Brightness = next.Brightness;
+    ledcWrite(0, Settings.Brightness);
+
+    String msg = poolChanged ? F("Settings saved! Reconnecting to pool with new settings...")
+                             : F("Settings saved and applied live without restart.");
+    webCfgServer.send(200, "text/html",
+                      "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                      "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                      "<meta http-equiv='refresh' content='2;url=/'>"
+                      "<style>body{background:#0b0e14;color:#f0f6fc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
+                      ".card{background:#161b22;padding:24px;border-radius:12px;border:1px solid #30363d;max-width:360px}</style></head>"
+                      "<body><div class='card'><h3 style='color:#22c55e;margin-top:0'>&#10003; Applied Live</h3><p>" + msg + "</p>"
+                      "<p><a href='/' style='color:#f7931a'>Return to Dashboard</a></p></div></body></html>");
+    return;
+  }
 
   webCfgServer.send(200, "text/html",
                      "<!DOCTYPE html><html><head><meta charset='utf-8'>"
@@ -1065,12 +1138,49 @@ static void handleSave()
                      "<style>body{background:#0b0e14;color:#f0f6fc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
                      ".sp{width:40px;height:40px;border:3px solid #30363d;border-top-color:#f7931a;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}"
                      "@keyframes s{to{transform:rotate(360deg)}}</style></head>"
-                     "<body><div><div class='sp'></div><h2>Saved Settings</h2><p style='color:#8b949e'>Restarting miner... Returning shortly.</p></div>"
+                     "<body><div><div class='sp'></div><h2>Saved Settings</h2><p style='color:#8b949e'>Screen orientation/inversion changed. Restarting miner...</p></div>"
                      "<script>function p(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(p,1200))};setTimeout(p,5000);</script>"
                      "</body></html>");
 
   delay(800);
   ESP.restart();
+}
+
+static void handleStatus()
+{
+  const MinerStatus m = getMinerStatus();
+  DynamicJsonDocument doc(1024);
+  doc["version"] = CURRENT_VERSION;
+  doc["fw"] = FW_GIT;
+  doc["uptime_s"] = (uint32_t)(millis() / 1000);
+  doc["state"] = mMonitor.NerdStatus == NM_hashing ? "mining" : mMonitor.NerdStatus == NM_Connecting ? "connecting" : "starting";
+  doc["hashrate_khs"] = round(m.hashrateKHs * 10.0) / 10.0;
+  doc["hashrate_avg_khs"] = round(m.avgHashrateKHs * 10.0) / 10.0;
+  doc["total_mhashes"] = Mhashes + hashes / 1000000;
+  doc["mining_time_s"] = (uint32_t)upTime;
+  doc["templates"] = templates;
+  doc["best_diff"] = best_diff;
+  doc["shares_32bit"] = shares;
+  doc["blocks_found"] = valids;
+  doc["shares_accepted"] = m.accepted;
+  doc["shares_rejected"] = m.rejected;
+  JsonObject pool = doc.createNestedObject("pool");
+  pool["address"] = activePoolAddress();
+  pool["port"] = activePoolPort();
+  pool["backup"] = onBackupPool();
+  pool["subscribed"] = m.subscribed;
+  pool["difficulty"] = m.poolDifficulty;
+  JsonObject wifi = doc.createNestedObject("wifi");
+  wifi["ssid"] = WiFi.SSID();
+  wifi["rssi"] = WiFi.RSSI();
+  wifi["ip"] = WiFi.localIP().toString();
+  doc["free_heap"] = ESP.getFreeHeap();
+
+  String out;
+  serializeJson(doc, out);
+  webCfgServer.sendHeader("Access-Control-Allow-Origin", "*");
+  webCfgServer.sendHeader("Cache-Control", "no-store");
+  webCfgServer.send(200, "application/json", out);
 }
 
 void setup_webConfig(void)
@@ -1100,6 +1210,7 @@ void setup_webConfig(void)
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);
+  webCfgServer.on("/api/status", HTTP_GET, handleStatus);
   webCfgServer.on("/api/reset-session", HTTP_POST, handleResetSession);
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
   webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);

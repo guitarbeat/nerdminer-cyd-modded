@@ -88,6 +88,34 @@ void runMonitor(void *name);
 void runStratumWorker(void *name);
 void runMiner(void *name);
 
+// Pool address, port, wallet and fallback pool from the LAN settings page:
+// the stratum task swaps them into Settings between connections and
+// reconnects to the pool, no restart needed.
+struct TSettings;
+void requestPoolChange(const TSettings &s);
+void readPoolSettings(TSettings &s);
+
+#define POOL_FAILOVER_TRIES 3
+#ifndef POOL_FAILBACK_ms
+#define POOL_FAILBACK_ms    (10 * 60 * 1000UL)
+#endif
+bool onBackupPool(void);
+const String &activePoolAddress(void);
+int activePoolPort(void);
+const char *activePoolPassword(void);
+
+// Live miner state for the LAN status endpoint (/api/status).
+struct MinerStatus
+{
+  float hashrateKHs;    // last 10 s
+  float avgHashrateKHs; // since boot
+  uint32_t accepted;    // shares the pool accepted since boot
+  uint32_t rejected;    // ...and refused
+  bool subscribed;      // connected and subscribed to the pool
+  double poolDifficulty;
+};
+MinerStatus getMinerStatus(void);
+
 void minerWorkerSw(void * task_id);
 void minerWorkerHw(void * task_id);
 

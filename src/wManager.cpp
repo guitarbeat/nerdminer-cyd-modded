@@ -26,6 +26,7 @@ bool shouldSaveConfig = false;
 
 // Variables to hold data from custom textboxes
 TSettings Settings;
+std::mutex g_settingsMutex;
 
 // Define WiFiManager Object
 WiFiManager wm;
@@ -129,9 +130,12 @@ void reset_configuration()
     ESP.restart();
 }
 
-void saveSettingsToFlash()
+void saveSettingsToFlash(TSettings *settings)
 {
-    nvMem.saveConfig(&Settings);
+    if (settings)
+        nvMem.saveConfig(settings);
+    else
+        nvMem.saveConfig(&Settings);
 }
 
 void init_WifiManager()
