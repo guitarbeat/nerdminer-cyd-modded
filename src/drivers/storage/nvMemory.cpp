@@ -48,6 +48,12 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_THEME] = Settings->displayTheme;
         json[JSON_SPIFFS_KEY_CURRENCY] = Settings->Currency;
         json[JSON_SPIFFS_KEY_MEMPOOL] = Settings->MempoolHost;
+#ifdef HAS_RGB_LED
+        json[JSON_SPIFFS_KEY_LEDMODE] = Settings->ledMode;
+        json[JSON_SPIFFS_KEY_LEDCOLOR] = Settings->ledColor;
+        json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] = Settings->ledBrightness;
+        json[JSON_SPIFFS_KEY_LEDSCREENOFF] = Settings->ledScreenOff;
+#endif
 
         // Open config file
         File configFile = SPIFFS.open(JSON_CONFIG_FILE, "w");
@@ -146,6 +152,12 @@ bool nvMemory::loadConfig(TSettings* Settings)
                     Settings->Currency = json[JSON_SPIFFS_KEY_CURRENCY] | DEFAULT_CURRENCY;
                     Settings->MempoolHost = json[JSON_SPIFFS_KEY_MEMPOOL] | DEFAULT_MEMPOOLHOST;
                     if (Settings->MempoolHost.length() == 0) Settings->MempoolHost = DEFAULT_MEMPOOLHOST;
+#ifdef HAS_RGB_LED
+                    Settings->ledMode = json[JSON_SPIFFS_KEY_LEDMODE] | DEFAULT_LEDMODE;
+                    Settings->ledColor = json[JSON_SPIFFS_KEY_LEDCOLOR] | (uint32_t)DEFAULT_LEDCOLOR;
+                    Settings->ledBrightness = json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] | DEFAULT_LEDBRIGHTNESS;
+                    Settings->ledScreenOff = json[JSON_SPIFFS_KEY_LEDSCREENOFF] | DEFAULT_LEDSCREENOFF;
+#endif
                     return true;
                 }
                 else

@@ -12,6 +12,7 @@
 #include "drivers/displays/display.h"
 #include "mining.h"
 #include "webCydTwin.h"
+#include "drivers/displays/rgbLed.h"
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -818,7 +819,37 @@ static void handleRoot()
             "<input type='checkbox' name='savestats'");
   if (Settings.saveStats) page += F(" checked");
   page += F("> <span><strong>Remember lifetime work:</strong> Persist total hashes and submitted share count across power cycles in ESP32 flash memory.</span>"
-            "</label></div></div>"
+            "</label></div></div>");
+#ifdef HAS_RGB_LED
+  page += F("<!-- 5. CYD Rear RGB LED -->"
+            "<div class='cfg-p'>"
+            "Control the RGB status LED on the back of the CYD board:"
+            "<div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;'>"
+            "<span>Mode: <select name='ledmode' class='blank-select'>");
+  static const char *const kLedModes[] = {
+    "Off",
+    "Status (Blinks while mining, Green on share, Blue connect, Red boot)",
+    "Always On (Solid custom color)"
+  };
+  for (int i = LED_MODE_OFF; i <= LED_MODE_STEADY; i++)
+  {
+    page += "<option value='" + String(i) + "'";
+    if (Settings.ledMode == i) page += " selected";
+    page += ">" + String(kLedModes[i]) + "</option>";
+  }
+  page += F("</select></span>");
+  char colorHex[8];
+  snprintf(colorHex, sizeof(colorHex), "#%06lx", (unsigned long)(Settings.ledColor & 0xFFFFFF));
+  page += "<span>Color: <input type='color' name='ledcolor' style='vertical-align:middle;cursor:pointer;background:none;border:1px solid var(--border);border-radius:4px;height:24px;width:32px;' value='" + String(colorHex) + "'></span>";
+  page += "<span>Brightness: <input type='number' name='ledbright' class='blank-input' style='width:52px' min='1' max='255' value='" + String(Settings.ledBrightness) + "'></span>";
+  page += F("</div><div style='margin-top:8px;'>"
+            "<label class='checkbox-label'>"
+            "<input type='checkbox' name='ledscreen'");
+  if (Settings.ledScreenOff) page += F(" checked");
+  page += F("> <span>Turn rear LED off when screen backlight is turned off</span></label>"
+            "</div></div>");
+#endif
+  page += F(
             "</div></div>"
             "<div class='actions'>"
             "<button type='submit' class='btn-save'>Save Settings</button>"
@@ -1092,6 +1123,16 @@ static void handleSave()
   if (webCfgServer.hasArg("brightness"))
     next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
 #endif
+#ifdef HAS_RGB_LED
+  if (webCfgServer.hasArg("ledmode"))
+    next.ledMode = constrain(webCfgServer.arg("ledmode").toInt(), LED_MODE_OFF, LED_MODE_STEADY);
+  const String ledColor = webCfgServer.arg("ledcolor"); // "#rrggbb"
+  if (ledColor.length() == 7 && ledColor[0] == '#')
+    next.ledColor = strtoul(ledColor.c_str() + 1, NULL, 16) & 0xFFFFFF;
+  if (webCfgServer.hasArg("ledbright"))
+    next.ledBrightness = constrain(webCfgServer.arg("ledbright").toInt(), 1, 255);
+  next.ledScreenOff = webCfgServer.hasArg("ledscreen");
+#endif
 
   saveSettingsToFlash(&next);
 
@@ -1117,6 +1158,13 @@ static void handleSave()
     setDisplayTheme(Settings.displayTheme);
     Settings.Brightness = next.Brightness;
     ledcWrite(0, Settings.Brightness);
+#ifdef HAS_RGB_LED
+    Settings.ledMode = next.ledMode;
+    Settings.ledColor = next.ledColor;
+    Settings.ledBrightness = next.ledBrightness;
+    Settings.ledScreenOff = next.ledScreenOff;
+    rgbLedTick();
+#endif
 
     String msg = poolChanged ? F("Settings saved! Reconnecting to pool with new settings...")
                              : F("Settings saved and applied live without restart.");

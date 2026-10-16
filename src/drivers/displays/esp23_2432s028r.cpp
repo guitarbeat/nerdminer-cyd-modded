@@ -31,6 +31,7 @@
 #include "drivers/storage/nvMemory.h"
 #include "drivers/storage/storage.h"
 #include "currency.h"
+#include "rgbLed.h"
 
 #define WIDTH 130
 #define HEIGHT 170
@@ -1955,12 +1956,16 @@ void esp32_2432S028R_Init(void)
     return;
   }
 
+#ifdef HAS_RGB_LED
+  rgbLedInit();
+#else
   pinMode(LED_PIN, OUTPUT);
   pinMode(LED_PIN_B, OUTPUT);
   pinMode(LED_PIN_G, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   digitalWrite(LED_PIN_B, HIGH);
   digitalWrite(LED_PIN_G, HIGH);
+#endif
   pData.bestDifficulty = "0";
   pData.workersHash = "0";
   pData.workersCount = 0;
@@ -1990,6 +1995,9 @@ void esp32_2432S028R_AlternateScreenState(void)
     g_currentDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
     ledcWrite(0, g_currentDuty);
   }
+#ifdef HAS_RGB_LED
+  rgbLedTick();
+#endif
 }
 
 // Save the orientation into the main config file, same field the portal and
@@ -2137,75 +2145,6 @@ static void touchTask(void *)
   }
 }
 
-// ------------------------------------------------------ reactive RGB LED --
-extern String current_block; // monitor.cpp, latest tip height from mempool
-extern volatile uint32_t g_acceptedShares; // mining.cpp
-enum RgbFx
-{
-  FX_NONE = 0,
-  FX_BLOCK, // white double-blink: new block
-  FX_SHARE  // short green pulse: share accepted by the pool
-};
-static RgbFx rgbFx = FX_NONE;
-static unsigned long rgbFxStart = 0;
-static String rgbLastBlock;
-static uint32_t rgbLastAccepted = 0;
-
-static void rgbSet(bool r, bool g, bool b) // true = lit (pins are active-low)
-{
-  digitalWrite(LED_PIN, r ? LOW : HIGH);
-  digitalWrite(LED_PIN_G, g ? LOW : HIGH);
-  digitalWrite(LED_PIN_B, b ? LOW : HIGH);
-}
-
-// Detect events and run the active effect. Returns true while an effect owns
-// the LED. Non-blocking: called every monitor tick.
-static bool rgbEffectStep(unsigned long now)
-{
-  if (mMonitor.NerdStatus == NM_hashing)
-  {
-    const String &cur = current_block;
-    if (rgbLastBlock.length() && cur.length() && cur != rgbLastBlock)
-    {
-      rgbFx = FX_BLOCK; // block beats share
-      rgbFxStart = now;
-    }
-    rgbLastBlock = cur;
-    uint32_t acc = g_acceptedShares;
-    if (acc != rgbLastAccepted && rgbFx == FX_NONE)
-    {
-      rgbFx = FX_SHARE;
-      rgbFxStart = now;
-    }
-    rgbLastAccepted = acc;
-  }
-  if (rgbFx == FX_NONE)
-    return false;
-
-  unsigned long t = now - rgbFxStart;
-  if (rgbFx == FX_BLOCK)
-  {
-    if (t < 700)
-    {
-      bool on = (t < 150) || (t >= 300 && t < 450);
-      rgbSet(on, on, on);
-      return true;
-    }
-  }
-  else if (rgbFx == FX_SHARE)
-  {
-    if (t < 250)
-    {
-      rgbSet(false, true, false);
-      return true;
-    }
-  }
-  rgbFx = FX_NONE;
-  rgbSet(false, false, false);
-  previousMillis = now; // let the status pattern resume cleanly
-  return false;
-}
-
 void esp32_2432S028R_DoLedStuff(unsigned long frame)
 {
   unsigned long currentMillis = millis();
@@ -2240,11 +2179,9 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
   if (uiLive)
     saveUiPrefs();
 
-  // Reactive RGB (active-low, R=GPIO4 G=GPIO16 B=GPIO17): an event effect
-  // pre-empts the status pattern until it finishes.
-  if (rgbEffectStep(currentMillis))
-    return;
-
+#ifdef HAS_RGB_LED
+  rgbLedTick();
+#else
   switch (mMonitor.NerdStatus)
   {
   case NM_waitingConfig:
@@ -2269,6 +2206,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     }
     break;
   }
+#endif
 }
 
 // ----------------------------------------------------- dev: screenshot dump --

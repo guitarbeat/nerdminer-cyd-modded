@@ -23,6 +23,13 @@
 #define DEFAULT_FLIPDISPLAY	false
 #define DEFAULT_CURRENCY	"usd"
 #define DEFAULT_MEMPOOLHOST	"mempool.space"	// public mempool; may be a local node e.g. "http://umbrel.local:3006"
+#define LED_MODE_OFF		0
+#define LED_MODE_STATUS		1	// red at start-up, blue while connecting, blinks the colour while mining
+#define LED_MODE_STEADY		2	// the colour, always on
+#define DEFAULT_LEDMODE		LED_MODE_STATUS
+#define DEFAULT_LEDCOLOR	0xF7931A	// 0xRRGGBB (Bitcoin Amber)
+#define DEFAULT_LEDBRIGHTNESS	255
+#define DEFAULT_LEDSCREENOFF	false
 
 // JSON config files
 #define JSON_CONFIG_FILE	"/config.json"
@@ -62,6 +69,10 @@
 #define JSON_SPIFFS_KEY_BACKUPPOOLURL	"backupPoolString"
 #define JSON_SPIFFS_KEY_BACKUPPOOLPORT	"backupPortNumber"
 #define JSON_SPIFFS_KEY_BACKUPPOOLPASS	"backupPoolPassword"
+#define JSON_SPIFFS_KEY_LEDMODE		"ledMode"
+#define JSON_SPIFFS_KEY_LEDCOLOR	"ledColor"
+#define JSON_SPIFFS_KEY_LEDBRIGHTNESS	"ledBrightness"
+#define JSON_SPIFFS_KEY_LEDSCREENOFF	"ledScreenOff"
 
 // settings
 struct TSettings
@@ -84,6 +95,11 @@ struct TSettings
 	int displayTheme{ 0 };	// 0=Instrument Amber, 1=Matrix Green, 2=Cyber Amber, 3=Arcade Neon, 4=Ice Blue, 5=Monochrome
 	String Currency{ DEFAULT_CURRENCY };	// fiat currency for the BTC price (CoinGecko vs_currency code)
 	String MempoolHost{ DEFAULT_MEMPOOLHOST };	// mempool API host for block/fee/difficulty stats
+	// Boards with an RGB LED (CYD)
+	int ledMode{ DEFAULT_LEDMODE };	// LED_MODE_*
+	uint32_t ledColor{ DEFAULT_LEDCOLOR };	// 0xRRGGBB
+	int ledBrightness{ DEFAULT_LEDBRIGHTNESS };	// 1-255
+	bool ledScreenOff{ DEFAULT_LEDSCREENOFF };	// LED off while the screen is off
 };
 
 #endif // _STORAGE_H_

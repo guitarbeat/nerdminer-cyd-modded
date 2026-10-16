@@ -22,6 +22,7 @@
 #include "rotation.h"
 #include "drivers/storage/nvMemory.h"
 #include "drivers/storage/storage.h"
+#include "rgbLed.h"
 
 #define WIDTH 130 //320
 #define HEIGHT 170 
@@ -105,12 +106,16 @@ void esp32_2432S028R_Init(void)
     return;
   }
   
+#ifdef HAS_RGB_LED
+  rgbLedInit();
+#else
   pinMode(LED_PIN, OUTPUT);
   pinMode(LED_PIN_B, OUTPUT);
   pinMode(LED_PIN_G, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   digitalWrite(LED_PIN_B, HIGH);
   digitalWrite(LED_PIN_G, HIGH);
+#endif
   pData.bestDifficulty = "0";
   pData.workersHash = "0";
   pData.workersCount = 0;
@@ -579,6 +584,9 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     if (currentScreen != currentDisplayDriver->current_cyclic_screen) hasChangedScreen ^= true;
     currentScreen = currentDisplayDriver->current_cyclic_screen;
 
+#ifdef HAS_RGB_LED
+  rgbLedTick();
+#else
   switch (mMonitor.NerdStatus)
   {
   case NM_waitingConfig:
@@ -605,6 +613,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     }
     break;
   }
+#endif
   
 
 }
