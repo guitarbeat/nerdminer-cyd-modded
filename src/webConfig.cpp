@@ -339,54 +339,60 @@ details.edu-acc[open] summary.edu-sum::after{content:'\2212'}
 .pool-info{font-size:14px;min-width:0}
 .pool-btn{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:var(--r);transition:opacity .15s}
 .pool-btn:hover{opacity:.85}
-input[type=text],input[type=number],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:16px;outline:none;transition:border-color .15s}
-input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--amber)}
-.cfg-story{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:0;margin-bottom:18px;overflow:hidden}
-.cfg-story-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--card-border)}
-.cfg-title{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
-.cfg-tag{font-size:10px;font-weight:700;color:var(--amber);border:1px solid var(--card-border);border-radius:999px;padding:2px 9px;letter-spacing:.5px}
-.cfg-flow{display:flex;flex-direction:column;counter-reset:cfg}
-.cfg-p{font-size:15px;line-height:2.1;color:#c9d1d9;padding:16px;border-top:1px solid var(--card-border);counter-increment:cfg}
-.cfg-p:first-child{border-top:none}
-.cfg-p::before{display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:var(--amber);line-height:1;margin-bottom:10px;font-family:var(--mono)}
-.cfg-p:nth-child(1)::before{content:'0' counter(cfg) ' \00B7  POOL & STRATUM'}
-.cfg-p:nth-child(2)::before{content:'0' counter(cfg) ' \00B7  PAYOUT ADDRESS'}
-.cfg-p:nth-child(3)::before{content:'0' counter(cfg) ' \00B7  DISPLAY'}
-.cfg-p:nth-child(4)::before{content:'0' counter(cfg) ' \00B7  CLOCK, MARKET & DATA'}
-.blank-input,.blank-select{display:inline-block;max-width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-bottom:2px solid var(--dim);border-radius:4px 4px 0 0;color:var(--amber);font-size:15px;font-weight:700;padding:1px 7px;margin:2px 3px;outline:none;transition:border-color .15s,background .15s;font-family:inherit;vertical-align:baseline;line-height:1.6}
-.blank-input{font-family:var(--mono);font-size:14px}
-.blank-input:focus,.blank-select:focus{border-bottom-color:var(--amber);background:rgba(247,147,26,0.05)}
-.blank-input::placeholder{color:var(--dim);font-weight:400}
-.blank-select{cursor:pointer}
-.blank-select option{background:#10141c;color:var(--text)}
-@media(max-width:480px){.blank-select{width:100%;margin:4px 0}}
-.cfg-help{font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px;display:block}
-.preset-pills{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 6px;line-height:1.3}
-.preset-pill{background:var(--input-bg);border:1px solid var(--card-border);color:var(--text);font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;transition:all .15s}
-.preset-pill:hover,.preset-pill.active{background:rgba(247,147,26,0.1);border-color:var(--amber);color:var(--amber)}
-.preset-comment{font-size:13px;line-height:1.5;color:var(--muted);background:var(--input-bg);border-left:3px solid var(--amber);border-radius:0 4px 4px 0;padding:8px 12px;margin-top:8px}
-.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px;line-height:1.4}
+input[type=text],input[type=number],input[type=password],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:14px;font-family:var(--mono);outline:none;transition:border-color .15s,box-shadow .15s,background .15s;min-height:42px;box-sizing:border-box}
+input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.18);background:#0d1117}
+input::placeholder{color:var(--dim)}
+select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238592a3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:16px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+.cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#111620;border-bottom:1px solid var(--card-border);gap:10px;flex-wrap:wrap}
+.cfg-card-title{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
+.cfg-badge{font-size:10px;font-weight:700;color:var(--amber);background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.25);border-radius:999px;padding:2px 8px;letter-spacing:.5px}
+.cfg-card-body{padding:16px;display:flex;flex-direction:column;gap:14px}
+.form-grid-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:540px){.form-grid-3,.form-grid-2{grid-template-columns:1fr}}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.8px;text-transform:uppercase}
+.form-label-sub{font-size:10px;font-weight:500;color:var(--dim);text-transform:none;letter-spacing:0}
+.form-sublabel{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.form-control{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:14px;font-family:var(--mono);box-sizing:border-box;min-height:42px;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
+.form-control:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.18);background:#0d1117}
+.form-hint{font-size:12px;color:var(--muted);line-height:1.5}
+.form-hint code{color:var(--amber);font-size:11px}
+.form-check{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;padding:4px 0;line-height:1.45}
+.form-check input[type=checkbox]{accent-color:var(--amber);width:17px;height:17px;margin-top:1px;flex-shrink:0;cursor:pointer}
+.slider-track-wrap{display:flex;align-items:center;gap:14px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;background:var(--card-border);border-radius:3px;outline:none;accent-color:var(--amber)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--amber);cursor:pointer;box-shadow:0 0 6px rgba(247,147,26,0.4);transition:transform .1s ease}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--amber);cursor:pointer;border:none}
+.preset-bar{display:flex;flex-direction:column;gap:8px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:10px 12px}
+.preset-pills{display:flex;flex-wrap:wrap;gap:6px}
+.preset-pill{background:var(--card);border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:700;padding:5px 11px;border-radius:999px;cursor:pointer;transition:all .15s}
+.preset-pill:hover,.preset-pill.active{background:rgba(247,147,26,0.12);border-color:var(--amber);color:var(--amber)}
+.preset-comment{font-size:12px;line-height:1.45;color:var(--muted);border-left:2px solid var(--amber);padding-left:8px}
+.active-pool-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--green);background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:3px 8px}
+.active-pool-pill.fallback{color:var(--warn);background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3)}
+.active-pool-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 @media(min-width:520px){.theme-grid{grid-template-columns:repeat(3,1fr)}}
-.theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:11px 12px;cursor:pointer;transition:border-color .15s,background .15s;user-select:none;position:relative}
+.theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s;user-select:none;position:relative}
 .theme-card:hover{border-color:var(--dim)}
-.theme-card.active{border-color:var(--amber);background:rgba(247,147,26,0.06)}
+.theme-card.active{border-color:var(--amber);background:rgba(247,147,26,0.08)}
 .theme-card.active::after{content:'\2713';position:absolute;top:8px;right:10px;font-size:12px;font-weight:800;color:var(--amber)}
-.theme-swatch{display:flex;align-items:center;gap:5px;margin-bottom:8px}
-.swatch-dot{width:14px;height:14px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
-.theme-card h4{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px}
-.theme-card p{font-size:11px;color:var(--muted);line-height:1.35}
+.theme-swatch{display:flex;align-items:center;gap:5px;margin-bottom:6px}
+.swatch-dot{width:13px;height:13px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
+.theme-card h4{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+.theme-card p{font-size:10.5px;color:var(--muted);line-height:1.35}
 .theme-toast{margin-top:10px;padding:7px 12px;border-radius:var(--r);background:rgba(34,197,94,0.1);color:var(--green);font-size:12px;font-weight:600;text-align:center;line-height:1.4}
-.slider-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;line-height:1.4}
-input[type=range]{flex:1;min-width:160px;accent-color:var(--amber);height:28px}
-.checkbox-label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:500;font-size:14px;line-height:1.5}
-.checkbox-label input[type=checkbox]{accent-color:var(--amber);width:18px;height:18px;margin-top:2px;flex-shrink:0}
-.actions{margin:0 0 22px;display:flex;flex-direction:column;gap:8px}
-.btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:14px 18px;font-size:15px;font-weight:800;letter-spacing:.3px;cursor:pointer;width:100%;transition:opacity .15s}
-.btn-save:hover{opacity:.9}
-.btn-restart{background:transparent;border:1px solid rgba(239,68,68,.45);border-radius:var(--r);color:#f87171;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;transition:background .15s}
+.actions{margin:18px 0 24px;display:flex;flex-direction:column;gap:8px}
+.btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:14px 18px;font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;width:100%;transition:opacity .15s,transform .1s;box-shadow:0 4px 12px rgba(247,147,26,0.25)}
+.btn-save:hover{opacity:.92}
+.btn-save:active{transform:translateY(1px)}
+.btn-restart{background:transparent;border:1px solid rgba(239,68,68,.4);border-radius:var(--r);color:#f87171;padding:10px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;width:100%;transition:background .15s}
 .btn-restart:hover{background:rgba(239,68,68,0.08)}
-.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;margin-bottom:18px}
-.ota-title{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;margin-bottom:18px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+.ota-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
 .ota-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;max-width:56ch}
 .ota-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #ota-file{border-radius:var(--r)}
@@ -398,8 +404,12 @@ input[type=range]{flex:1;min-width:160px;accent-color:var(--amber);height:28px}
 .ota-status{font-size:12px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .guide-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 18px}
 @media(min-width:480px){.guide-grid{grid-template-columns:repeat(2,1fr)}}
-.guide-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;font-size:13px;color:var(--muted);line-height:1.65}
+.guide-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;font-size:13px;color:var(--muted);line-height:1.65;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 .guide-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.guide-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12px}
+.guide-row:last-child{border-bottom:none}
+.guide-key{color:var(--text);font-weight:600}
+.guide-val{color:var(--muted);font-family:var(--mono);font-size:11px}
 #overlay{display:none;position:fixed;inset:0;background:rgba(7,9,13,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
 .spinner{width:40px;height:40px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -563,13 +573,13 @@ const eRes=document.getElementById('sim-result');
 if(isWin){
 if(eHash)eHash.innerHTML='<span style="color:var(--green);font-weight:800;">'+hash.substring(0,18)+'</span>'+hash.substring(18);
 if(eRes){
-if(simIsHist)eRes.innerHTML='<span style="color:var(--green);font-size:12px;">&#10003; REAL BLOCK #286,819 SOLVED! Nonce '+curN.toLocaleString()+' &rarr; Hash &lt; Target (wins 25 BTC)!</span>';
-else eRes.innerHTML='<span style="color:var(--green);">&#10003; WINNER! Hash &lt; Target!</span>';
+if(simIsHist)eRes.innerHTML='<span style="color:var(--green);font-size:12px;">&#10003; BLOCK #286,819 SOLVED: Nonce '+curN.toLocaleString()+' &rarr; Hash &lt; Target (25 BTC Subsidy)</span>';
+else eRes.innerHTML='<span style="color:var(--green);">&#10003; VALID HASH: Hash &lt; Target</span>';
 }
 if(simAutoTimer)simToggleAuto();
 }else{
 if(eHash)eHash.innerHTML='<span style="color:var(--red);">'+hash.substring(0,6)+'</span>'+hash.substring(6);
-if(eRes)eRes.innerHTML='<span style="color:var(--red);">&#10005; TOO LARGE (hash &ge; target). Die roll missed. No getting warmer!</span>';
+if(eRes)eRes.innerHTML='<span style="color:var(--red);">&#10005; CANDIDATE UNSOLVED: Hash &ge; Target</span>';
 }
 simN++;
 }
@@ -743,68 +753,143 @@ static void handleRoot()
   }
 
   page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
-  page += F("<div class='cfg-story'>"
-            "<div class='cfg-story-hdr'>"
-            "<span class='cfg-title'>Settings</span>"
-            "<span class='cfg-tag'>Applied live (reboots only on orientation change)</span>"
+
+  // Card 1: Solo Pool & Stratum Connection
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M2 12h20'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>"
+            "<span>Stratum Solo Pool &amp; Failover</span>"
             "</div>"
-            "<div class='cfg-flow'>"
-            "<!-- 1. Solo Pool & Stratum -->"
-            "<div class='cfg-p'>"
-            "Connect this CYD miner to the solo pool at <input type='text' id='f-pool' class='blank-input' style='min-width:150px' name='pool' value='");
+            "<span class='cfg-badge'>FAILOVER READY</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;'>"
+            "<span class='form-hint'>Stratum V1 mining endpoints. The device switches to fallback after 3 connection timeouts.</span>"
+            "<span class='active-pool-pill");
+  page += (onBackupPool() ? F(" fallback'>Active: Fallback Pool") : F("'>Active: Primary Pool"));
+  page += F("</span>"
+            "</div>"
+            "<div class='form-group'>"
+            "<span class='form-label'>Primary Solo Pool</span>"
+            "<div class='form-grid-3'>"
+            "<div>"
+            "<label class='form-sublabel' for='f-pool'>Host / IP</label>"
+            "<input type='text' id='f-pool' class='form-control' name='pool' value='");
   page += htmlEscape(Settings.PoolAddress);
-  page += F("' required> on Stratum port <input type='number' id='f-port' class='blank-input' style='width:68px' name='port' value='");
+  page += F("' placeholder='public-pool.io' required>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-port'>Stratum Port</label>"
+            "<input type='number' id='f-port' class='form-control' name='port' value='");
   page += String(Settings.PoolPort);
-  page += F("' required> using pool password <input type='text' id='f-pass' class='blank-input' style='width:50px' name='poolpass' value='");
+  page += F("' placeholder='3333' required>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-pass'>Password</label>"
+            "<input type='text' id='f-pass' class='form-control' name='poolpass' value='");
   page += htmlEscape(String(Settings.PoolPassword));
-  page += F("'>. If the primary pool is unreachable after 3 attempts, automatically fail over to fallback pool <input type='text' id='f-fbpool' class='blank-input' style='min-width:140px' name='fbpool' value='");
+  page += F("' placeholder='x'>"
+            "</div>"
+            "</div>"
+            "</div>"
+            "<div class='form-group'>"
+            "<span class='form-label'>Fallback Solo Pool <span class='form-label-sub'>Auto-Failover</span></span>"
+            "<div class='form-grid-3'>"
+            "<div>"
+            "<label class='form-sublabel' for='f-fbpool'>Host / IP</label>"
+            "<input type='text' id='f-fbpool' class='form-control' name='fbpool' value='");
   page += htmlEscape(Settings.FallbackPoolAddress);
-  page += F("' placeholder='pool.nerdminers.org'> on port <input type='number' id='f-fbport' class='blank-input' style='width:68px' name='fbport' value='");
+  page += F("' placeholder='pool.nerdminers.org'>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-fbport'>Stratum Port</label>"
+            "<input type='number' id='f-fbport' class='form-control' name='fbport' value='");
   page += String(Settings.FallbackPoolPort);
-  page += F("'> with password <input type='text' id='f-fbpass' class='blank-input' style='width:50px' name='fbpass' value='");
+  page += F("' placeholder='3333'>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-fbpass'>Password</label>"
+            "<input type='text' id='f-fbpass' class='form-control' name='fbpass' value='");
   page += htmlEscape(String(Settings.FallbackPoolPassword));
-  page += F("'> (now mining on <b>");
-  page += (onBackupPool() ? F("fallback pool") : F("primary pool"));
-  page += F("</b>)."
+  page += F("' placeholder='x'>"
+            "</div>"
+            "</div>"
+            "</div>"
+            "<div class='preset-bar'>"
+            "<span class='form-label' style='margin:0;'>Quick Pool Presets</span>"
             "<div class='preset-pills'>"
-            "<span style='font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);align-self:center;'>PRESETS</span>"
-            "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"Public-Pool.io (port 3333) is the official recommended Stratum V1 port for ESP32 miners.\")'>Public-Pool (3333 &bull; Recommended)</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"NerdMiners.org (port 3333) is an ESP32-dedicated solo pool optimized for low-hashrate devices.\")'>NerdMiners.org (3333)</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"SoloMining.de (port 3333) is a low-latency European solo mining pool.\")'>SoloMining.de (3333)</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Port 21496 is the legacy port; if you experience dropped connections or 0 KH/s, switch back to 3333.\")'>Public-Pool (21496 &bull; Legacy)</button>"
+            "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"Public-Pool.io (port 3333) is the official recommended Stratum V1 port for ESP32 miners.\")'>Public-Pool.io &bull; 3333 (Recommended)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"NerdMiners.org (port 3333) is an ESP32-dedicated solo pool optimized for low-hashrate hardware.\")'>NerdMiners.org &bull; 3333</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"SoloMining.de (port 3333) is a low-latency European solo mining pool.\")'>SoloMining.de &bull; 3333</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Port 21496 is legacy unencrypted Stratum; use 3333 if experiencing dropped connections.\")'>Public-Pool.io &bull; 21496 (Legacy)</button>"
             "</div>"
-            "<div id='preset-note' class='preset-comment'>Public-Pool.io on port 3333 is the official standard for unencrypted Stratum V1, ensuring stable shares for low-hashrate hardware.</div>"
+            "<div id='preset-note' class='preset-comment'>Public-Pool.io on port 3333 provides standard Stratum V1 with low extranonce overhead, ideal for ESP32.</div>"
             "</div>"
-            "<!-- 2. Payout Address & Worker -->"
-            "<div class='cfg-p'>"
-            "Your <strong>");
-  page += String(coin.name) + " (" + String(coin.ticker) + ")</strong> payout address (if this miner solves a block, the pool deposits the block reward directly to this on-chain address):<br>";
-  page += "<input type='text' name='wallet' id='f-wallet' class='blank-input' style='width:100%;max-width:440px;margin-top:6px;' placeholder='Your " + String(coin.ticker) + " address' value='";
+            "</div></div>");
+
+  // Card 2: Payout Address & Worker Identity
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='20' height='14' x='2' y='5' rx='2'/><line x1='2' x2='22' y1='10' y2='10'/></svg>"
+            "<span>Payout Address &amp; Worker Identity</span>"
+            "</div>"
+            "<span class='cfg-badge'>ON-CHAIN DIRECT</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-wallet'>");
+  page += String(coin.name) + " (" + String(coin.ticker) + F(") On-Chain Payout Address</label>"
+            "<input type='text' id='f-wallet' class='form-control' name='wallet' value='");
   page += htmlEscape(String(Settings.BtcWallet));
-  page += F("' required>"
-            "<span class='cfg-help'>💡 <strong>Worker naming:</strong> To give your miner a friendly nickname on the pool dashboard, append <code>.worker_name</code> directly to your address (e.g. <code>");
-  page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>). Because solo mining sends payouts directly on-chain, only you hold the keys.</span>"
+  page += F("' placeholder='Your on-chain address (e.g. bc1q...)' required>"
+            "<span class='form-hint'>Solo mining deposits block rewards (3.125 ");
+  page += String(coin.ticker) + F(" + fees) directly on-chain to this address. Append <code>.worker_name</code> to set your pool identifier (e.g., <code>");
+  page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</span>"
             "</div>"
-            "<!-- 3. Screen Orientation, Brightness & Themes -->"
-            "<div class='cfg-p'>"
-            "Display information on the CYD screen in <select name='rot' class='blank-select'>");
+            "</div></div>");
+
+  // Card 3: Display, Orientation & Illumination
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='20' height='14' x='2' y='3' rx='2'/><line x1='8' x2='16' y1='21' y2='21'/><line x1='12' x2='12' y1='17' y2='21'/></svg>"
+            "<span>Display, Orientation &amp; Illumination</span>"
+            "</div>"
+            "<span class='cfg-badge'>LIVE PREVIEW</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-grid-2'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-rot'>Screen Orientation</label>"
+            "<select name='rot' id='f-rot' class='form-control'>");
   int curRot = Settings.screenRotation;
   page += "<option value='0'" + String(curRot == 0 ? " selected" : "") + ">Portrait &bull; USB at bottom (Default)</option>";
   page += "<option value='1'" + String(curRot == 1 ? " selected" : "") + ">Landscape &bull; USB on right</option>";
   page += "<option value='2'" + String(curRot == 2 ? " selected" : "") + ">Portrait Inverted &bull; USB at top</option>";
   page += "<option value='3'" + String(curRot == 3 ? " selected" : "") + ">Landscape Inverted &bull; USB on left</option>";
-  page += F("</select> orientation at <span id='b-val' style='color:var(--amber);font-weight:700'>");
-  page += String(Settings.Brightness) + " (" + String((Settings.Brightness * 100) / 255) + F("%)</span> screen brightness:"
-            "<div class='slider-row' style='margin:8px 0;'>"
+  page += F("</select>"
+            "<span class='form-hint'>Orientation change restarts display controller on save.</span>"
+            "</div>"
+            "<div class='form-group'>"
+            "<div class='form-label'>"
+            "<span>Backlight Brightness</span>"
+            "<span id='b-val' style='color:var(--amber);font-weight:700'>");
+  page += String(Settings.Brightness) + " (" + String((Settings.Brightness * 100) / 255) + F("%)</span>"
+            "</div>"
+            "<div class='slider-track-wrap' style='min-height:42px;'>"
             "<input type='range' name='brightness' id='b-slider' min='10' max='255' value='");
   page += String(Settings.Brightness) + F("' oninput='updateBright(this.value)'>"
-            "<label class='checkbox-label' style='white-space:nowrap;align-items:center'>"
+            "</div>"
+            "<label class='form-check'>"
             "<input type='checkbox' name='invert' id='cb-invert' onchange='toggleInvert(this.checked)'");
   if (Settings.invertColors) page += F(" checked");
-  page += F("> Invert colors</label></div>"
-            "<div style='margin-top:8px;'>"
-            "Style the screen with your chosen color palette (tap any card to switch instantly):"
-            "<div class='theme-grid' style='margin-top:10px;'>");
+  page += F("> <span>Invert display colors (live hardware preview)</span></label>"
+            "</div></div>"
+            "<div class='form-group'>"
+            "<span class='form-label'>Color Theme Palette <span class='form-label-sub'>Tap to Apply Instantly</span></span>"
+            "<div class='theme-grid'>");
   int curTheme = Settings.displayTheme;
   page += F("<div class='theme-card");
   if (curTheme == 0) page += F(" active");
@@ -815,68 +900,101 @@ static void handleRoot()
   if (curTheme == 1) page += F(" active");
   page += F("' id='thm-1' onclick='selectTheme(1,\"#22c55e\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#22c55e'></span><span class='swatch-dot' style='background:#08140a'></span></div>"
-            "<h4>Matrix Green</h4><p>Retro phosphor terminal CRT aesthetic</p></div>"
+            "<h4>Matrix Green</h4><p>Phosphor terminal CRT green</p></div>"
             "<div class='theme-card");
   if (curTheme == 2) page += F(" active");
   page += F("' id='thm-2' onclick='selectTheme(2,\"#f59e0b\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f59e0b'></span><span class='swatch-dot' style='background:#181208'></span></div>"
-            "<h4>Cyber Amber</h4><p>Vintage 1980s monochrome CRT terminal</p></div>"
+            "<h4>Cyber Amber</h4><p>Vintage 1980s monochrome CRT</p></div>"
             "<div class='theme-card");
   if (curTheme == 3) page += F(" active");
   page += F("' id='thm-3' onclick='selectTheme(3,\"#06b6d4\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#06b6d4'></span><span class='swatch-dot' style='background:#ec4899'></span></div>"
-            "<h4>Arcade Neon</h4><p>Vibrant cyan &amp; magenta classic mod colors</p></div>"
+            "<h4>Arcade Neon</h4><p>Cyan &amp; magenta dual-tone</p></div>"
             "<div class='theme-card");
   if (curTheme == 4) page += F(" active");
   page += F("' id='thm-4' onclick='selectTheme(4,\"#38bdf8\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#38bdf8'></span><span class='swatch-dot' style='background:#111827'></span></div>"
-            "<h4>Ice Blue</h4><p>Cool midnight slate &amp; ice blue precision</p></div>"
+            "<h4>Ice Blue</h4><p>Midnight slate &amp; ice blue</p></div>"
             "<div class='theme-card");
   if (curTheme == 5) page += F(" active");
   page += F("' id='thm-5' onclick='selectTheme(5,\"#ffffff\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#ffffff'></span><span class='swatch-dot' style='background:#181818'></span></div>"
-            "<h4>Monochrome</h4><p>Stark pure white on void black (E-Ink style)</p></div>"
+            "<h4>Monochrome</h4><p>Pure white on void black (E-Ink)</p></div>"
             "</div>"
             "<input type='hidden' id='f-theme' name='theme' value='");
   page += String(curTheme) + F("'>"
-            "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Live theme applied instantly to CYD screen!</div>"
+            "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Theme updated on device</div>"
             "</div>");
 #ifdef HAS_BACKLIGHT_CONTROL
-  page += F("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--card-border);'>"
-            "<div style='font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;'>🌙 Backlight Timeout &amp; Night Dimming</div>"
-            "<div style='display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:14px;'>"
-            "<span>Sleep timeout: <input type='number' name='screenoff' class='blank-input' style='width:52px' min='0' max='1440' value='");
+  page += F("<div style='border-top:1px solid var(--card-border);padding-top:14px;display:flex;flex-direction:column;gap:12px;'>"
+            "<div class='form-label'>🌙 Solar Dimming &amp; Screen Timeout</div>"
+            "<div class='form-grid-3'>"
+            "<div>"
+            "<label class='form-sublabel' for='f-screenoff'>Screen Sleep Timeout</label>"
+            "<input type='number' id='f-screenoff' class='form-control' name='screenoff' min='0' max='1440' value='");
   page += String(Settings.ScreenTimeout);
-  page += F("'> min <span class='cfg-help' style='display:inline;'>(0 = never; wake on touch or BOOT)</span></span>"
-            "</div><div style='margin-top:10px;'>"
-            "<label class='checkbox-label'>"
+  page += F("' placeholder='0'>"
+            "<span class='form-hint'>Minutes (0 = always on; wake on touch/BOOT).</span>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-nbright'>Night Brightness (1–255)</label>"
+            "<input type='number' id='f-nbright' class='form-control' name='nightbright' min='1' max='255' value='");
+  page += String(Settings.NightBrightness);
+  page += F("'>"
+            "</div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-nfade'>Fade Window (min)</label>"
+            "<input type='number' id='f-nfade' class='form-control' name='nightfade' min='0' max='240' value='");
+  page += String(Settings.NightFade);
+  page += F("'>"
+            "</div>"
+            "</div>"
+            "<label class='form-check'>"
             "<input type='checkbox' name='nightdim'");
   if (Settings.nightDim) page += F(" checked");
-  page += F("> <span><strong>Automatic Night Dimming:</strong> Fade backlight to <input type='number' name='nightbright' class='blank-input' style='width:52px' min='1' max='255' value='");
-  page += String(Settings.NightBrightness);
-  page += F("'> at sunset over a <input type='number' name='nightfade' class='blank-input' style='width:52px' min='0' max='240' value='");
-  page += String(Settings.NightFade);
-  page += F("'> min window.</span></label>"
-            "</div><div style='margin-top:10px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:14px;'>"
-            "<span>Location: <select onchange='pickCity(this.value)' class='blank-select'>"
+  page += F("> <span><strong>Automatic Solar Dimming:</strong> Fade screen brightness at sunset based on geographic coordinates.</span></label>"
+            "<div class='form-grid-3'>"
+            "<div>"
+            "<label class='form-sublabel'>Quick City Preset</label>"
+            "<select onchange='pickCity(this.value)' class='form-control'>"
             "<option value=''>Pick Nearest City...</option>");
   for (unsigned i = 0; i < sizeof(kCities) / sizeof(kCities[0]); i++)
   {
     page += "<option value='" + String(kCities[i].latitude, 2) + "," + String(kCities[i].longitude, 2) + "'>" + String(kCities[i].name) + "</option>";
   }
-  page += F("</select></span>"
-            "<span>Lat: <input type='text' id='f-lat' name='lat' class='blank-input' style='width:75px' value='");
+  page += F("</select></div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-lat'>Latitude (&deg;)</label>"
+            "<input type='text' id='f-lat' name='lat' class='form-control' value='");
   page += String(Settings.Latitude, 2);
-  page += F("'></span><span>Lon: <input type='text' id='f-lon' name='lon' class='blank-input' style='width:75px' value='");
+  page += F("'></div>"
+            "<div>"
+            "<label class='form-sublabel' for='f-lon'>Longitude (&deg;)</label>"
+            "<input type='text' id='f-lon' name='lon' class='form-control' value='");
   page += String(Settings.Longitude, 2);
-  page += F("'></span></div><div class='cfg-help' style='margin-top:6px;'>📍 ");
+  page += F("'></div>"
+            "</div>"
+            "<span class='form-hint'>📍 Solar status: ");
   page += nightDimStatus();
-  page += F("</div></div>");
+  page += F("</span></div>");
 #endif
-  page += F("</div>"
-            "<!-- 4. Timezone, Currency & Stats Persistence -->"
-            "<div class='cfg-p'>"
-            "Set the on-screen clock to <select id='tz-select' onchange='applyTz(this.value)' class='blank-select'>"
+  page += F("</div></div>");
+
+  // Card 4: System, Clock & Data Feeds
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>"
+            "<span>System, Clock &amp; Data Feeds</span>"
+            "</div>"
+            "<span class='cfg-badge'>NODE TELEMETRY</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-grid-3'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='tz-select'>Timezone Preset</label>"
+            "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
             "<option value=''>Preset Timezones...</option>"
             "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
             "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
@@ -889,8 +1007,14 @@ static void handleRoot()
             "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
             "<option value='9'>UTC+9 (Japan, Korea)</option>"
             "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
-            "</select> (UTC offset <input type='number' name='tz' id='f-tz' class='blank-input' style='width:52px' min='-12' max='14' value='");
-  page += String(Settings.Timezone) + F("'>) and quote live ") + String(coin.name) + F(" market prices in <select name='currency' class='blank-select'>");
+            "</select></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-tz'>UTC Offset (Hours)</label>"
+            "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
+  page += String(Settings.Timezone) + F("'></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-currency'>Fiat Currency</label>"
+            "<select name='currency' id='f-currency' class='form-control'>");
   for (int i = 0; i < kCurrencyCount; i++)
   {
     page += "<option value='" + String(kCurrencies[i].code) + "'";
@@ -898,24 +1022,39 @@ static void handleRoot()
       page += " selected";
     page += ">" + String(kCurrencies[i].label) + "</option>";
   }
-  page += F("</select>. Read block, fee and difficulty stats from mempool host <input type='text' name='mempool' class='blank-input' style='width:190px' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
-  page += htmlEscape(Settings.MempoolHost) + F("'> (use your own node, e.g. <code>http://umbrel.local:3006</code>)."
-            "<div style='margin-top:10px;'>"
-            "<label class='checkbox-label'>"
+  page += F("</select></div></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-mempool'>Mempool API Endpoint</label>"
+            "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
+  page += htmlEscape(Settings.MempoolHost) + F("'>"
+            "<span class='form-hint'>Mempool REST endpoint for block height, fee estimates, and difficulty (e.g. <code>https://mempool.space</code> or local node <code>http://umbrel.local:3006</code>).</span>"
+            "</div>"
+            "<div class='form-group'>"
+            "<label class='form-check'>"
             "<input type='checkbox' name='savestats'");
   if (Settings.saveStats) page += F(" checked");
-  page += F("> <span><strong>Remember lifetime work:</strong> Persist total hashes and submitted share count across power cycles in ESP32 flash memory.</span>"
-            "</label></div></div>");
+  page += F("> <span><strong>Persist Lifetime Work in Flash:</strong> Retain total hashes and submitted share count across power cycles and restarts.</span></label>"
+            "</div></div></div>");
+
 #ifdef HAS_RGB_LED
-  page += F("<!-- 5. CYD Rear RGB LED -->"
-            "<div class='cfg-p'>"
-            "Control the RGB status LED on the back of the CYD board:"
-            "<div style='margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;'>"
-            "<span>Mode: <select name='ledmode' class='blank-select'>");
+  // Card 5: Hardware RGB Status LED
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='4'/><path d='M12 2v2'/><path d='M12 20v2'/><path d='m4.93 4.93 1.41 1.41'/><path d='m17.66 17.66 1.41 1.41'/><path d='M2 12h2'/><path d='M20 12h2'/><path d='m6.34 17.66-1.41 1.41'/><path d='m19.07 4.93-1.41 1.41'/></svg>"
+            "<span>CYD Rear RGB LED</span>"
+            "</div>"
+            "<span class='cfg-badge'>ONBOARD LED</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-grid-3'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-ledmode'>Operating Mode</label>"
+            "<select name='ledmode' id='f-ledmode' class='form-control'>");
   static const char *const kLedModes[] = {
     "Off",
-    "Status (Blinks while mining, Green on share, Blue connect, Red boot)",
-    "Always On (Solid custom color)"
+    "Status (Blinks while mining, Green on share, Blue connect)",
+    "Always On (Steady custom color)"
   };
   for (int i = LED_MODE_OFF; i <= LED_MODE_STEADY; i++)
   {
@@ -923,30 +1062,34 @@ static void handleRoot()
     if (Settings.ledMode == i) page += " selected";
     page += ">" + String(kLedModes[i]) + "</option>";
   }
-  page += F("</select></span>");
+  page += F("</select></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-ledcolor'>LED Color</label>"
+            "<input type='color' id='f-ledcolor' name='ledcolor' class='form-control' style='height:42px;padding:4px;cursor:pointer;' value='");
   char colorHex[8];
   snprintf(colorHex, sizeof(colorHex), "#%06lx", (unsigned long)(Settings.ledColor & 0xFFFFFF));
-  page += "<span>Color: <input type='color' name='ledcolor' style='vertical-align:middle;cursor:pointer;background:none;border:1px solid var(--border);border-radius:4px;height:24px;width:32px;' value='" + String(colorHex) + "'></span>";
-  page += "<span>Brightness: <input type='number' name='ledbright' class='blank-input' style='width:52px' min='1' max='255' value='" + String(Settings.ledBrightness) + "'></span>";
-  page += F("</div><div style='margin-top:8px;'>"
-            "<label class='checkbox-label'>"
+  page += String(colorHex) + F("'></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-ledbright'>LED Brightness (1–255)</label>"
+            "<input type='number' id='f-ledbright' name='ledbright' class='form-control' min='1' max='255' value='");
+  page += String(Settings.ledBrightness) + F("'></div></div>"
+            "<label class='form-check'>"
             "<input type='checkbox' name='ledscreen'");
   if (Settings.ledScreenOff) page += F(" checked");
-  page += F("> <span>Turn rear LED off when screen backlight is turned off</span></label>"
+  page += F("> <span>Turn rear LED off when screen backlight sleeps</span></label>"
             "</div></div>");
 #endif
-  page += F(
-            "</div></div>"
-            "<div class='actions'>"
-            "<button type='submit' class='btn-save'>Save Settings</button>"
+
+  page += F("<div class='actions'>"
+            "<button type='submit' class='btn-save'>Save &amp; Apply Settings</button>"
             "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
             "</div>"
             "</form>"
             "<div class='ota-box'>"
-            "<div class='ota-title'>Firmware Update Over-the-Air</div>"
-            "<div class='ota-desc'>Flash new firmware (.bin) directly over Wi-Fi without connecting a USB cable. The miner will write to flash and automatically reboot.</div>"
+            "<div class='ota-title'>Over-The-Air (OTA) Firmware Flasher</div>"
+            "<div class='ota-desc'>Upload compiled <code>firmware.bin</code> directly over Wi-Fi. The device verifies binary integrity, flashes partition, and reboots automatically.</div>"
             "<div class='ota-row'>"
-            "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:8px;border:1px solid var(--card-border);'>"
+            "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:9px;border:1px solid var(--card-border);border-radius:var(--r);'>"
             "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload &amp; Flash</button>"
             "</div>"
             "<div class='ota-progress-box' id='ota-progress-box'>"
@@ -956,17 +1099,17 @@ static void handleRoot()
             "</div>"
             "<div class='guide-grid'>"
             "<div class='guide-card'>"
-            "<div class='guide-title'>&#128070; CYD Touch Zones</div>"
-            "<div>&bull; <strong>Tap Wordmark:</strong> Cycle accent color</div>"
-            "<div>&bull; <strong>Tap Top-Right:</strong> Toggle screen backlight ON / OFF</div>"
-            "<div>&bull; <strong>Tap Screen Center:</strong> Cycle views (MINE &rarr; MARKET &rarr; CLOCK &rarr; PROTOCOL)</div>"
+            "<div class='guide-title'>👆 CYD Touch Regions</div>"
+            "<div class='guide-row'><span class='guide-key'>Top-Left Wordmark</span><span class='guide-val'>Cycle Accent Color</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Top-Right Corner</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Screen Center</span><span class='guide-val'>Cycle Screens (0 &rarr; 1 &rarr; 2 &rarr; 3)</span></div>"
             "</div>"
             "<div class='guide-card'>"
-            "<div class='guide-title'>&#128296; Physical BOOT Button</div>"
-            "<div>&bull; <strong>1 Click:</strong> Next screen view</div>"
-            "<div>&bull; <strong>Double Click:</strong> Rotate orientation (0&deg;, 90&deg;, 180&deg;, 270&deg;)</div>"
-            "<div>&bull; <strong>Triple Click:</strong> Toggle backlight ON / OFF</div>"
-            "<div>&bull; <strong>Hold 5s:</strong> Reset stored configuration and reboot</div>"
+            "<div class='guide-title'>🔨 Physical BOOT Button</div>"
+            "<div class='guide-row'><span class='guide-key'>1 Tap</span><span class='guide-val'>Next Screen View</span></div>"
+            "<div class='guide-row'><span class='guide-key'>2 Taps</span><span class='guide-val'>Rotate Display 90&deg;</span></div>"
+            "<div class='guide-row'><span class='guide-key'>3 Taps</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Hold 5 Seconds</span><span class='guide-val'>Factory Reset Config &amp; Reboot</span></div>"
             "</div></div>"
             "<details class='edu-acc' name='cyd-main' open>"
             "<summary class='edu-sum'><span>📖 Live Telemetry &amp; Solo Mining Mathematics</span></summary>"
@@ -1015,17 +1158,17 @@ static void handleRoot()
             "Inspect the exact 80-byte block header format your CYD iterates at ~1 MHz. Step through historical nonces or test the avalanche effect in real time:"
             "</p>"
             "<div style='display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;'>"
-            "<button type='button' class='preset-pill active' id='sim-mode-hist' onclick='simSetMode(true)'>Preset: Historical Block #286,819 (Solves at Nonce 856,192,328!)</button>"
-            "<button type='button' class='preset-pill' id='sim-mode-rand' onclick='simSetMode(false)'>Preset: Sandbox (Adjust Leading Zeros)</button>"
+            "<button type='button' class='preset-pill active' id='sim-mode-hist' onclick='simSetMode(true)'>Historical Block #286,819 (Target: Nonce 856,192,328)</button>"
+            "<button type='button' class='preset-pill' id='sim-mode-rand' onclick='simSetMode(false)'>Sandbox (Variable Difficulty)</button>"
             "</div>"
             "<div id='sim-shirriff-box' style='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;'>"
-            "<span style='font-size:11px;color:var(--muted);'>Ken Shirriff Nonce Stepping Stones:</span>"
+            "<span style='font-size:11px;color:var(--muted);'>Reference Nonce Milestones:</span>"
             "<button type='button' class='preset-pill' onclick='simJump(0)' style='font-size:11px;padding:3px 8px;'>0 (0 zeros)</button>"
             "<button type='button' class='preset-pill' onclick='simJump(39)' style='font-size:11px;padding:3px 8px;'>39 (1 zero)</button>"
             "<button type='button' class='preset-pill' onclick='simJump(990)' style='font-size:11px;padding:3px 8px;'>990 (3 zeros)</button>"
             "<button type='button' class='preset-pill' onclick='simJump(52117)' style='font-size:11px;padding:3px 8px;'>52,117 (4 zeros)</button>"
-            "<button type='button' class='preset-pill' onclick='simJump(856192320)' style='font-size:11px;padding:3px 8px;'>856,192,320 (Countdown)</button>"
-            "<button type='button' class='preset-pill' onclick='simJump(856192328)' style='font-size:11px;padding:3px 8px;'>856,192,328 (WINNER!)</button>"
+            "<button type='button' class='preset-pill' onclick='simJump(856192320)' style='font-size:11px;padding:3px 8px;'>856,192,320 (Approach)</button>"
+            "<button type='button' class='preset-pill' onclick='simJump(856192328)' style='font-size:11px;padding:3px 8px;'>856,192,328 (Solved Block)</button>"
             "</div>"
             "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;'>"
             "<div style='color:var(--muted);margin-bottom:6px;'><strong id='sim-hdr-title'>80-Byte Candidate Block Header (Block #286,819):</strong></div>"
