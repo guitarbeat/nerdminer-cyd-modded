@@ -357,7 +357,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
       </button>
       <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>1 MARKET</button>
       <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
-      <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 PROTOCOL/ARCH</button>
+      <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 ARCH</button>
     </div>
     <div class='cyd-ctrls'>
       <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous Screen'>&larr; Prev</button>
@@ -381,7 +381,7 @@ let cydRefreshTimer = null;
 let cydIsLoading = false;
 let cydPendingRefresh = false;
 
-const CYD_SCREEN_NAMES = ['MINE', 'MARKET', 'CLOCK', 'PROTOCOL/ARCH'];
+const CYD_SCREEN_NAMES = ['MINE', 'MARKET', 'CLOCK', 'ARCH'];
 
 function cydGetScreenUrl(screenIdx) {
   const s = (typeof screenIdx === 'number') ? screenIdx : cydPreviewScr;

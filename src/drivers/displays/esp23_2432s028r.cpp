@@ -204,21 +204,6 @@ enum WidgetId
   W_C1,
   W_C2,
   W_CHART,
-  W_EXP_STREAM,
-  W_EXP_TEXT,
-  W_LOT_JACKPOT,
-  W_LOT_WORK,
-  W_LOT_DIFF,
-  W_DIAG_NET,
-  W_DIAG_WIFI,
-  W_DIAG_TEMP,
-  W_DIAG_RAM,
-  W_DIAG_UPTIME,
-  W_HDR_LIVE,
-  W_DIAG_ARC0, // mini arc: core temp
-  W_DIAG_ARC1, // mini arc: free heap
-  W_DIAG_ARC2, // mini arc: ping
-  W_ECON_ARC,  // mini arc: odds meter (best diff / net diff)
   W_PROTO_PLOT,
   W_PROTO_FOOT,
   W_COUNT
@@ -326,35 +311,6 @@ static void gradBar(TFT_eSPI &d, int x, int y, int w, int h, uint16_t bg)
     d.drawFastVLine(x + i, gy + inset, h - 2 * inset, c);
   }
   (void)bg;
-}
-
-// 240° sweep mini arc gauge drawn into the current wgt sprite.
-// Inspired by CarCYD's mini_gauge widget (lv_arc 240° rotation at 150°).
-// val = 0.0..1.0 (fill fraction). warnAt/critAt are 0..1 zone thresholds.
-// invert=true flips severity: high val = good (e.g. free heap).
-static void drawMiniArcInSprite(int cx, int cy, int r, int ri, float val,
-                                 float warnAt, float critAt, bool invert)
-{
-  const int startAngle = 150;
-  const int sweepTotal = 240;
-  if (val < 0.0f) val = 0.0f;
-  if (val > 1.0f) val = 1.0f;
-
-  uint16_t fillCol;
-  if (!invert)
-    fillCol = (val >= critAt) ? C_BAD : (val >= warnAt ? C_WARN : C_GOOD);
-  else
-    fillCol = (val <= critAt) ? C_BAD : (val <= warnAt ? C_WARN : C_GOOD);
-
-  // Track (full 240°)
-  wgt.drawArc(cx, cy, r, ri, startAngle, startAngle + sweepTotal, C_TRACK, C_PANEL, true);
-  // Fill
-  if (val > 0.005f)
-  {
-    int fillEnd = startAngle + (int)(val * sweepTotal + 0.5f);
-    if (fillEnd > startAngle + sweepTotal) fillEnd = startAngle + sweepTotal;
-    wgt.drawArc(cx, cy, r, ri, startAngle, fillEnd, fillCol, C_PANEL, true);
-  }
 }
 
 static String commas(const String &s)
@@ -562,7 +518,7 @@ struct HdrV
   String ip;
   int bars;
   int status;
-  int screen; // current screen index (0-5) for nav dots
+  int screen; // current screen index (0-3) for nav dots
 };
 
 static void drawHeader(const HdrV &h)
@@ -580,7 +536,7 @@ static void drawHeader(const HdrV &h)
       "MINE",
       "MARKET",
       "CLOCK",
-      "PROTOCOL"
+      "ARCH"
   };
   const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
   // MARKET / PROTOCOL / CLOCK: compact "TITLE|HASHING" wordmark (mock).
