@@ -2,6 +2,7 @@
 #define MONITOR_API_H
 
 #include <Arduino.h>
+#include "coinProfile.h"
 
 // Monitor states
 #define SCREEN_MINING   0
@@ -40,7 +41,7 @@
 #define UPDATE_POOL_min   5
 
 #define NEXT_HALVING_EVENT 1050000 //840000
-#define HALVING_BLOCKS 210000
+#define HALVING_BLOCKS (getActiveCoinProfile().halvingInterval)
 
 enum NMState {
   NM_waitingConfig,

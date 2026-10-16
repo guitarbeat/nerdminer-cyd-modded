@@ -178,7 +178,8 @@ int blockAgeMin(void) {
 String halvingEtaStr(unsigned long rem) {
   unsigned long now = timeClient.getEpochTime();
   if (now < 1700000000UL || rem == 0) return "";
-  time_t t = (time_t)now + (time_t)rem * 600;
+  const CoinProfile &coin = getActiveCoinProfile();
+  time_t t = (time_t)now + (time_t)rem * coin.targetBlockTimeSec;
   struct tm tmv;
   gmtime_r(&t, &tmv);
   static const char *const MON[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
@@ -240,13 +241,18 @@ uint8_t copyKlines(Kline *out) {
 // never triggers a network fetch from the web server task.
 String getMarketJson(void) {
   const CurrencyInfo &cur = currencyFor(Settings.Currency);
+  const CoinProfile &coin = getActiveCoinProfile();
   unsigned long blk = current_block.toInt();
-  unsigned long rem = blk ? (((blk / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - blk : 0;
+  unsigned long rem = blk ? (((blk / coin.halvingInterval) + 1) * coin.halvingInterval) - blk : 0;
   String j;
-  j.reserve(300);
+  j.reserve(320);
   j += "{\"price\":" + String(bitcoin_price);
   j += ",\"prefix\":\"" + String(cur.prefix) + "\"";
   j += ",\"cur\":\"" + String(cur.code) + "\"";
+  j += ",\"coin\":\"" + String(coin.ticker) + "\"";
+  j += ",\"unit\":\"" + String(coin.feeUnit) + "\"";
+  j += ",\"halv\":" + String(coin.halvingInterval);
+  j += ",\"sub\":" + String((int)coin.initialSubsidy);
   j += ",\"block\":" + String(blk);
   j += ",\"fee\":" + String(gData.halfHourFee);
   j += ",\"diff\":\"" + gData.difficulty + "\"";
@@ -262,6 +268,7 @@ String getMarketJson(void) {
 
 String getBTCprice(void){
     const CurrencyInfo &cur = currencyFor(Settings.Currency);
+    const CoinProfile &coin = getActiveCoinProfile();
     static char price_buffer[24];
 
     if((mBTCUpdate == 0) || (millis() - mBTCUpdate > UPDATE_BTC_min * 60 * 1000)){
@@ -276,7 +283,7 @@ String getBTCprice(void){
         bool priceUpdated = false;
 
         try {
-        http.begin(String(getBTCAPI) + cur.code);
+        http.begin(String("https://api.coingecko.com/api/v3/simple/price?ids=") + coin.priceApiCoinId + "&vs_currencies=" + cur.code);
         int httpCode;
         { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
 
@@ -286,8 +293,8 @@ String getBTCprice(void){
             StaticJsonDocument<1024> doc;
             deserializeJson(doc, payload);
           
-            if (doc.containsKey("bitcoin") && doc["bitcoin"].containsKey(cur.code)) {
-                bitcoin_price = doc["bitcoin"][cur.code];
+            if (doc.containsKey(coin.priceApiCoinId) && doc[coin.priceApiCoinId].containsKey(cur.code)) {
+                bitcoin_price = doc[coin.priceApiCoinId][cur.code];
             }
 
             doc.clear();
@@ -636,15 +643,16 @@ String getPoolAPIUrl(void) {
         url = "https://public-pool.io:40557/api/client/";
     }
     else if (pool.indexOf("hmpool.io") >= 0) {
-        String coin = "btc";
+        const CoinProfile &coin = getActiveCoinProfile();
+        String coinStr = coin.id;
         const int coinEnd = pool.indexOf(".hmpool.io");
         if (coinEnd > 0)
-            coin = pool.substring(pool.lastIndexOf('.', coinEnd - 1) + 1, coinEnd);
-        if (coin == "btc") {
-            url = "https://btc.hmpool.io/api/miner/";
+            coinStr = pool.substring(pool.lastIndexOf('.', coinEnd - 1) + 1, coinEnd);
+        if (coinStr == coin.id) {
+            url = "https://" + String(coin.id) + ".hmpool.io/api/miner/";
             style = POOL_API_HMPOOL;
         } else {
-            url = "https://" + coin + ".hmpool.io/api/client/";
+            url = "https://" + coinStr + ".hmpool.io/api/client/";
         }
     }
     else if (pool.indexOf("heliospool.") >= 0) {

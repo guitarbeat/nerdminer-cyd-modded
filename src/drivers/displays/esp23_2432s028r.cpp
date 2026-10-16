@@ -385,9 +385,10 @@ static String fmtPrice(const String &s)
 
 static String btcPairLabel()
 {
+  const CoinProfile &coin = getActiveCoinProfile();
   String c = currencyFor(Settings.Currency).code;
   c.toUpperCase();
-  return "BTC / " + c;
+  return String(coin.ticker) + " / " + c;
 }
 
 static String fmtUptime(const String &s)
@@ -1021,9 +1022,10 @@ static void paintMarket(const MarketV &m)
       String fv = m.fee > 0 ? String(m.fee) : String("--");
       uint16_t pc = C_DIM;
       const char *cls = feeClass(m.fee, pc);
+      const CoinProfile &coin = getActiveCoinProfile();
       String range;
       if (m.feeHour > 0 && m.feeFast > 0 && m.feeFast != m.feeHour)
-        range = "range " + String(min(m.feeHour, m.feeFast)) + "-" + String(max(m.feeHour, m.feeFast)) + " sat/vB";
+        range = "range " + String(min(m.feeHour, m.feeFast)) + "-" + String(max(m.feeHour, m.feeFast)) + " " + coin.feeUnit;
       text(wgt, "HALF-HOUR FEE", 6, P ? 4 : 3, 10, C_DIM, C_PANEL);
       unsigned vs = P ? 22 : 18;
       int vx = 6, vy = P ? 20 : 17;
@@ -1034,7 +1036,7 @@ static void paintMarket(const MarketV &m)
       }
       text(wgt, fv.c_str(), vx, vy, vs, C_TEXT, C_PANEL);
       int fw = textW(fv.c_str(), vs);
-      text(wgt, "sat/vB", vx + fw + 4, vy + vs - 11, 10, C_DIM, C_PANEL);
+      text(wgt, coin.feeUnit, vx + fw + 4, vy + vs - 11, 10, C_DIM, C_PANEL);
       if (cls)
       {
         int pw = textW(cls, 9) + 12, ph = 14;
@@ -1064,11 +1066,12 @@ static void paintMarket(const MarketV &m)
     int w = g.hw - 4, h = g.vh - 4;
     if (wBegin(w, h, C_PANEL))
     {
+      const CoinProfile &coin = getActiveCoinProfile();
       char pc[8];
       snprintf(pc, sizeof(pc), "%d%%", m.pct);
-      int era = m.height > 0 ? (int)(m.height / 210000) : 4;
-      float now = 50.0f / (float)(1UL << era);
-      String r0 = fmtReward(now), r1 = fmtReward(now / 2) + " BTC";
+      int era = m.height > 0 ? (int)(m.height / coin.halvingInterval) : 4;
+      float now = coin.initialSubsidy / (float)(1UL << era);
+      String r0 = fmtReward(now), r1 = fmtReward(now / 2) + " " + coin.ticker;
       String rem = m.remaining > 0 ? commas(String(m.remaining)) + " blocks left" : String("-- blocks left");
       const int bx = 6, bw = w - 12;
       if (P)
