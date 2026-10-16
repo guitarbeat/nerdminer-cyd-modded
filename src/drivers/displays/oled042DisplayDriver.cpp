@@ -100,7 +100,7 @@ void oledDisplay_Screen2(unsigned long mElapsed)
 {
   mining_data data = getMiningData(mElapsed);
   char temp[8];
-  sprintf(temp, "%s°c", data.temp.c_str());
+  sprintf(temp, "%s C", data.temp.c_str());
 
   u8g2.clearBuffer(); 
   u8g2.setFont(u8g2_font_helvB18_tf);

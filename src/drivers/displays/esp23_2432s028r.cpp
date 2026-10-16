@@ -26,6 +26,7 @@
 #include "monitor.h"
 #include "mining.h"
 #include "OpenFontRender.h"
+#include <mutex>
 #include <SPI.h>
 #include "rotation.h"
 #include "drivers/storage/nvMemory.h"
@@ -33,6 +34,7 @@
 #include "currency.h"
 #include "rgbLed.h"
 #include "display.h"
+#include "utils.h"
 
 #define WIDTH 130
 #define HEIGHT 170
@@ -223,26 +225,25 @@ enum WidgetId
 };
 static String wkey[W_COUNT];
 
-static bool need(int id, const String &k) { return wkey[id] != k; }
-static void done(int id, const String &k) { wkey[id] = k; }
+// ---------------------------------------------------------- output target --
+// Everything draws either to the panel or to an offscreen shot.
+
+static TFT_eSprite wgt = TFT_eSprite(&tft); // scratch sprite reused by every widget
+static TFT_eSprite shot = TFT_eSprite(&tft);
+static std::mutex g_displayMutex;
+static bool shotOn = false;
+static int g_shotYOffset = 0;
+static int g_shotTargetScr = 0;
+static inline int dY(int y) { return shotOn ? (y - g_shotYOffset) : y; }
+static TFT_eSPI &out() { return shotOn ? (TFT_eSPI &)shot : tft; }
+
+static bool need(int id, const String &k) { return shotOn || (wkey[id] != k); }
+static void done(int id, const String &k) { if (!shotOn) wkey[id] = k; }
 static void resetWidgets()
 {
   for (int i = 0; i < W_COUNT; i++)
     wkey[i] = "\x01";
 }
-
-// ---------------------------------------------------------- output target --
-// Everything draws either to the panel or (dev builds) to an offscreen shot.
-
-static TFT_eSprite wgt = TFT_eSprite(&tft); // scratch sprite reused by every widget
-
-#ifdef CYD_UI_SCREENSHOT
-static TFT_eSprite shot = TFT_eSprite(&tft);
-static bool shotOn = false;
-static TFT_eSPI &out() { return shotOn ? (TFT_eSPI &)shot : tft; }
-#else
-static TFT_eSPI &out() { return tft; }
-#endif
 
 static bool wBegin(int w, int h, uint16_t bg)
 {
@@ -260,17 +261,16 @@ static bool wBegin(int w, int h, uint16_t bg)
 
 static void wEnd(int x, int y)
 {
-#ifdef CYD_UI_SCREENSHOT
   if (shotOn)
   {
-    wgt.pushToSprite(&shot, x, y);
+    wgt.pushToSprite(&shot, x, dY(y));
     wgt.deleteSprite();
     return;
   }
-#endif
   wgt.pushSprite(x, y);
   wgt.deleteSprite();
 }
+
 
 // ------------------------------------------------------------ draw helpers --
 
@@ -307,13 +307,15 @@ static void textPair(TFT_eSPI &d, int cx, int y, const char *val, const char *un
 // structural cell: crisp 1px hairline border, flat surface
 static void panel(TFT_eSPI &d, int x, int y, int w, int h, int r, uint16_t fill, uint16_t edge, uint16_t behind)
 {
-  d.fillRect(x, y, w, h, fill);
-  d.drawRect(x, y, w, h, edge);
+  int py = dY(y);
+  d.fillRect(x, py, w, h, fill);
+  d.drawRect(x, py, w, h, edge);
 }
 
 // horizontal gradient bar (alt -> accent) with softly rounded ends
 static void gradBar(TFT_eSPI &d, int x, int y, int w, int h, uint16_t bg)
 {
+  int gy = dY(y);
   for (int i = 0; i < w; i++)
   {
     int inset = 0;
@@ -321,7 +323,7 @@ static void gradBar(TFT_eSPI &d, int x, int y, int w, int h, uint16_t bg)
     if (h >= 6)
       inset = e < 1 ? 2 : (e < 3 ? 1 : 0);
     uint16_t c = mix565(cAlt, cAcc, (uint8_t)(w > 1 ? i * 255 / (w - 1) : 255));
-    d.drawFastVLine(x + i, y + inset, h - 2 * inset, c);
+    d.drawFastVLine(x + i, gy + inset, h - 2 * inset, c);
   }
   (void)bg;
 }
@@ -443,7 +445,17 @@ static String fmtHashCount(const String &mhashes)
 static String fmtUptimeShort(const String &s)
 {
   int d = 0, h = 0, m = 0, sec = 0;
-  sscanf(s.c_str(), "%d %d:%d:%d", &d, &h, &m, &sec);
+  if (s.indexOf(':') >= 0)
+  {
+    sscanf(s.c_str(), "%d %d:%d:%d", &d, &h, &m, &sec);
+  }
+  else
+  {
+    unsigned long totalSec = s.toInt();
+    d = totalSec / 86400UL;
+    h = (totalSec % 86400UL) / 3600UL;
+    m = (totalSec % 3600UL) / 60UL;
+  }
   char b[12];
   if (d > 0)
     snprintf(b, sizeof(b), "%dd", d);
@@ -524,19 +536,21 @@ static void noteHashrate(float kh)
 static void gaugeDraw(TFT_eSPI &d, float v)
 {
   float pos = v * G_SEGS;
+  int cy = dY(G_CY);
   for (int i = 0; i < G_SEGS; i++)
   {
     float f = pos - i;
     uint8_t lvl = f >= 1.0f ? 4 : (f <= 0.05f ? 0 : 1 + (int)(f * 3.0f)); // 0, 1..3 (partial), 4
-    if (lvl == segLvl[i])
+    if (!shotOn && lvl == segLvl[i])
       continue;
     // CarCYD-style zone coloring: last ~20% transitions warm→red (redline)
     uint16_t mCol = (i >= 27) ? C_BAD : (i >= 24 ? C_WARN : C_METER);
     uint16_t tCol = (i >= 27) ? mix565(C_BAD, C_BG, 64) : C_TRACK;
     uint16_t col = lvl == 0 ? tCol : (lvl == 4 ? mCol : mix565(tCol, mCol, lvl * 64));
     int a0 = 45 + i * 9; // 270 degree sweep, gap at 6 o'clock
-    d.drawArc(G_CX, G_CY, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
-    segLvl[i] = lvl;
+    d.drawArc(G_CX, cy, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
+    if (!shotOn)
+      segLvl[i] = lvl;
   }
 }
 
@@ -764,36 +778,35 @@ static void mineStripGeom(int &x, int &y, int &w, int &h)
 
 static void chromeMine(TFT_eSPI &d)
 {
-  memset(segLvl, 0xFF, sizeof(segLvl));
+  if (!shotOn)
+    memset(segLvl, 0xFF, sizeof(segLvl));
   gaugeDraw(d, gaugeShown);
   int x, y, w, h;
   mineStripGeom(x, y, w, h);
   panel(d, x, y, w, h, 8, C_PANEL, C_EDGE, C_BG);
+  int vy = dY(y);
   for (int i = 1; i < 3; i++)
-    d.drawFastVLine(x + (w * i) / 3, y + 8, h - 16, C_EDGE);
+    d.drawFastVLine(x + (w * i) / 3, vy + 8, h - 16, C_EDGE);
 }
 
-// small 5-point star filled into the wgt sprite
-static void wStar(int cx, int cy, int r, uint16_t col)
+// Crisp, iconic lightning bolt glyph (12x18)
+static void drawBolt(TFT_eSPI &d, int x, int y, uint16_t col)
 {
-  float ox[5], oy[5], ix[5], iy[5];
-  for (int i = 0; i < 5; i++)
-  {
-    float a = -PI / 2 + i * 2 * PI / 5;
-    ox[i] = cx + r * cosf(a);
-    oy[i] = cy + r * sinf(a);
-    ix[i] = cx + r * 0.42f * cosf(a + PI / 5);
-    iy[i] = cy + r * 0.42f * sinf(a + PI / 5);
-  }
-  for (int i = 0; i < 5; i++)
-  {
-    wgt.fillTriangle(cx, cy, ox[i], oy[i], ix[i], iy[i], col);
-    wgt.fillTriangle(cx, cy, ix[i], iy[i], ox[(i + 1) % 5], oy[(i + 1) % 5], col);
-  }
+  int p0x = x + 7,  p0y = y + 0;
+  int p1x = x + 1,  p1y = y + 9;
+  int p2x = x + 6,  p2y = y + 9;
+  int p3x = x + 5,  p3y = y + 17;
+  int p4x = x + 11, p4y = y + 7;
+  int p5x = x + 6,  p5y = y + 7;
+
+  d.fillTriangle(p0x, p0y, p1x, p1y, p5x, p5y, col);
+  d.fillTriangle(p1x, p1y, p2x, p2y, p5x, p5y, col);
+  d.fillTriangle(p2x, p2y, p5x, p5y, p4x, p4y, col);
+  d.fillTriangle(p2x, p2y, p4x, p4y, p3x, p3y, col);
 }
 
 static void drawMineCard(int id, int x, int y, int w, int h, const char *label, const char *value,
-                         uint16_t valCol, bool star)
+                         uint16_t valCol)
 {
   char k[64];
   snprintf(k, sizeof(k), "mc|%s|%s|%u|%d", label, value, valCol, accentIdx);
@@ -803,13 +816,8 @@ static void drawMineCard(int id, int x, int y, int w, int h, const char *label, 
     return;
   wgt.fillRect(0, 0, w, h, C_PANEL);
   wgt.drawRect(0, 0, w, h, C_EDGE);
-  int lw = textW(label, 10) + (star ? 12 : 0);
+  int lw = textW(label, 10);
   int lx = (w - lw) / 2;
-  if (star)
-  {
-    wStar(lx + 4, 9, 5, C_GOLD);
-    lx += 12;
-  }
   text(wgt, label, lx, 4, 10, C_DIM, C_PANEL);
   unsigned vs = h >= 60 ? 24 : 20;
   if (strlen(value) > 8)
@@ -855,16 +863,18 @@ static void paintMine(const MineV &m)
   if (need(W_HERO, k))
   {
     // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
-    const int hw = P ? 124 : 110, hh = P ? 112 : 100;
+    const int hw = P ? 124 : 110, hh = P ? 126 : 106;
     if (wBegin(hw, hh, C_BG))
     {
       int c = hw / 2;
       text(wgt, "HASHRATE", c, 2, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
-      unsigned sz = P ? (m.hash.length() <= 5 ? 40 : 34) : (m.hash.length() <= 5 ? 34 : 28);
-      text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", c, P ? 62 : 54, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
-      String att = fmtHashCount(m.total) + " hashes attempted";
-      text(wgt, att.c_str(), c, P ? 90 : 80, P ? 10 : 9, C_DIM, C_BG, Align::TopCenter);
+      unsigned sz = P ? (m.hash.length() <= 5 ? 38 : 32) : (m.hash.length() <= 5 ? 34 : 28);
+      text(wgt, m.hash.c_str(), c, P ? 16 : 14, sz, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 54 : 46, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
+      String cnt = fmtHashCount(m.total);
+      text(wgt, cnt.c_str(), c, P ? 70 : 64, P ? 18 : 13, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "HASHES", c, P ? 90 : 80, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "ATTEMPTED", c, P ? 104 : 92, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
       wEnd(cx - c, cy - (P ? 44 : 40));
       done(W_HERO, k);
     }
@@ -873,13 +883,13 @@ static void paintMine(const MineV &m)
   uint16_t sharesCol = m.flash ? C_GOOD : C_TEXT;
   if (P)
   {
-    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "SHARES", m.shares.c_str(), sharesCol, false);
-    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "BEST", m.best.c_str(), C_GOLD, true);
+    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "SHARES", m.shares.c_str(), sharesCol);
+    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "BEST", m.best.c_str(), C_GOLD);
   }
   else
   {
-    drawMineCard(W_T0, 198, 34, 114, 76, "SHARES", m.shares.c_str(), sharesCol, false);
-    drawMineCard(W_T1, 198, 116, 114, 76, "BEST", m.best.c_str(), C_GOLD, true);
+    drawMineCard(W_T0, 198, 34, 114, 76, "SHARES", m.shares.c_str(), sharesCol);
+    drawMineCard(W_T1, 198, 116, 114, 76, "BEST", m.best.c_str(), C_GOLD);
   }
 
   drawMineStrip(m.strip);
@@ -952,6 +962,18 @@ static void drawRewardRight(int xr, int y, unsigned sz, const String &a, const S
   text(wgt, b.c_str(), x0 + wa + aw, y, sz, C_GOLD, C_PANEL);
 }
 
+static void drawRewardRightD(TFT_eSPI &d, int xr, int y, unsigned sz, const String &a, const String &b)
+{
+  int wa = textW(a.c_str(), sz), wb = textW(b.c_str(), sz);
+  const int aw = 14;
+  int x0 = xr - (wa + aw + wb);
+  text(d, a.c_str(), x0, dY(y), sz, C_DIM, C_PANEL);
+  int ax = x0 + wa + 3, ay = dY(y + sz / 2);
+  d.drawFastHLine(ax, ay, 7, C_DIM);
+  d.fillTriangle(ax + 6, ay - 3, ax + 6, ay + 3, ax + 9, ay, C_DIM);
+  text(d, b.c_str(), x0 + wa + aw, dY(y), sz, C_GOLD, C_PANEL);
+}
+
 static void paintMarket(const MarketV &m)
 {
   drawHeader(m.hdr);
@@ -965,34 +987,33 @@ static void paintMarket(const MarketV &m)
   if (need(W_PRICE, k))
   {
     int w = g.hw - 4, h = g.hh - 4;
-    if (wBegin(w, h, C_PANEL))
+    int px = g.hx + 2, py = g.hy + 2;
+    TFT_eSPI &d = out();
+    panel(d, px, py, w, h, 8, C_PANEL, C_EDGE, C_BG);
+    if (P)
     {
-      if (P)
+      text(d, btcPairLabel().c_str(), px + 8, dY(py + 4), 10, C_DIM, C_PANEL);
+      text(d, m.price.c_str(), px + w / 2, dY(py + 18), m.price.length() > 9 ? 26 : 30, C_GOLD, C_PANEL, Align::TopCenter);
+      int lw = textW(bl.c_str(), 10);
+      int aw = ag.length() ? textW(ag.c_str(), 10) : 0;
+      int tw = lw + (ag.length() ? 14 + aw : 0);
+      int x0 = px + (w - tw) / 2;
+      text(d, bl.c_str(), x0, dY(py + 54), 10, C_TEXT, C_PANEL);
+      if (ag.length())
       {
-        text(wgt, btcPairLabel().c_str(), 8, 4, 10, C_DIM, C_PANEL);
-        text(wgt, m.price.c_str(), w / 2, 18, m.price.length() > 9 ? 26 : 30, C_GOLD, C_PANEL, Align::TopCenter);
-        int lw = textW(bl.c_str(), 10);
-        int aw = ag.length() ? textW(ag.c_str(), 10) : 0;
-        int tw = lw + (ag.length() ? 14 + aw : 0);
-        int x0 = (w - tw) / 2;
-        text(wgt, bl.c_str(), x0, 54, 10, C_TEXT, C_PANEL);
-        if (ag.length())
-        {
-          wgt.fillCircle(x0 + lw + 7, 60, 1, C_DIM);
-          text(wgt, ag.c_str(), x0 + lw + 14, 54, 10, C_DIM, C_PANEL);
-        }
+        d.fillCircle(x0 + lw + 7, dY(py + 60), 1, C_DIM);
+        text(d, ag.c_str(), x0 + lw + 14, dY(py + 54), 10, C_DIM, C_PANEL);
       }
-      else
-      {
-        text(wgt, btcPairLabel().c_str(), 6, 3, 10, C_DIM, C_PANEL);
-        text(wgt, m.price.c_str(), 6, 18, 28, C_GOLD, C_PANEL);
-        text(wgt, bl.c_str(), w - 6, 8, 14, C_TEXT, C_PANEL, Align::TopRight);
-        if (ag.length())
-          text(wgt, ag.c_str(), w - 6, 30, 10, C_DIM, C_PANEL, Align::TopRight);
-      }
-      wEnd(g.hx + 2, g.hy + 2);
-      done(W_PRICE, k);
     }
+    else
+    {
+      text(d, btcPairLabel().c_str(), px + 6, dY(py + 3), 10, C_DIM, C_PANEL);
+      text(d, m.price.c_str(), px + 6, dY(py + 18), 28, C_GOLD, C_PANEL);
+      text(d, bl.c_str(), px + w - 6, dY(py + 8), 14, C_TEXT, C_PANEL, Align::TopRight);
+      if (ag.length())
+        text(d, ag.c_str(), px + w - 6, dY(py + 30), 10, C_DIM, C_PANEL, Align::TopRight);
+    }
+    done(W_PRICE, k);
   }
 
   // 2. NETWORK | DIFFICULTY cards
@@ -1065,46 +1086,49 @@ static void paintMarket(const MarketV &m)
   snprintf(kb, sizeof(kb), "%d|%ld|%s|%ld|%d", m.pct, m.remaining, m.eta.c_str(), m.height, P ? 1 : 0);
   if (need(W_HALV, kb))
   {
-    int w = g.hw - 4, h = g.vh - 4;
-    if (wBegin(w, h, C_PANEL))
+    TFT_eSPI &d = out();
+    int x0 = g.hx + 2;
+    int y0 = g.vy + 2;
+    int w = g.hw - 4;
+    panel(d, g.hx, g.vy, g.hw, g.vh, 8, C_PANEL, C_EDGE, C_BG);
+
+    const CoinProfile &coin = getActiveCoinProfile();
+    char pc[8];
+    snprintf(pc, sizeof(pc), "%d%%", m.pct);
+    int era = m.height > 0 ? (int)(m.height / coin.halvingInterval) : 4;
+    float now = coin.initialSubsidy / (float)(1UL << era);
+    String r0 = fmtReward(now), r1 = fmtReward(now / 2) + " " + coin.ticker;
+    String rem = m.remaining > 0 ? commas(String(m.remaining)) + " blocks left" : String("-- blocks left");
+    const int bx = x0 + 6, bw = w - 12;
+    if (P)
     {
-      const CoinProfile &coin = getActiveCoinProfile();
-      char pc[8];
-      snprintf(pc, sizeof(pc), "%d%%", m.pct);
-      int era = m.height > 0 ? (int)(m.height / coin.halvingInterval) : 4;
-      float now = coin.initialSubsidy / (float)(1UL << era);
-      String r0 = fmtReward(now), r1 = fmtReward(now / 2) + " " + coin.ticker;
-      String rem = m.remaining > 0 ? commas(String(m.remaining)) + " blocks left" : String("-- blocks left");
-      const int bx = 6, bw = w - 12;
-      if (P)
-      {
-        text(wgt, "NEXT HALVING", bx, 4, 10, C_DIM, C_PANEL);
-        text(wgt, pc, w - 6, 2, 16, C_METER, C_PANEL, Align::TopRight);
-        wgt.fillRoundRect(bx, 24, bw, 10, 5, C_TRACK);
-        int fw = (bw * m.pct) / 100;
-        if (fw > 0) wgt.fillRoundRect(bx, 24, fw, 10, 5, C_METER);
-        text(wgt, rem.c_str(), bx, 42, 11, C_TEXT, C_PANEL);
-        if (m.eta.length())
-          text(wgt, m.eta.c_str(), w - 6, 42, 11, C_DIM, C_PANEL, Align::TopRight);
-        wgt.drawFastHLine(bx, 60, bw, C_EDGE);
-        text(wgt, "BLOCK REWARD", bx, 68, 9, C_DIM, C_PANEL);
-        drawRewardRight(w - 6, 66, 12, r0, r1);
-      }
-      else
-      {
-        text(wgt, "NEXT HALVING", bx, 3, 10, C_DIM, C_PANEL);
-        text(wgt, pc, bx + textW("NEXT HALVING", 10) + 8, 1, 13, C_METER, C_PANEL);
-        drawRewardRight(w - 6, 2, 11, r0, r1);
-        wgt.fillRoundRect(bx, 20, bw, 8, 4, C_TRACK);
-        int fw = (bw * m.pct) / 100;
-        if (fw > 0) wgt.fillRoundRect(bx, 20, fw, 8, 4, C_METER);
-        text(wgt, rem.c_str(), bx, 33, 10, C_TEXT, C_PANEL);
-        if (m.eta.length())
-          text(wgt, m.eta.c_str(), w - 6, 33, 10, C_DIM, C_PANEL, Align::TopRight);
-      }
-      wEnd(g.hx + 2, g.vy + 2);
-      done(W_HALV, kb);
+      text(d, "NEXT HALVING", bx, dY(y0 + 4), 10, C_DIM, C_PANEL);
+      text(d, pc, x0 + w - 6, dY(y0 + 2), 16, C_METER, C_PANEL, Align::TopRight);
+      int trackY = dY(y0 + 24);
+      d.fillRoundRect(bx, trackY, bw, 10, 5, C_TRACK);
+      int fw = (bw * m.pct) / 100;
+      if (fw > 0) d.fillRoundRect(bx, trackY, fw, 10, 5, C_METER);
+      text(d, rem.c_str(), bx, dY(y0 + 42), 11, C_TEXT, C_PANEL);
+      if (m.eta.length())
+        text(d, m.eta.c_str(), x0 + w - 6, dY(y0 + 42), 11, C_DIM, C_PANEL, Align::TopRight);
+      d.drawFastHLine(bx, dY(y0 + 60), bw, C_EDGE);
+      text(d, "BLOCK REWARD", bx, dY(y0 + 68), 9, C_DIM, C_PANEL);
+      drawRewardRightD(d, x0 + w - 6, y0 + 66, 12, r0, r1);
     }
+    else
+    {
+      text(d, "NEXT HALVING", bx, dY(y0 + 3), 10, C_DIM, C_PANEL);
+      text(d, pc, bx + textW("NEXT HALVING", 10) + 8, dY(y0 + 1), 13, C_METER, C_PANEL);
+      drawRewardRightD(d, x0 + w - 6, y0 + 2, 11, r0, r1);
+      int trackY = dY(y0 + 20);
+      d.fillRoundRect(bx, trackY, bw, 8, 4, C_TRACK);
+      int fw = (bw * m.pct) / 100;
+      if (fw > 0) d.fillRoundRect(bx, trackY, fw, 8, 4, C_METER);
+      text(d, rem.c_str(), bx, dY(y0 + 33), 10, C_TEXT, C_PANEL);
+      if (m.eta.length())
+        text(d, m.eta.c_str(), x0 + w - 6, dY(y0 + 33), 10, C_DIM, C_PANEL, Align::TopRight);
+    }
+    done(W_HALV, kb);
   }
 }
 
@@ -1158,12 +1182,14 @@ static void drawChart()
   const bool P = isPortrait();
   const int W = P ? 216 : 288;
   const int H = P ? 52 : 50;
-  if (!wBegin(W, H, C_PANEL))
-    return;
-  text(wgt, "HASHRATE HISTORY", 0, 0, 9, C_DIM, C_PANEL);
-  text(wgt, "LAST 60 SECONDS", W - 1, 0, 9, C_DIM, C_PANEL, Align::TopRight);
-  const int baseY = H - 1;
-  wgt.drawFastHLine(0, baseY, W, C_TRACK);
+  const int px = P ? 12 : 16;
+  const int py = P ? 186 : 118;
+  TFT_eSPI &d = out();
+  d.fillRect(px, dY(py), W, H, C_PANEL);
+  text(d, "HASHRATE HISTORY", px, dY(py), 9, C_DIM, C_PANEL);
+  text(d, "LAST 60 SECONDS", px + W - 1, dY(py), 9, C_DIM, C_PANEL, Align::TopRight);
+  const int baseY = dY(py + H - 1);
+  d.drawFastHLine(px, baseY, W, C_TRACK);
   float mx = 1;
   for (int i = 0; i < histCount; i++)
     if (hist[i] > mx)
@@ -1176,18 +1202,17 @@ static void drawChart()
   for (int i = 0; i < numSlots; i++)
   {
     int slot = i - (numSlots - histCount); // right-align newest
-    int x = (int)(i * step);
+    int x = px + (int)(i * step);
     if (slot < 0 || slot >= HIST_N)
     {
-      wgt.fillRect(x, baseY - 2, bw, 2, C_TRACK);
+      d.fillRect(x, baseY - 2, bw, 2, C_TRACK);
       continue;
     }
     int bh = (int)(barH * hist[slot] / mx);
     if (bh < 2)
       bh = 2;
-    wgt.fillRect(x, baseY - bh, bw, bh, C_METER);
+    d.fillRect(x, baseY - bh, bw, bh, C_METER);
   }
-  wEnd(P ? 12 : 16, P ? 186 : 118);
   done(W_CHART, k);
 }
 
@@ -1202,23 +1227,22 @@ static void paintClock(const ClockV &c)
     if (need(W_HH, k))
     {
       int pw = P ? 220 : 144, ph = P ? 70 : 62;
-      if (wBegin(pw, ph, C_PANEL))
+      int px = P ? 10 : 12, py = P ? 34 : 34;
+      TFT_eSPI &d = out();
+      panel(d, px, py, pw, ph, 8, C_PANEL, C_EDGE, C_BG);
+      char tim[8];
+      snprintf(tim, sizeof(tim), "%s%s%s", c.hh.c_str(), c.colon ? ":" : " ", c.mm.c_str());
+      if (P)
       {
-        char tim[8];
-        snprintf(tim, sizeof(tim), "%s%s%s", c.hh.c_str(), c.colon ? ":" : " ", c.mm.c_str());
-        if (P)
-        {
-          text(wgt, tim, pw / 2, 4, 42, C_TEXT, C_PANEL, Align::TopCenter);
-          text(wgt, c.date.c_str(), pw / 2, 52, 12, C_DIM, C_PANEL, Align::TopCenter);
-        }
-        else
-        {
-          text(wgt, tim, 6, 6, 36, C_TEXT, C_PANEL);
-          text(wgt, c.date.c_str(), 6, 48, 10, C_DIM, C_PANEL);
-        }
-        wEnd(P ? 10 : 12, P ? 34 : 34);
-        done(W_HH, k);
+        text(d, tim, px + pw / 2, dY(py + 4), 42, C_TEXT, C_PANEL, Align::TopCenter);
+        text(d, c.date.c_str(), px + pw / 2, dY(py + 52), 12, C_DIM, C_PANEL, Align::TopCenter);
       }
+      else
+      {
+        text(d, tim, px + 6, dY(py + 6), 36, C_TEXT, C_PANEL);
+        text(d, c.date.c_str(), px + 6, dY(py + 48), 10, C_DIM, C_PANEL);
+      }
+      done(W_HH, k);
     }
   }
 
@@ -1227,16 +1251,19 @@ static void paintClock(const ClockV &c)
     String k = c.hash + "|" + String(c.flash) + (P ? "P" : "L");
     if (need(W_C0, k))
     {
-      int pw = P ? 220 : 136, ph = P ? 44 : 62;
-      if (wBegin(pw, ph, C_PANEL))
+      int pw = P ? 228 : 144, ph = P ? 52 : 70;
+      int px = P ? 6 : 168, py = P ? 114 : 30;
+      if (wBegin(pw, ph, C_BG))
       {
-        text(wgt, "CURRENT HASHRATE", P ? 8 : 6, P ? 4 : 6, 10, C_DIM, C_PANEL);
+        wgt.fillRect(0, 0, pw, ph, C_PANEL);
+        wgt.drawRect(0, 0, pw, ph, C_EDGE);
+        text(wgt, "CURRENT HASHRATE", P ? 12 : 8, P ? 6 : 8, 10, C_DIM, C_PANEL);
         uint16_t vc = c.flash ? C_GOOD : C_TEXT;
         unsigned sz = P ? 26 : 28;
-        text(wgt, c.hash.c_str(), P ? 8 : 6, P ? 18 : 24, sz, vc, C_PANEL);
+        text(wgt, c.hash.c_str(), P ? 12 : 8, P ? 20 : 26, sz, vc, C_PANEL);
         int nw = textW(c.hash.c_str(), sz);
-        text(wgt, "KH/s", P ? (8 + nw + 6) : (6 + nw + 4), P ? 28 : 36, 12, C_METER, C_PANEL);
-        wEnd(P ? 10 : 172, P ? 118 : 34);
+        text(wgt, "KH/s", (P ? 12 : 8) + nw + 6, P ? 30 : 38, 12, C_METER, C_PANEL);
+        wEnd(px, py);
         done(W_C0, k);
       }
     }
@@ -1249,10 +1276,10 @@ static void paintClock(const ClockV &c)
     String k = String("live|") + (P ? "P" : "L");
     if (need(W_C1, k))
     {
-      int pw = P ? 216 : 288, ph = 12;
+      int pw = P ? 216 : 288, ph = 14;
       if (wBegin(pw, ph, C_PANEL))
       {
-        text(wgt, "LIVE SAMPLE · MINER HASHING CONTINUOUSLY", 0, 0, 8, C_DIM, C_PANEL);
+        text(wgt, "LIVE SAMPLE - HASHING ACTIVE", 0, 0, 10, C_DIM, C_PANEL);
         wEnd(P ? 12 : 16, P ? 244 : 176);
         done(W_C1, k);
       }
@@ -1398,12 +1425,15 @@ static void paintProtocolPlot(const ArchitectureV &av)
   snprintf(kbuf, sizeof(kbuf), "%u|%u|%ld|%ld|%s|%d",
            (unsigned)count, (unsigned)latest, (long)tgtQ8, (long)bestQ8,
            av.bestDiff.c_str(), P ? 1 : 0);
-  if (need(W_PROTO_PLOT, kbuf) && wBegin(plotW, plotH, C_PANEL))
+  if (need(W_PROTO_PLOT, kbuf))
   {
+    TFT_eSPI &d = out();
+    panel(d, plotX, plotY, plotW, plotH, 6, C_PANEL, C_EDGE, C_BG);
+
     const int G = textW("1G", 8) + 8;
-    const int sx0 = G + 10;
-    const int sxSpan = plotW - sx0 - 14;
-    const int yTop = 2, yBot = plotH - 16; // leave room for x caption
+    const int sx0 = plotX + G + 10;
+    const int sxSpan = plotW - (G + 10) - 14;
+    const int yTop = plotY + 2, yBot = plotY + plotH - 16; // leave room for x caption
     auto Y = [&](int32_t q) -> int {
       int32_t span = topQ8 - botQ8;
       if (span <= 0) return (yTop + yBot) / 2;
@@ -1419,27 +1449,27 @@ static void paintProtocolPlot(const ArchitectureV &av)
       int32_t q = (int32_t)((t + 1) * 10) << 8;
       if (q >= topQ8 - (4 << 8)) break;
       int ty = Y(q);
-      for (int x = G + 2; x < plotW - 4; x += 4)
-        wgt.drawPixel(x, ty, C_EDGE);
-      text(wgt, tk[t], G - 4, ty - 4, 8, C_DIM, C_PANEL, Align::TopRight);
+      for (int x = plotX + G + 2; x < plotX + plotW - 4; x += 4)
+        d.drawPixel(x, dY(ty), C_EDGE);
+      text(d, tk[t], plotX + G - 4, dY(ty - 4), 8, C_DIM, C_PANEL, Align::TopRight);
     }
-    wgt.drawFastVLine(G, yTop, yBot - yTop + 1, C_EDGE);
+    d.drawFastVLine(plotX + G, dY(yTop), yBot - yTop + 1, C_EDGE);
     // Baseline "<1".
-    wgt.drawFastHLine(G, yBot, plotW - G - 4, C_EDGE);
-    text(wgt, "<1", G - 4, yBot - 4, 8, C_DIM, C_PANEL, Align::TopRight);
+    d.drawFastHLine(plotX + G, dY(yBot), plotW - G - 4, C_EDGE);
+    text(d, "<1", plotX + G - 4, dY(yBot - 4), 8, C_DIM, C_PANEL, Align::TopRight);
     // Top: orange BLOCK THRESHOLD at live network difficulty.
-    wgt.drawFastHLine(G, yTop, plotW - G - 4, C_WARN);
-    wgt.drawFastHLine(G, yTop + 1, plotW - G - 4, C_WARN);
-    text(wgt, av.netDiff.c_str(), G - 4, yTop, 8, C_WARN, C_PANEL, Align::TopRight);
+    d.drawFastHLine(plotX + G, dY(yTop), plotW - G - 4, C_WARN);
+    d.drawFastHLine(plotX + G, dY(yTop + 1), plotW - G - 4, C_WARN);
+    text(d, av.netDiff.c_str(), plotX + G - 4, dY(yTop), 8, C_WARN, C_PANEL, Align::TopRight);
     char tlab[48];
-    snprintf(tlab, sizeof(tlab), "BLOCK THRESHOLD · %s diff", av.netDiff.c_str());
-    text(wgt, tlab, plotW - 6, yTop + 4, 8, C_WARN, C_PANEL, Align::TopRight);
-    text(wgt, "hash < target -> valid block", plotW - 6, yTop + 15, 7, C_DIM, C_PANEL, Align::TopRight);
-    text(wgt, "RARER ^", G + 4, yTop + 4, 8, C_DIM, C_PANEL);
+    snprintf(tlab, sizeof(tlab), "BLOCK THRESHOLD - %s diff", av.netDiff.c_str());
+    text(d, tlab, plotX + plotW - 6, dY(yTop + 4), 9, C_WARN, C_PANEL, Align::TopRight);
+    text(d, "hash < target -> valid block", plotX + plotW - 6, dY(yTop + 15), 8, C_DIM, C_PANEL, Align::TopRight);
+    text(d, "RARER ^", plotX + G + 4, dY(yTop + 4), 9, C_DIM, C_PANEL);
 
     if (count < 1)
     {
-      text(wgt, "waiting for samples...", G + (plotW - G) / 2, plotH / 2 - 6, 10, C_DIM, C_PANEL, Align::TopCenter);
+      text(d, "waiting for samples...", plotX + G + (plotW - G) / 2, dY(plotY + plotH / 2 - 6), 10, C_DIM, C_PANEL, Align::TopCenter);
     }
     else
     {
@@ -1447,12 +1477,12 @@ static void paintProtocolPlot(const ArchitectureV &av)
       {
         if (bestIsSample && i == bestI) continue;
         int x = sx0 + (i * sxSpan) / (count > 1 ? (count - 1) : 1);
-        drawProtoX(wgt, x, Y(protoDiffQ8FromHashQ8(snap[i])), C_BAD);
+        drawProtoX(d, x, dY(Y(protoDiffQ8FromHashQ8(snap[i]))), C_BAD);
       }
       // Newest: thin outline only.
       int cx = sx0 + sxSpan;
       int cy = Y(protoDiffQ8FromHashQ8(snap[count - 1]));
-      wgt.drawCircle(cx, cy, 5, C_DIM);
+      d.drawCircle(cx, dY(cy), 5, C_DIM);
     }
     // BEST: the highest plotted point, labeled in place. If it came from a
     // share (not in the 48-sample ring) it is pinned at the left edge.
@@ -1460,19 +1490,17 @@ static void paintProtocolPlot(const ArchitectureV &av)
     {
       int bx = bestIsSample ? sx0 + (bestI * sxSpan) / (count > 1 ? (count - 1) : 1) : sx0;
       int by = Y(bestQ8);
-      wgt.fillCircle(bx, by, 4, C_METER);
-      wgt.drawCircle(bx, by, 5, C_WARN);
+      d.fillCircle(bx, dY(by), 4, C_METER);
+      d.drawCircle(bx, dY(by), 5, C_WARN);
       char blab[32];
       snprintf(blab, sizeof(blab), "* BEST %s", av.bestDiff.c_str());
       int lw = textW(blab, 9);
-      bool right = bx + 8 + lw < plotW - 4;
+      bool right = bx + 8 + lw < plotX + plotW - 4;
       int ly = (by > yTop + 30) ? by - 12 : by + 7;
-      text(wgt, blab, right ? bx + 8 : bx - 8, ly, 9, C_METER, C_PANEL,
+      text(d, blab, right ? bx + 8 : bx - 8, dY(ly), 9, C_METER, C_PANEL,
            right ? Align::TopLeft : Align::TopRight);
     }
-    text(wgt, "recent samples · newest ->", G + (plotW - G) / 2, plotH - 11, 8, C_DIM, C_PANEL, Align::TopCenter);
-
-    wEnd(plotX, plotY);
+    text(d, "recent samples - newest ->", plotX + G + (plotW - G) / 2, dY(plotY + plotH - 12), 10, C_DIM, C_PANEL, Align::TopCenter);
     done(W_PROTO_PLOT, kbuf);
   }
 
@@ -1489,9 +1517,8 @@ static void paintProtocolPlot(const ArchitectureV &av)
     snprintf(rateBuf, sizeof(rateBuf), "%.0f KH/s", kh);
   else
     snprintf(rateBuf, sizeof(rateBuf), "-- KH/s");
-  int bx = 10, by = P ? 6 : 8;
-  wgt.fillTriangle(bx, by + 14, bx + 8, by, bx + 5, by + 8, C_METER);
-  wgt.fillTriangle(bx + 4, by + 6, bx + 12, by + 6, bx + 6, by + 20, C_METER);
+  int bx = 10, by = P ? 5 : 7;
+  drawBolt(wgt, bx, by, C_METER);
   text(wgt, rateBuf, 28, P ? 4 : 6, 20, C_METER, C_PANEL);
   char att[40];
   if (kh > 0)
@@ -1502,7 +1529,7 @@ static void paintProtocolPlot(const ArchitectureV &av)
     text(wgt, att, 28, 27, 10, C_TEXT, C_PANEL);
   else
     text(wgt, att, plotW - 8, 10, 11, C_TEXT, C_PANEL, Align::TopRight);
-  text(wgt, "LIVE SAMPLE · MINING UNINTERRUPTED", 28, P ? 40 : 28, 8, C_DIM, C_PANEL);
+  text(wgt, "LIVE SAMPLE - MINING ACTIVE", 28, P ? 40 : 28, 10, C_DIM, C_PANEL);
   wEnd(plotX, footY);
   done(W_PROTO_FOOT, fkey);
 }
@@ -1568,7 +1595,9 @@ static void paintSetup(TFT_eSPI &d)
 static void paintChrome(TFT_eSPI &d, int scr)
 {
   clearScreen(d);
-  d.drawFastHLine(0, HDR_H, isPortrait() ? 240 : 320, C_EDGE);
+  int hy = dY(HDR_H);
+  if (hy >= 0 && hy < d.height())
+    d.drawFastHLine(0, hy, isPortrait() ? 240 : 320, C_EDGE);
   switch (scr)
   {
   case SCR_MINE:
@@ -1591,12 +1620,16 @@ static void paintChrome(TFT_eSPI &d, int scr)
 
 static void ensureChrome(int scr)
 {
-  if (uiScreen == scr)
+  if (!shotOn && uiScreen == scr)
     return;
-  uiScreen = scr;
-  resetWidgets();
+  if (!shotOn)
+  {
+    uiScreen = scr;
+    resetWidgets();
+  }
   paintChrome(out(), scr);
 }
+
 
 static void repaintCached(int scr);
 
@@ -1736,7 +1769,7 @@ static HdrV liveHeader(const String &time)
   h.ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String();
   h.bars = wifiBars();
   h.status = uiStatus();
-  h.screen = currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0;
+  h.screen = shotOn ? g_shotTargetScr : (currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0);
   return h;
 }
 
@@ -1749,6 +1782,7 @@ static void logShare(const String &shares, const String &khashes, const String &
 
 void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 {
+  std::lock_guard<std::mutex> lock(g_displayMutex);
   if (restorePage > 0 && restorePage < currentDisplayDriver->num_cyclic_screens)
   {
     // First tick after boot: go straight to the page that was showing before.
@@ -1798,6 +1832,7 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 {
+  std::lock_guard<std::mutex> lock(g_displayMutex);
   coin_data data = getCoinData(mElapsed);
   refreshPool();
   uiLive = true;
@@ -1813,8 +1848,8 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.fee = data.halfHourFee.toInt();
   m.feeHour = data.feeHour;
   m.feeFast = data.feeFast;
-  m.diff = data.netwrokDifficulty.length() ? data.netwrokDifficulty : String("--");
-  m.net = data.globalHashRate.length() ? data.globalHashRate + " EH/s" : String("--");
+  m.diff = data.netwrokDifficulty.length() ? data.netwrokDifficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("--"));
+  m.net = data.globalHashRate.length() ? data.globalHashRate : String("--");
   m.pct = (int)data.progressPercent;
   m.remaining = data.remainingBlocks.toInt();
   m.eta = data.halvingEta;
@@ -1827,6 +1862,7 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 {
+  std::lock_guard<std::mutex> lock(g_displayMutex);
   clock_data data = getClockData(mElapsed);
   uiLive = true;
   ensureChrome(SCR_CLOCK);
@@ -1848,9 +1884,10 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
   c.date = fmtDate(data.currentDate);
   c.hash = data.currentHashRate;
   c.flash = millis() < shareFlashUntil;
-  c.temp = data.temp.length() ? (data.temp + "°C") : String("--");
+  float tC = data.temp.toFloat();
+  float tF = tC * 1.8f + 32.0f;
+  c.temp = data.temp.length() ? (String((int)roundf(tF)) + " F") : String("--");
   c.uptime = fmtUptimeShort(data.timeMining);
-  int tC = data.temp.toInt();
   bool hot = (data.temp.length() && tC >= 70);
   c.tempCol = hot ? C_WARN : C_TEXT;
   if (WiFi.status() != WL_CONNECTED)
@@ -1882,6 +1919,7 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 {
+  std::lock_guard<std::mutex> lock(g_displayMutex);
   mining_data data = getMiningData(mElapsed);
   uiLive = true;
   ensureChrome(SCR_ARCH);
@@ -1891,15 +1929,8 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
   ArchitectureV av;
   av.hdr = liveHeader(data.currentTime);
   av.netDiffRaw = g_networkDifficulty > 0.0 ? g_networkDifficulty : 1e14;
-  {
-    char b[32];
-    double t = av.netDiffRaw / 1e12;
-    if (t >= 100.0)
-      snprintf(b, sizeof(b), "%.0fT", t);
-    else
-      snprintf(b, sizeof(b), "%.1fT", t);
-    av.netDiff = String(b);
-  }
+  av.netDiff = formatNetworkDifficulty(av.netDiffRaw, true);
+
   av.hashRate = data.currentHashRate;
   av.bestDiff = data.bestDiff;
   // best_diff is the real session/persisted best (updated on improve).
@@ -2065,11 +2096,13 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
 {
   if (!uiLive || uiScreen < 0)
     return;
+  if (!g_displayMutex.try_lock())
+    return;
   drawPulse(frame);
   if (uiScreen == SCR_MINE && fabsf(gaugeTarget - gaugeShown) > 0.002f)
   {
     gaugeShown += (gaugeTarget - gaugeShown) * 0.3f; // ease toward the measured rate
-    gaugeDraw(out(), gaugeShown);
+    gaugeDraw(tft, gaugeShown);
   }
   // Protocol scatter: 5–10 Hz partial redraw from the sample ring.
   if (uiScreen == SCR_ARCH && haveArch && (frame & 1) == 0)
@@ -2077,6 +2110,7 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
     // Refresh hashrate text periodically from lastArch; samples read live.
     paintProtocolPlot(lastArch);
   }
+  g_displayMutex.unlock();
 }
 
 unsigned long previousMillis = 0;
@@ -2230,7 +2264,234 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
 #endif
 }
 
+// ---------------------------------------------------- runtime: screen capture --
+
+bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
+{
+  int w = isPortrait() ? 240 : 320;
+  int h = isPortrait() ? 320 : 240;
+  const int nSlices = 4;
+  int sliceH = h / nSlices; // 80 portrait, 60 landscape (only 19.2 KB!)
+
+  shot.setColorDepth(8);
+  shot.createSprite(w, sliceH);
+  if (!shot.created())
+  {
+    Serial.printf("[ui] shot sprite %dx%d alloc failed (free %u, max %u)\n",
+                  w, sliceH, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    return false;
+  }
+
+  uint8_t bmpHeader[54] = {0};
+  uint32_t fileSize = 1078 + w * h;
+  uint32_t offBits = 1078;
+  uint32_t dibHeaderSize = 40;
+  int32_t width = w;
+  int32_t height = h; // positive height for bottom-up order
+  uint16_t planes = 1;
+  uint16_t bitCount = 8;
+  uint32_t compression = 0; // BI_RGB
+  uint32_t imageSize = w * h;
+
+  // BITMAPFILEHEADER (14 bytes)
+  bmpHeader[0] = 'B';
+  bmpHeader[1] = 'M';
+  bmpHeader[2] = (uint8_t)(fileSize & 0xFF);
+  bmpHeader[3] = (uint8_t)((fileSize >> 8) & 0xFF);
+  bmpHeader[4] = (uint8_t)((fileSize >> 16) & 0xFF);
+  bmpHeader[5] = (uint8_t)((fileSize >> 24) & 0xFF);
+  bmpHeader[10] = (uint8_t)(offBits & 0xFF);
+  bmpHeader[11] = (uint8_t)((offBits >> 8) & 0xFF);
+  bmpHeader[12] = (uint8_t)((offBits >> 16) & 0xFF);
+  bmpHeader[13] = (uint8_t)((offBits >> 24) & 0xFF);
+
+  // BITMAPINFOHEADER (40 bytes)
+  bmpHeader[14] = (uint8_t)(dibHeaderSize & 0xFF);
+  bmpHeader[15] = (uint8_t)((dibHeaderSize >> 8) & 0xFF);
+  bmpHeader[16] = (uint8_t)((dibHeaderSize >> 16) & 0xFF);
+  bmpHeader[17] = (uint8_t)((dibHeaderSize >> 24) & 0xFF);
+
+  bmpHeader[18] = (uint8_t)(width & 0xFF);
+  bmpHeader[19] = (uint8_t)((width >> 8) & 0xFF);
+  bmpHeader[20] = (uint8_t)((width >> 16) & 0xFF);
+  bmpHeader[21] = (uint8_t)((width >> 24) & 0xFF);
+
+  bmpHeader[22] = (uint8_t)(height & 0xFF);
+  bmpHeader[23] = (uint8_t)((height >> 8) & 0xFF);
+  bmpHeader[24] = (uint8_t)((height >> 16) & 0xFF);
+  bmpHeader[25] = (uint8_t)((height >> 24) & 0xFF);
+
+  bmpHeader[26] = (uint8_t)(planes & 0xFF);
+  bmpHeader[27] = (uint8_t)((planes >> 8) & 0xFF);
+  bmpHeader[28] = (uint8_t)(bitCount & 0xFF);
+  bmpHeader[29] = (uint8_t)((bitCount >> 8) & 0xFF);
+  bmpHeader[30] = (uint8_t)(compression & 0xFF);
+  bmpHeader[34] = (uint8_t)(imageSize & 0xFF);
+  bmpHeader[35] = (uint8_t)((imageSize >> 8) & 0xFF);
+  bmpHeader[36] = (uint8_t)((imageSize >> 16) & 0xFF);
+  bmpHeader[37] = (uint8_t)((imageSize >> 24) & 0xFF);
+  bmpHeader[46] = 0x00;
+  bmpHeader[47] = 0x01; // 256 colors
+
+  client.write(bmpHeader, sizeof(bmpHeader));
+
+  uint8_t palette[1024];
+  for (int i = 0; i < 256; i++)
+  {
+    uint8_t r = (i >> 5) & 7;
+    uint8_t g = (i >> 2) & 7;
+    uint8_t b = i & 3;
+    palette[i * 4 + 0] = (uint8_t)(b * 255 / 3);
+    palette[i * 4 + 1] = (uint8_t)(g * 255 / 7);
+    palette[i * 4 + 2] = (uint8_t)(r * 255 / 7);
+    palette[i * 4 + 3] = 0;
+  }
+  client.write(palette, sizeof(palette));
+
+  int targetScr = (screenIdx >= 0 && screenIdx <= 3)
+                      ? screenIdx
+                      : (currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0);
+  if (targetScr < 0 || targetScr > 3)
+    targetScr = 0;
+  g_shotTargetScr = targetScr;
+
+  auto renderSlice = [&](int yOff) {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    g_shotYOffset = yOff;
+    shotOn = true;
+    shot.fillSprite(C_BG);
+    ensureChrome(targetScr);
+    if (targetScr == SCR_MINE)
+    {
+      if (haveMine)
+      {
+        paintMine(lastMine);
+      }
+      else
+      {
+        MineV m;
+        m.hdr = liveHeader(getTime());
+        m.hash = getCurrentHashRate(0);
+        m.shares = commas(String(shares));
+        char bestBuf[16];
+        suffix_string(best_diff, bestBuf, 16, 0);
+        m.best = String(bestBuf);
+        m.tmpl = commas(String(templates));
+        m.blocks = String(valids);
+        m.total = String(Mhashes);
+        m.kh = m.hash.toFloat();
+        m.flash = false;
+        m.strip.v[0] = String(pData.workersCount);
+        m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
+        m.strip.v[1] = fmtUptimeShort(String((unsigned long)upTime));
+        m.strip.l[1] = "uptime";
+        m.strip.v[2] = String(valids);
+        m.strip.l[2] = valids == 1 ? "block" : "blocks";
+        paintMine(m);
+      }
+      gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);
+    }
+    else if (targetScr == SCR_MARKET)
+    {
+      if (haveMarket)
+      {
+        paintMarket(lastMarket);
+      }
+      else
+      {
+        MarketV m;
+        m.hdr = liveHeader(getTime());
+        m.price = fmtPrice(String(bitcoin_price));
+        m.height = current_block.toInt();
+        m.block = commas(current_block);
+        m.age = blockAgeMin();
+        m.fee = gData.halfHourFee;
+        m.feeHour = gData.feeHour;
+        m.feeFast = gData.feeFast;
+        m.diff = gData.difficulty.length() ? gData.difficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("--"));
+        m.net = gData.globalHash.length() ? gData.globalHash : String("--");
+        unsigned long cb = current_block.toInt();
+        unsigned long rem = cb ? (((cb / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - cb : 0;
+        m.pct = (int)((HALVING_BLOCKS - rem) * 100 / HALVING_BLOCKS);
+        m.remaining = rem;
+        m.eta = halvingEtaStr(rem);
+        paintMarket(m);
+      }
+    }
+    else if (targetScr == SCR_CLOCK)
+    {
+      if (haveClock)
+      {
+        paintClock(lastClock);
+      }
+      else
+      {
+        ClockV c;
+        String t = getTime();
+        c.hdr = liveHeader(t);
+        int colon = t.indexOf(':');
+        c.hh = colon > 0 ? t.substring(0, colon) : String("--");
+        c.mm = colon > 0 ? t.substring(colon + 1) : String("--");
+        c.colon = true;
+        c.date = fmtDate(getDate());
+        c.hash = getCurrentHashRate(0);
+        float tC = temperatureRead();
+        float tF = tC * 1.8f + 32.0f;
+        c.temp = String((int)roundf(tF)) + " F";
+        c.uptime = fmtUptimeShort(String((unsigned long)upTime));
+        c.link = (WiFi.status() == WL_CONNECTED) ? "ONLINE" : "OFFLINE";
+        c.linkCol = (WiFi.status() == WL_CONNECTED) ? C_GOOD : C_BAD;
+        c.tempCol = C_TEXT;
+        c.flash = false;
+        paintClock(c);
+      }
+    }
+    else if (targetScr == SCR_ARCH)
+    {
+      if (haveArch)
+      {
+        paintArchitecture(lastArch);
+      }
+      else
+      {
+        ArchitectureV a;
+        a.hdr = liveHeader(getTime());
+        a.netDiff = gData.difficulty.length() ? gData.difficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("133T"));
+        a.netDiffRaw = g_networkDifficulty;
+        char bestBuf[16];
+        suffix_string(best_diff, bestBuf, 16, 0);
+        a.bestDiff = String(bestBuf);
+        a.bestDiffRaw = best_diff;
+        a.hashRate = getCurrentHashRate(0);
+        paintArchitecture(a);
+      }
+    }
+    shotOn = false;
+  };
+
+  // Stream slices bottom-up for BMP
+  for (int s = nSlices - 1; s >= 0; s--)
+  {
+    renderSlice(s * sliceH);
+    const uint8_t *pixels = (const uint8_t *)shot.getPointer();
+    for (int y = sliceH - 1; y >= 0; y--)
+    {
+      client.write(pixels + y * w, w);
+      if ((y & 15) == 0)
+      {
+        vTaskDelay(1); // yield to Wi-Fi / lwIP task
+      }
+    }
+    vTaskDelay(2);
+  }
+
+  shot.deleteSprite();
+  g_shotYOffset = 0;
+  return true;
+}
+
 // ----------------------------------------------------- dev: screenshot dump --
+
 
 #ifdef CYD_UI_SCREENSHOT
 static void dumpShot(const char *name)
@@ -2334,7 +2595,7 @@ void cydDumpScreens(void)
     c.date = fmtDate("12/10/2026");
     c.hash = "951.4";
     c.flash = false;
-    c.temp = "51°C";
+    c.temp = "124 F";
     c.uptime = "1d";
     c.link = "ONLINE";
     c.linkCol = C_GOOD;
