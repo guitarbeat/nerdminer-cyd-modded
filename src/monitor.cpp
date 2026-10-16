@@ -22,8 +22,8 @@ extern uint32_t totalKHashes;
 extern uint32_t elapsedKHs;
 extern uint64_t upTime;
 
-extern uint32_t shares; // increase if blockhash has 32 bits of zeroes
-extern uint32_t valids; // increased if blockhash <= targethalfshares
+extern volatile uint32_t shares; // increase if blockhash has 32 bits of zeroes
+extern volatile uint32_t valids; // increased if blockhash <= targethalfshares
 
 extern double best_diff; // track best diff
 
@@ -119,20 +119,43 @@ void updateGlobalData(void){
             
             StaticJsonDocument<1024> doc;
             deserializeJson(doc, payload);
-            String temp = "";
-            if (doc.containsKey("currentHashrate")) temp = String(doc["currentHashrate"].as<float>());
-            if(temp.length()>18 + 3) //Exahashes more than 18 digits + 3 digits decimals
-              gData.globalHash = temp.substring(0,temp.length()-18 - 3);
-            if (doc.containsKey("currentDifficulty")) temp = String(doc["currentDifficulty"].as<float>());
-            if(temp.length()>10 + 3){ //Terahash more than 10 digits + 3 digit decimals
-              temp = temp.substring(0,temp.length()-10 - 3);
-              gData.difficulty = temp.substring(0,temp.length()-2) + "." + temp.substring(temp.length()-2,temp.length()) + "T";
+            double hr = 0.0;
+            if (doc.containsKey("currentHashrate"))
+              hr = doc["currentHashrate"].as<double>();
+
+            if (hr > 0.0)
+              gData.globalHash = formatNetworkHashrate(hr, true);
+            else if (g_networkDifficulty > 0.0)
+            {
+              double derivedHr = g_networkDifficulty * 4294967296.0 / (double)getActiveCoinProfile().targetBlockTimeSec;
+              gData.globalHash = formatNetworkHashrate(derivedHr, true);
             }
+
+            double diff = 0.0;
+            if (doc.containsKey("currentDifficulty"))
+              diff = doc["currentDifficulty"].as<double>();
+
+            if (diff > 0.0)
+              gData.difficulty = formatNetworkDifficulty(diff, true);
+            else if (g_networkDifficulty > 0.0)
+              gData.difficulty = formatNetworkDifficulty(g_networkDifficulty, true);
+
             doc.clear();
+
 
             mGlobalUpdate = millis();
         }
         http.end();
+
+        if (gData.difficulty.length() == 0 && g_networkDifficulty > 0.0)
+        {
+          gData.difficulty = formatNetworkDifficulty(g_networkDifficulty, true);
+        }
+        if (gData.globalHash.length() == 0 && g_networkDifficulty > 0.0)
+        {
+          double derivedHr = g_networkDifficulty * 4294967296.0 / (double)getActiveCoinProfile().targetBlockTimeSec;
+          gData.globalHash = formatNetworkHashrate(derivedHr, true);
+        }
 
       
         //Make third API call to get fees
@@ -351,20 +374,16 @@ bool getUtcTime(time_t &utc, bool sync){
 }
 
 String getDate(){
-  
-  unsigned long elapsedTime = (millis() - mTriggerUpdate) / 1000; // Tiempo transcurrido en segundos
-  unsigned long currentTime = initialTime + elapsedTime; // La hora actual
+  unsigned long elapsedTime = (millis() - mTriggerUpdate) / 1000;
+  unsigned long currentTime = initialTime + elapsedTime;
 
-  // Convierte la hora actual (epoch time) en una estructura tm
-  struct tm *tm = localtime((time_t *)&currentTime);
-
-  int year = tm->tm_year + 1900; // tm_year es el número de años desde 1900
-  int month = tm->tm_mon + 1;    // tm_mon es el mes del año desde 0 (enero) hasta 11 (diciembre)
-  int day = tm->tm_mday;         // tm_mday es el día del mes
+  struct tm tmv;
+  time_t ct = (time_t)currentTime;
+  if (ct < 100000 || localtime_r(&ct, &tmv) == nullptr)
+    return String("--/--/----");
 
   char currentDate[20];
-  sprintf(currentDate, "%02d/%02d/%04d", tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900);
-
+  snprintf(currentDate, sizeof(currentDate), "%02d/%02d/%04d", tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_year + 1900);
   return String(currentDate);
 }
 

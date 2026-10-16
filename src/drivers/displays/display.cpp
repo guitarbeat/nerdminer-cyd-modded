@@ -1,4 +1,5 @@
 #include "display.h"
+#include <WiFi.h>
 
 #ifdef NO_DISPLAY
 DisplayDriver *currentDisplayDriver = &noDisplayDriver;
@@ -288,4 +289,17 @@ void setDisplayScreen(int idx)
 int getDisplayScreen()
 {
   return currentDisplayDriver ? currentDisplayDriver->current_cyclic_screen : 0;
+}
+
+#if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx);
+#endif
+
+bool captureDisplayBmp(WiFiClient &client, int screenIdx)
+{
+#if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
+  return esp32_2432S028R_CaptureBmp(client, screenIdx);
+#else
+  return false;
+#endif
 }

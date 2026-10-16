@@ -21,6 +21,9 @@ void setDisplayScreen(int idx);
 int getDisplayScreen();
 void setDisplayInvert(bool inv);
 
+class WiFiClient;
+bool captureDisplayBmp(WiFiClient &client, int screenIdx = -1);
+
 // Backlight control on the boards whose backlight is LEDC channel 0 and set
 // from the LAN settings page; a no-op on the rest.
 //  - Screen timeout: off after Settings.ScreenTimeout minutes without a touch

@@ -209,6 +209,25 @@ static void handleSetScreen()
   webCfgServer.send(200, "application/json", json);
 }
 
+static void handleScreenshot()
+{
+  int screenIdx = -1;
+  if (webCfgServer.hasArg("screen"))
+    screenIdx = webCfgServer.arg("screen").toInt();
+
+  webCfgServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  webCfgServer.sendHeader("Pragma", "no-cache");
+  webCfgServer.sendHeader("Expires", "0");
+  webCfgServer.setContentLength(77878);
+  webCfgServer.send(200, "image/bmp", "");
+
+  WiFiClient client = webCfgServer.client();
+  if (!captureDisplayBmp(client, screenIdx))
+  {
+    client.stop();
+  }
+}
+
 static void handleRestart()
 {
   webCfgServer.send(200, "application/json", "{\"status\":\"restarting\"}");
@@ -663,6 +682,7 @@ static void handleRoot()
   String cleanWallet = getCleanWallet(fullWallet);
   String worker = getWorkerName(fullWallet);
   bool isPublicPool = Settings.PoolAddress.indexOf("public-pool") >= 0;
+  const CoinProfile &coin = getActiveCoinProfile();
 
   String page;
   page.reserve(24000);
@@ -757,9 +777,9 @@ static void handleRoot()
             "</div>"
             "<!-- 2. Payout Address & Worker -->"
             "<div class='cfg-p'>"
-            "If this miner finds a winning Bitcoin block, have the pool deposit the entire 3.125 BTC block reward directly into my on-chain Bitcoin address:"
-            "<br>"
-            "<input type='text' name='wallet' id='f-wallet' class='blank-input' style='width:100%;max-width:440px;margin-top:6px;' value='");
+            "Your <strong>");
+  page += String(coin.name) + " (" + String(coin.ticker) + ")</strong> payout address (if this miner solves a block, the pool deposits the block reward directly to this on-chain address):<br>";
+  page += "<input type='text' name='wallet' id='f-wallet' class='blank-input' style='width:100%;max-width:440px;margin-top:6px;' placeholder='Your " + String(coin.ticker) + " address' value='";
   page += htmlEscape(String(Settings.BtcWallet));
   page += F("' required>"
             "<span class='cfg-help'>💡 <strong>Worker naming:</strong> To give your miner a friendly nickname on the pool dashboard, append <code>.worker_name</code> directly to your address (e.g. <code>");
@@ -870,7 +890,7 @@ static void handleRoot()
             "<option value='9'>UTC+9 (Japan, Korea)</option>"
             "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
             "</select> (UTC offset <input type='number' name='tz' id='f-tz' class='blank-input' style='width:52px' min='-12' max='14' value='");
-  page += String(Settings.Timezone) + F("'>) and quote live Bitcoin market prices in <select name='currency' class='blank-select'>");
+  page += String(Settings.Timezone) + F("'>) and quote live ") + String(coin.name) + F(" market prices in <select name='currency' class='blank-select'>");
   for (int i = 0; i < kCurrencyCount; i++)
   {
     page += "<option value='" + String(kCurrencies[i].code) + "'";
@@ -1295,6 +1315,7 @@ static void handleStatus()
   doc["state"] = mMonitor.NerdStatus == NM_hashing ? "mining" : mMonitor.NerdStatus == NM_Connecting ? "connecting" : "starting";
   doc["hashrate_khs"] = round(m.hashrateKHs * 10.0) / 10.0;
   doc["hashrate_avg_khs"] = round(m.avgHashrateKHs * 10.0) / 10.0;
+  doc["hw_loop"] = m.hwLoop ? m.hwLoop : "default";
   doc["total_mhashes"] = Mhashes + hashes / 1000000;
   doc["mining_time_s"] = (uint32_t)upTime;
   doc["templates"] = templates;
@@ -1356,6 +1377,7 @@ void setup_webConfig(void)
   webCfgServer.on("/api/invert", HTTP_POST, handleSetInvert);
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
+  webCfgServer.on("/api/screenshot", HTTP_GET, handleScreenshot);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
   webCfgServer.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   webCfgServer.onNotFound([]()

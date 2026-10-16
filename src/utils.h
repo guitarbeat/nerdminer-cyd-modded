@@ -29,6 +29,15 @@ uint32_t crc32_reset();
 uint32_t crc32_add(uint32_t crc32, const void* data, size_t size);
 uint32_t crc32_finish(uint32_t crc32);
 
+struct ScaledMagnitude {
+  double value;
+  const char *unit;
+  String str;
+};
 
+ScaledMagnitude scaleNetworkHashrate(double hashrate, int maxDecimals = -1);
+ScaledMagnitude scaleNetworkDifficulty(double difficulty, int maxDecimals = -1);
+String formatNetworkHashrate(double hashrate, bool includeUnit = true, int maxDecimals = -1);
+String formatNetworkDifficulty(double difficulty, bool includeUnit = true, int maxDecimals = -1);
 
 #endif // UTILS_API_H

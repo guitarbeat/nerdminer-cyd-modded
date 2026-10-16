@@ -606,3 +606,134 @@ uint32_t crc32_finish(uint32_t crc32)
     return crc32 ^ 0xFFFFFFFF;
 }
 
+ScaledMagnitude scaleNetworkHashrate(double hashrate, int maxDecimals)
+{
+  ScaledMagnitude res;
+  if (isnan(hashrate) || hashrate <= 0.0)
+  {
+    res.value = 0.0;
+    res.unit = "H/s";
+    res.str = "--";
+    return res;
+  }
+
+  const double divisor[] = {1e24, 1e21, 1e18, 1e15, 1e12, 1e9, 1e6, 1e3, 1.0};
+  const char *units[]    = {"YH/s", "ZH/s", "EH/s", "PH/s", "TH/s", "GH/s", "MH/s", "KH/s", "H/s"};
+  const int count = sizeof(divisor) / sizeof(divisor[0]);
+
+  int idx = count - 1;
+  for (int i = 0; i < count; i++)
+  {
+    if (hashrate >= divisor[i] * 0.9999)
+    {
+      idx = i;
+      break;
+    }
+  }
+
+  res.value = hashrate / divisor[idx];
+  res.unit = units[idx];
+
+  char numBuf[32];
+  if (maxDecimals >= 0)
+  {
+    snprintf(numBuf, sizeof(numBuf), "%.*f", maxDecimals, res.value);
+  }
+  else
+  {
+    if (res.value >= 100.0)
+      snprintf(numBuf, sizeof(numBuf), "%.1f", res.value);
+    else
+      snprintf(numBuf, sizeof(numBuf), "%.2f", res.value);
+  }
+  res.str = String(numBuf) + " " + res.unit;
+  return res;
+}
+
+ScaledMagnitude scaleNetworkDifficulty(double difficulty, int maxDecimals)
+{
+  ScaledMagnitude res;
+  if (isnan(difficulty) || difficulty <= 0.0)
+  {
+    res.value = 0.0;
+    res.unit = "";
+    res.str = "--";
+    return res;
+  }
+
+  const double divisor[] = {1e18, 1e15, 1e12, 1e9, 1e6, 1e3, 1.0};
+  const char *units[]    = {"E", "P", "T", "G", "M", "K", ""};
+  const int count = sizeof(divisor) / sizeof(divisor[0]);
+
+  int idx = count - 1;
+  for (int i = 0; i < count; i++)
+  {
+    if (difficulty >= divisor[i] * 0.9999)
+    {
+      idx = i;
+      break;
+    }
+  }
+
+  res.value = difficulty / divisor[idx];
+  res.unit = units[idx];
+
+  char numBuf[32];
+  if (maxDecimals >= 0)
+  {
+    snprintf(numBuf, sizeof(numBuf), "%.*f", maxDecimals, res.value);
+  }
+  else
+  {
+    if (res.value >= 100.0)
+      snprintf(numBuf, sizeof(numBuf), "%.1f", res.value);
+    else
+      snprintf(numBuf, sizeof(numBuf), "%.2f", res.value);
+  }
+  res.str = String(numBuf) + res.unit;
+  return res;
+}
+
+String formatNetworkHashrate(double hashrate, bool includeUnit, int maxDecimals)
+{
+  ScaledMagnitude m = scaleNetworkHashrate(hashrate, maxDecimals);
+  if (m.str == "--") return m.str;
+  if (!includeUnit)
+  {
+    char numBuf[32];
+    if (maxDecimals >= 0)
+      snprintf(numBuf, sizeof(numBuf), "%.*f", maxDecimals, m.value);
+    else
+    {
+      if (m.value >= 100.0)
+        snprintf(numBuf, sizeof(numBuf), "%.1f", m.value);
+      else
+        snprintf(numBuf, sizeof(numBuf), "%.2f", m.value);
+    }
+    return String(numBuf);
+  }
+  return m.str;
+}
+
+String formatNetworkDifficulty(double difficulty, bool includeUnit, int maxDecimals)
+{
+  ScaledMagnitude m = scaleNetworkDifficulty(difficulty, maxDecimals);
+  if (m.str == "--") return m.str;
+  if (!includeUnit)
+  {
+    char numBuf[32];
+    if (maxDecimals >= 0)
+      snprintf(numBuf, sizeof(numBuf), "%.*f", maxDecimals, m.value);
+    else
+    {
+      if (m.value >= 100.0)
+        snprintf(numBuf, sizeof(numBuf), "%.1f", m.value);
+      else
+        snprintf(numBuf, sizeof(numBuf), "%.2f", m.value);
+    }
+    return String(numBuf);
+  }
+  return m.str;
+}
+
+

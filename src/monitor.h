@@ -174,8 +174,24 @@ bool getUtcTime(time_t &utc, bool sync = false);
 
 void requestCurrencyChange(const char *code);
 String currencySetting(void);
+pool_data getPoolData(void);
 void poolSettingsChanged(void);
 void applyPendingSettings(void);
+
+String getTime(void);
+String getDate(void);
+String getCurrentHashRate(unsigned long mElapsed);
+
+extern unsigned int bitcoin_price;
+extern String current_block;
+extern global_data gData;
+extern pool_data pData;
+extern double best_diff;
+extern volatile uint32_t shares;
+extern volatile uint32_t valids;
+extern uint32_t templates;
+extern uint32_t Mhashes;
+extern uint64_t upTime;
 
 #endif //MONITOR_API_H
 

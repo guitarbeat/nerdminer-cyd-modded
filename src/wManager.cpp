@@ -227,7 +227,9 @@ void init_WifiManager()
     //WiFiManagerParameter password_text_box("Poolpassword", "Pool password (Optional)", Settings.PoolPassword, 80);
 
     // Text box (String) - 80 characters maximum
-    WiFiManagerParameter addr_text_box("btcAddress", "Your BTC address", Settings.BtcWallet, 80);
+    const CoinProfile &coin = getActiveCoinProfile();
+    String walletLabel = "Your " + String(coin.ticker) + " address";
+    WiFiManagerParameter addr_text_box("btcAddress", walletLabel.c_str(), Settings.BtcWallet, 80);
 
   // Text box (Number) - 2 characters maximum
   char charZone[6];

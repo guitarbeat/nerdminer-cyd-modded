@@ -16,6 +16,11 @@ struct CoinProfile
   uint32_t halvingInterval;
   float initialSubsidy;
   uint16_t targetBlockTimeSec;
+
+  const char *defaultPoolUrl;
+  uint16_t defaultPoolPort;
+  const char *defaultExplorerHost;
+  const char *addressFormatHelp;
 };
 
 const CoinProfile &getActiveCoinProfile(void);

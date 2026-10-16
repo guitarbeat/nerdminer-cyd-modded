@@ -4,391 +4,589 @@
 #include <Arduino.h>
 
 static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
-.cyd-preview-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r,6px);padding:0;margin-bottom:18px;overflow:hidden}
-.cyd-preview-hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--card-border);flex-wrap:wrap;gap:8px}
-.cyd-preview-title{font-size:11px;font-weight:800;display:flex;align-items:center;gap:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
-.cyd-hdr-right{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
-.cyd-follow{display:flex;align-items:center;gap:5px;cursor:pointer}
-.cyd-follow input{accent-color:var(--amber)}
-.cyd-badge{background:rgba(34,197,94,0.1);color:#22c55e;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.8px;border:1px solid rgba(34,197,94,0.3);font-family:ui-monospace,Menlo,monospace}
-.cyd-bezel{background:radial-gradient(ellipse at top,#121823 0%,var(--card-2,#0c1017) 70%);padding:16px 14px 14px;display:flex;flex-direction:column;align-items:center;position:relative}
-.cyd-bezel-lbl{font-size:9px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;font-weight:700;font-family:ui-monospace,Menlo,monospace;text-align:center}
-#cyd-canvas{width:100%;max-width:260px;height:auto;aspect-ratio:3/4;background:#000;border:6px solid #1a1f29;border-radius:8px;image-rendering:pixelated;box-shadow:0 0 0 1px #2a3240,0 10px 28px rgba(0,0,0,0.55);transition:max-width .2s,aspect-ratio .2s}
-#cyd-canvas.landscape{max-width:420px;aspect-ratio:4/3}
-.cyd-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:14px;width:100%;max-width:420px;border:1px solid var(--card-border);border-radius:var(--r,6px);overflow:hidden}
-.cyd-tab-btn{background:var(--input-bg);border:none;border-left:1px solid var(--card-border);color:var(--muted);padding:8px 4px;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap}
-.cyd-tab-btn:first-child{border-left:none}
-.cyd-tab-btn:hover{color:var(--text)}
-.cyd-tab-btn.active{background:rgba(247,147,26,0.12);color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber)}
-.cyd-live-dot{width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 6px #22c55e;flex-shrink:0}
-.cyd-ctrls{display:flex;gap:6px;margin-top:10px;justify-content:center;align-items:center;width:100%;max-width:420px;flex-wrap:wrap}
-.cyd-btn-switch{flex:1 1 160px;background:var(--amber);color:#000;border:none;border-radius:var(--r,6px);padding:8px 12px;font-size:12px;font-weight:800;cursor:pointer;transition:opacity .15s}
-.cyd-btn-switch:hover{opacity:.9}
-.cyd-btn-nav{background:var(--input-bg);border:1px solid var(--card-border);color:var(--text);border-radius:var(--r,6px);padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s}
-.cyd-btn-nav:hover{border-color:var(--amber)}
+:root{
+  --cyd-accent:#f7931a;
+  --cyd-accent-glow:rgba(247,147,26,0.18);
+  --cyd-card-bg:#0d1117;
+  --cyd-bezel-bg:radial-gradient(ellipse at 50% -10%,#18202d 0%,#090d13 75%);
+  --cyd-border:#1f2937;
+  --cyd-border-highlight:#2e3c4e;
+  --cyd-text:#f0f6fc;
+  --cyd-muted:#8b949e;
+  --cyd-green:#22c55e;
+  --cyd-amber:#f59e0b;
+  --cyd-red:#ef4444;
+  --cyd-mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --cyd-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  color-scheme:dark;
+  accent-color:var(--cyd-accent);
+}
+.cyd-preview-card{
+  background:var(--cyd-card-bg);
+  border:1px solid var(--cyd-border);
+  border-radius:10px;
+  margin-bottom:20px;
+  overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.03);
+}
+.cyd-preview-hdr{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:12px 16px;
+  background:#090d14;
+  border-bottom:1px solid var(--cyd-border);
+  flex-wrap:wrap;
+  gap:10px;
+}
+.cyd-title-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.cyd-title-icon{
+  width:18px;
+  height:18px;
+  color:var(--cyd-accent);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.cyd-preview-title{
+  font-family:var(--cyd-sans);
+  font-size:12px;
+  font-weight:800;
+  color:var(--cyd-text);
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.cyd-title-tag{
+  font-family:var(--cyd-mono);
+  font-size:9px;
+  font-weight:700;
+  color:var(--cyd-accent);
+  background:var(--cyd-accent-glow);
+  border:1px solid rgba(247,147,26,0.3);
+  padding:1px 6px;
+  border-radius:4px;
+  letter-spacing:1px;
+}
+.cyd-hdr-right{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  font-size:12px;
+  color:var(--cyd-muted);
+  flex-wrap:wrap;
+}
+.cyd-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer;
+  user-select:none;
+  font-size:12px;
+  font-weight:600;
+  color:var(--cyd-muted);
+  transition:color .15s;
+}
+.cyd-toggle:hover{color:var(--cyd-text);}
+.cyd-toggle input[type=checkbox]{
+  accent-color:var(--cyd-accent);
+  width:14px;
+  height:14px;
+  cursor:pointer;
+}
+.cyd-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:rgba(34,197,94,0.08);
+  color:var(--cyd-green);
+  padding:3px 10px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.6px;
+  border:1px solid rgba(34,197,94,0.25);
+  font-family:var(--cyd-mono);
+  box-shadow:0 0 12px rgba(34,197,94,0.1);
+}
+.cyd-pulse-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--cyd-green);
+  display:inline-block;
+  box-shadow:0 0 6px var(--cyd-green);
+  transition:all .2s;
+  flex-shrink:0;
+}
+.cyd-pulse-dot.loading{
+  background:var(--cyd-accent);
+  box-shadow:0 0 8px var(--cyd-accent);
+  animation:cydBlink .8s infinite alternate;
+}
+.cyd-pulse-dot.offline{
+  background:var(--cyd-red);
+  box-shadow:0 0 8px var(--cyd-red);
+}
+@keyframes cydBlink{
+  from{opacity:.35;transform:scale(.85);}
+  to{opacity:1;transform:scale(1.15);}
+}
+.cyd-bezel{
+  background:var(--cyd-bezel-bg);
+  padding:18px 16px 16px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  position:relative;
+}
+.cyd-bezel-lbl{
+  font-size:10px;
+  letter-spacing:1.5px;
+  color:var(--cyd-muted);
+  text-transform:uppercase;
+  margin-bottom:12px;
+  font-weight:700;
+  font-family:var(--cyd-mono);
+  text-align:center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.cyd-lbl-tag{
+  background:#141b24;
+  border:1px solid var(--cyd-border);
+  color:var(--cyd-text);
+  padding:1px 6px;
+  border-radius:4px;
+}
+.cyd-screen-frame{
+  width:100%;
+  max-width:252px;
+  aspect-ratio:3/4;
+  margin:0 auto;
+  position:relative;
+  background:#000;
+  border:5px solid #141923;
+  border-radius:8px;
+  overflow:hidden;
+  box-shadow:0 0 0 1px #222b38,0 12px 32px rgba(0,0,0,0.65);
+  transition:max-width .25s ease,aspect-ratio .25s ease;
+}
+.cyd-screen-frame.landscape{
+  max-width:380px;
+  aspect-ratio:4/3;
+}
+#cyd-screen-img{
+  width:100%;
+  height:100%;
+  object-fit:fill;
+  display:block;
+  image-rendering:-webkit-optimize-contrast;
+  image-rendering:-moz-crisp-edges;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+}
+.cyd-screen-glare{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:28%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.04) 0%,rgba(255,255,255,0) 100%);
+  pointer-events:none;
+}
+.cyd-tabs{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:0;
+  margin-top:16px;
+  width:100%;
+  max-width:440px;
+  border:1px solid var(--cyd-border);
+  border-radius:6px;
+  overflow:hidden;
+  background:#090d14;
+}
+.cyd-tab-btn{
+  background:transparent;
+  border:none;
+  border-left:1px solid var(--cyd-border);
+  color:var(--cyd-muted);
+  padding:9px 4px;
+  font-family:var(--cyd-mono);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.5px;
+  cursor:pointer;
+  transition:all .15s ease;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  white-space:nowrap;
+}
+.cyd-tab-btn:first-child{border-left:none;}
+.cyd-tab-btn:hover{
+  color:var(--cyd-text);
+  background:rgba(255,255,255,0.03);
+}
+.cyd-tab-btn.active{
+  background:var(--cyd-accent-glow);
+  color:var(--cyd-accent);
+  box-shadow:inset 0 -2px 0 var(--cyd-accent);
+}
+.cyd-live-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:var(--cyd-green);
+  display:inline-block;
+  box-shadow:0 0 6px var(--cyd-green);
+  flex-shrink:0;
+}
+.cyd-ctrls{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+  justify-content:center;
+  align-items:center;
+  width:100%;
+  max-width:440px;
+  flex-wrap:wrap;
+}
+.cyd-btn-switch{
+  flex:2 1 180px;
+  background:var(--cyd-accent);
+  color:#000;
+  border:none;
+  border-radius:6px;
+  padding:9px 14px;
+  font-family:var(--cyd-sans);
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  letter-spacing:.5px;
+  transition:transform .1s ease,opacity .15s ease;
+}
+.cyd-btn-switch:hover{opacity:.92;transform:translateY(-1px);}
+.cyd-btn-switch:active{transform:translateY(0);}
+.cyd-btn-switch:disabled{opacity:.5;cursor:not-allowed;}
+.cyd-btn-nav{
+  flex:1 1 65px;
+  background:#10151f;
+  border:1px solid var(--cyd-border);
+  color:var(--cyd-text);
+  border-radius:6px;
+  padding:9px 12px;
+  font-family:var(--cyd-sans);
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:border-color .15s ease,background .15s ease;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+.cyd-btn-nav:hover{
+  border-color:var(--cyd-accent);
+  background:#161d2b;
+}
+.cyd-btn-snap{
+  font-family:var(--cyd-mono);
+  font-size:11px;
+}
+@media(max-width:480px){
+  .cyd-preview-hdr{padding:10px 12px;}
+  .cyd-bezel{padding:14px 10px 12px;}
+  .cyd-tab-btn{font-size:10px;padding:8px 2px;letter-spacing:0;}
+  .cyd-ctrls{gap:6px;}
+  .cyd-btn-switch{flex:1 1 100%;order:1;}
+  .cyd-btn-nav{order:2;flex:1 1 28%;padding:8px 6px;font-size:11px;}
+}
 )rawcss";
 
 static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
 <div class='cyd-preview-card'>
-<div class='cyd-preview-hdr'>
-<div class='cyd-preview-title'><span>Screen Twin</span></div>
-<div class='cyd-hdr-right'>
-<label class='cyd-follow'><input type='checkbox' id='cyd-auto-follow' checked> Follow device</label>
-<span id='cyd-device-badge' class='cyd-badge'>Device: SCR 0 (MINE)</span>
-</div></div>
-<div class='cyd-bezel'>
-<div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT (PORTRAIT)</div>
-<canvas id='cyd-canvas' width='240' height='320'></canvas>
-<div class='cyd-tabs'>
-<button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'><span class='cyd-live-dot'></span>0 MINE</button>
-<button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>1 MARKET</button>
-<button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
-<button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 PROTOCOL</button>
+  <div class='cyd-preview-hdr'>
+    <div class='cyd-title-wrap'>
+      <div class='cyd-preview-title'>
+        <span class='cyd-title-icon'>&#9632;</span>
+        <span>Screen Twin</span>
+      </div>
+      <span class='cyd-title-tag'>HARDWARE SCREENSHOT</span>
+    </div>
+    <div class='cyd-hdr-right'>
+      <label class='cyd-toggle' title='Sync twin tab automatically when device switches screens'>
+        <input type='checkbox' id='cyd-auto-follow' checked onchange='cydToggleFollow()'> Follow Device
+      </label>
+      <label class='cyd-toggle' title='Toggle automatic periodic refresh'>
+        <input type='checkbox' id='cyd-auto-refresh' onchange='cydToggleAutoRefresh(this)'> Auto-Refresh
+      </label>
+      <span id='cyd-device-badge' class='cyd-badge'>
+        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>
+        Device: SCR 0 (MINE)
+      </span>
+    </div>
+  </div>
+  <div class='cyd-bezel'>
+    <div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>
+      ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT <span class='cyd-lbl-tag'>PORTRAIT</span>
+    </div>
+    <div class='cyd-screen-frame' id='cyd-screen-frame'>
+      <img id='cyd-screen-img'
+           src='/api/screenshot'
+           fetchpriority='high'
+           alt='Live CYD Screen'
+           width='240'
+           height='320'>
+      <div class='cyd-screen-glare'></div>
+    </div>
+    <div class='cyd-tabs' role='tablist'>
+      <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'>
+        <span class='cyd-live-dot' title='Active on hardware'></span>0 MINE
+      </button>
+      <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>1 MARKET</button>
+      <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>2 CLOCK</button>
+      <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>3 PROTOCOL/ARCH</button>
+    </div>
+    <div class='cyd-ctrls'>
+      <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous Screen'>&larr; Prev</button>
+      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Switch Device to Screen 0</button>
+      <button type='button' class='cyd-btn-nav' onclick='cydNextScreen()' title='Next Screen'>Next &rarr;</button>
+      <button type='button' class='cyd-btn-nav cyd-btn-snap' id='cyd-snap-btn' onclick='cydSnapshot()' title='Force Snapshot Refresh'>&#8635; Snapshot</button>
+      <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Toggle Orientation Preview'>Portrait (240&times;320)</button>
+    </div>
+  </div>
 </div>
-<div class='cyd-ctrls'>
-<button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()'>&larr; Prev</button>
-<button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Switch Device to Screen 0</button>
-<button type='button' class='cyd-btn-nav' onclick='cydNextScreen()'>Next &rarr;</button>
-<button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()'>Portrait</button>
-</div>
-</div></div>
 )rawhtml";
 
 static const char CYD_TWIN_JS[] PROGMEM = R"rawjs(
-let cydPreviewScr=0,cydDevScr=0,cydLastStats=null,cydAutoFollow=true,cydIsPortrait=true;
-const CYD_PALETTES=[
-{acc:'#f7931a',meter:'#f7931a',track:'#221608',text:'#f0f6fc',dim:'#afb9c8',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#3fb950',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#00ff66',meter:'#00ff66',track:'#002810',text:'#e6ffed',dim:'#78eba0',panel:'#0d1b12',edge:'#1b4329',bg:'#040d07',good:'#00ff66',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#ffaa00',meter:'#ffaa00',track:'#2a1b00',text:'#fff4e5',dim:'#f5be64',panel:'#1a1408',edge:'#3d2b0d',bg:'#0a0702',good:'#3fb950',warn:'#ffaa00',bad:'#f85149',gold:'#ffd700'},
-{acc:'#ff007f',meter:'#00f0ff',track:'#1f0033',text:'#ffffff',dim:'#d7afff',panel:'#150a21',edge:'#381559',bg:'#0a0312',good:'#00f0ff',warn:'#ffbf00',bad:'#ff007f',gold:'#ffd700'},
-{acc:'#58a6ff',meter:'#58a6ff',track:'#091b33',text:'#f0f6fc',dim:'#a0e1ff',panel:'#0d1829',edge:'#1f3b64',bg:'#040914',good:'#58a6ff',warn:'#d29922',bad:'#f85149',gold:'#ffd700'},
-{acc:'#e6edf3',meter:'#e6edf3',track:'#21262d',text:'#f0f6fc',dim:'#c3c3c3',panel:'#161b22',edge:'#30363d',bg:'#0b0e14',good:'#e6edf3',warn:'#d29922',bad:'#f85149',gold:'#ffd700'}
-];
+let cydPreviewScr = 0;
+let cydDevScr = 0;
+let cydLastStats = null;
+let cydAutoFollow = true;
+let cydIsPortrait = true;
+let cydAutoRefresh = false;
+let cydRefreshTimer = null;
+let cydIsLoading = false;
+let cydPendingRefresh = false;
 
-function cydGetPalette(th){const idx=(typeof th==='number'&&th>=0&&th<CYD_PALETTES.length)?th:0;return CYD_PALETTES[idx];}
-function cydToggleOrientation(){const af=document.getElementById('cyd-auto-follow');if(af)af.checked=false;cydAutoFollow=false;cydIsPortrait=!cydIsPortrait;cydRender();}
-function cydSelectTab(idx,isUserClick=true){
-cydPreviewScr=idx;
-if(isUserClick){const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&idx!==cydDevScr)af.checked=false;}
-for(let i=0;i<4;i++){const el=document.getElementById('ctab-'+i);if(el)el.className=(i===idx)?'cyd-tab-btn active':'cyd-tab-btn';}
-const btn=document.getElementById('cyd-switch-btn');if(btn)btn.textContent='Switch Device to Screen '+idx;
-cydRender();
-}
-function cydPrevScreen(){cydSelectTab((cydPreviewScr+3)%4,true);}
-function cydNextScreen(){cydSelectTab((cydPreviewScr+1)%4,true);}
-function cydSwitchPhysical(){
-fetch('/api/screen?id='+cydPreviewScr,{method:'POST'}).then(r=>r.json()).then(data=>{cydDevScr=data.screen;cydUpdateDevBadge();}).catch(()=>{});
-}
-function cydUpdateDevBadge(){
-const b=document.getElementById('cyd-device-badge');const names=['MINE','MARKET','CLOCK','PROTOCOL'];
-if(b)b.textContent='Device: SCR '+cydDevScr+' ('+(names[cydDevScr]||'')+')';
-for(let i=0;i<4;i++){
-const el=document.getElementById('ctab-'+i);
-if(el){
-const dot=el.querySelector('.cyd-live-dot');
-if(i===cydDevScr){if(!dot){const s=document.createElement('span');s.className='cyd-live-dot';el.prepend(s);}}
-else if(dot){dot.remove();}
-}}
-}
-function cydDrawPanel(ctx,p,x,y,w,h,r=6){
-ctx.fillStyle=p.panel;ctx.strokeStyle=p.edge;ctx.lineWidth=1;
-ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();ctx.stroke();
-}
-function cydDrawTile(ctx,p,x,y,w,h,lbl,val,valCol){
-cydDrawPanel(ctx,p,x,y,w,h,4);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText(lbl,x+6,y+13);
-ctx.fillStyle=valCol||p.text;ctx.font='bold 13px sans-serif';ctx.fillText(val,x+6,y+28);
-}
-function cydDrawCoin(ctx,p,cx,cy,r){
-ctx.fillStyle=p.gold;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
-ctx.strokeStyle='#feaa00';ctx.lineWidth=2;ctx.stroke();
-ctx.fillStyle='#994d00';ctx.beginPath();ctx.arc(cx,cy,r-3,0,Math.PI*2);ctx.fill();
-ctx.fillStyle='#fff';ctx.font='bold '+(r+2)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-ctx.fillText('₿',cx,cy+1);ctx.textAlign='left';ctx.textBaseline='alphabetic';
-}
-function cydDrawArrow(ctx,p,x,y,s,col){
-ctx.fillStyle=col||p.acc;ctx.beginPath();ctx.moveTo(x,y-s);ctx.lineTo(x+s*1.2,y);ctx.lineTo(x,y+s);ctx.closePath();ctx.fill();
+const CYD_SCREEN_NAMES = ['MINE', 'MARKET', 'CLOCK', 'PROTOCOL/ARCH'];
+
+function cydGetScreenUrl(screenIdx) {
+  const s = (typeof screenIdx === 'number') ? screenIdx : cydPreviewScr;
+  return '/api/screenshot?screen=' + s + '&t=' + Date.now();
 }
 
-function cydDrawHeaderPortrait(ctx,p,d){
-ctx.fillStyle=p.bg;ctx.fillRect(0,0,240,26);
-const screenNames=['MINE','MARKET','CLOCK','PROTOCOL'];
-const title=screenNames[cydPreviewScr]||'MINE';
-const wordmark=(cydPreviewScr===1||cydPreviewScr===2||cydPreviewScr===3);
-const hideTime=(cydPreviewScr===2);
-ctx.fillStyle=p.text;ctx.font='bold '+(wordmark?11:11)+'px sans-serif';ctx.fillText(title,8,16);
-const tw=ctx.measureText(title).width;
-const isHash=d&&(d.status==='hashing');
-const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
-const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':(wordmark?'IDLE':'SETUP'));
-let sx;
-if(wordmark){ctx.fillStyle=p.dim;ctx.font='bold 11px sans-serif';ctx.fillText('|',tw+10,16);ctx.fillStyle=stCol;ctx.fillText(stTxt,tw+18,16);sx=tw+18+ctx.measureText(stTxt).width+6;}
-else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
-if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
-const dotW=6,dotH=3,gap=2;let startX=hideTime?170:142;if(startX<sx+4)startX=sx+4;
-for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
-if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='13px sans-serif';ctx.textAlign='right';ctx.fillText(tm,236,17);ctx.textAlign='left';}
-ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(6,26);ctx.lineTo(234,26);ctx.stroke();
+function cydFetchScreenshot(force) {
+  if (cydIsLoading && !force) {
+    cydPendingRefresh = true;
+    return;
+  }
+  const img = document.getElementById('cyd-screen-img');
+  if (!img) return;
+
+  cydIsLoading = true;
+  const pulse = document.getElementById('cyd-live-pulse');
+  if (pulse) pulse.classList.add('loading');
+
+  const next = new Image();
+  const targetUrl = cydGetScreenUrl(cydPreviewScr);
+
+  next.onload = function() {
+    img.src = next.src;
+    cydIsLoading = false;
+    if (pulse) {
+      pulse.classList.remove('loading');
+      pulse.classList.remove('offline');
+    }
+    if (cydPendingRefresh) {
+      cydPendingRefresh = false;
+      cydFetchScreenshot(false);
+    }
+  };
+
+  next.onerror = function() {
+    cydIsLoading = false;
+    if (pulse) {
+      pulse.classList.remove('loading');
+      pulse.classList.add('offline');
+    }
+    cydPendingRefresh = false;
+  };
+
+  next.src = targetUrl;
 }
 
-function cydPoolLbl(h){h=h||'';const i=h.lastIndexOf('.');if(i>0)h=h.substring(0,i);if(h.startsWith('pool.'))h=h.substring(5);return (h.substring(0,9))||'--';}
-function cydMkt(d){const m=(d&&d.market)||{};const pre=m.prefix||'$';const rem=m.rem||0;const blk=m.block||0;
-const coin=m.coin||'BTC';const unit=m.unit||'sat/vB';const halv=m.halv||210000;const sub=m.sub||50;
-return {price:m.price?pre+Number(m.price).toLocaleString('en-US'):'--',cur:(m.cur||'USD').toUpperCase(),coin:coin,unit:unit,halv:halv,sub:sub,block:blk?Number(blk).toLocaleString('en-US'):'--',height:blk,
-age:(m.age!==undefined&&m.age>=0)?m.age:-1,fee:m.fee||0,fhour:m.fhour||0,ffast:m.ffast||0,diff:m.diff||'--',net:m.net?m.net+' EH/s':'--',rem:rem,
-pct:rem?Math.floor((halv-rem)*100/halv):0,eta:m.hdate||''};}
-function cydFeeClass(f,p){if(!(f>0))return null;if(f<=4)return ['LOW',p.good];if(f<=20)return ['NORMAL',p.meter];return ['BUSY',p.bad];}
-function cydFmtReward(r){return String(parseFloat(r.toFixed(4)));}
-function cydDrawMarket(ctx,p,d,ls){
-const m=cydMkt(d);const g=ls?{hx:8,hy:30,hw:304,hh:56,ry:90,rh:44,cw:150,fy:138,fh:40,vy:182,vh:54}:{hx:6,hy:30,hw:228,hh:74,ry:108,rh:50,cw:112,fy:162,fh:56,vy:222,vh:94};
-const R=g.hx+g.hw;const ag=m.age>=0?(m.age<1?'just now':m.age+'m ago'):'';const bl='BLOCK #'+m.block;
-cydDrawPanel(ctx,p,g.hx,g.hy,g.hw,g.hh,6);ctx.textAlign='left';ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(m.coin+' / '+m.cur,g.hx+10,g.hy+15);
-if(!ls){ctx.textAlign='center';ctx.fillStyle=p.gold;ctx.font='bold '+(m.price.length>9?26:30)+'px sans-serif';ctx.fillText(m.price,120,g.hy+50);
-ctx.font='10px sans-serif';const lw=ctx.measureText(bl).width,aw=ag?ctx.measureText(ag).width:0;const x0=120-(lw+(ag?14+aw:0))/2;ctx.textAlign='left';ctx.fillStyle=p.text;ctx.fillText(bl,x0,g.hy+66);
-if(ag){ctx.fillStyle=p.dim;ctx.fillRect(x0+lw+6,g.hy+62,2,2);ctx.fillText(ag,x0+lw+14,g.hy+66);}}
-else{ctx.fillStyle=p.gold;ctx.font='bold 28px sans-serif';ctx.fillText(m.price,g.hx+8,g.hy+46);ctx.textAlign='right';ctx.fillStyle=p.text;ctx.font='bold 14px sans-serif';ctx.fillText(bl,R-8,g.hy+24);
-if(ag){ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(ag,R-8,g.hy+42);}ctx.textAlign='left';}
-const cards=[['NETWORK',m.net,p.good,g.hx],['DIFFICULTY',m.diff,p.gold,R-g.cw]];
-for(const c of cards){cydDrawPanel(ctx,p,c[3],g.ry,g.cw,g.rh,6);ctx.textAlign='center';ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(c[0],c[3]+g.cw/2,g.ry+(ls?14:16));ctx.fillStyle=c[2];ctx.font='bold '+(ls?17:18)+'px sans-serif';ctx.fillText(c[1],c[3]+g.cw/2,g.ry+(ls?37:40));}
-ctx.textAlign='left';cydDrawPanel(ctx,p,g.hx,g.fy,g.hw,g.fh,6);ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('HALF-HOUR FEE',g.hx+8,g.fy+(ls?15:16));
-const fv=m.fee>0?String(m.fee):'--';const vs=ls?18:22;const vx=ls?g.hx+132:g.hx+8,vy=ls?g.fy+28:g.fy+42;ctx.fillStyle=p.text;ctx.font='bold '+vs+'px sans-serif';ctx.fillText(fv,vx,vy);const fw=ctx.measureText(fv).width;ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(m.unit,vx+fw+4,vy);
-const cls=cydFeeClass(m.fee,p);if(cls){ctx.font='bold 9px sans-serif';const pw=ctx.measureText(cls[0]).width+12,ph=14,px=R-pw-8,py=ls?g.fy+12:g.fy+6;ctx.fillStyle=cls[1];ctx.beginPath();ctx.roundRect(px,py,pw,ph,7);ctx.fill();ctx.fillStyle=p.bg;ctx.textAlign='center';ctx.fillText(cls[0],px+pw/2,py+10);ctx.textAlign='left';}
-if(m.fhour>0&&m.ffast>0&&m.fhour!==m.ffast){const rg='range '+Math.min(m.fhour,m.ffast)+'-'+Math.max(m.fhour,m.ffast)+' '+m.unit;ctx.fillStyle=p.dim;ctx.font='9px sans-serif';if(ls){ctx.fillText(rg,g.hx+8,g.fy+33);}else{ctx.textAlign='right';ctx.fillText(rg,R-8,g.fy+48);ctx.textAlign='left';}}
-cydDrawPanel(ctx,p,g.hx,g.vy,g.hw,g.vh,6);const era=m.height>0?Math.floor(m.height/m.halv):4;const r0=m.sub/Math.pow(2,era);
-const rw=cydFmtReward(r0)+' \u2192 ',rw2=cydFmtReward(r0/2)+' '+m.coin;const rem=(m.rem>0?m.rem.toLocaleString('en-US'):'--')+' blocks left';const bx=g.hx+8,bw=g.hw-16;
-const reward=(xr,y,sz)=>{ctx.font='bold '+sz+'px sans-serif';const w2=ctx.measureText(rw2).width;ctx.textAlign='right';ctx.fillStyle=p.gold;ctx.fillText(rw2,xr,y);ctx.fillStyle=p.dim;ctx.fillText(rw,xr-w2,y);ctx.textAlign='left';};
-if(!ls){ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('NEXT HALVING',bx,g.vy+16);ctx.textAlign='right';ctx.fillStyle=p.meter;ctx.font='bold 16px sans-serif';ctx.fillText(m.pct+'%',R-8,g.vy+18);ctx.textAlign='left';
-ctx.fillStyle=p.track;ctx.beginPath();ctx.roundRect(bx,g.vy+26,bw,10,5);ctx.fill();if(m.pct>0){ctx.fillStyle=p.meter;ctx.beginPath();ctx.roundRect(bx,g.vy+26,bw*m.pct/100,10,5);ctx.fill();}
-ctx.fillStyle=p.text;ctx.font='11px sans-serif';ctx.fillText(rem,bx,g.vy+55);if(m.eta){ctx.textAlign='right';ctx.fillStyle=p.dim;ctx.fillText(m.eta,R-8,g.vy+55);ctx.textAlign='left';}
-ctx.strokeStyle=p.edge;ctx.beginPath();ctx.moveTo(bx,g.vy+62.5);ctx.lineTo(bx+bw,g.vy+62.5);ctx.stroke();ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('BLOCK REWARD',bx,g.vy+79);reward(R-8,g.vy+80,12);}
-else{ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('NEXT HALVING',bx,g.vy+15);const hw=ctx.measureText('NEXT HALVING').width;ctx.fillStyle=p.meter;ctx.font='bold 13px sans-serif';ctx.fillText(m.pct+'%',bx+hw+8,g.vy+16);reward(R-8,g.vy+15,11);
-ctx.fillStyle=p.track;ctx.beginPath();ctx.roundRect(bx,g.vy+22,bw,8,4);ctx.fill();if(m.pct>0){ctx.fillStyle=p.meter;ctx.beginPath();ctx.roundRect(bx,g.vy+22,bw*m.pct/100,8,4);ctx.fill();}
-ctx.fillStyle=p.text;ctx.font='10px sans-serif';ctx.fillText(rem,bx,g.vy+45);if(m.eta){ctx.textAlign='right';ctx.fillStyle=p.dim;ctx.fillText(m.eta,R-8,g.vy+45);ctx.textAlign='left';}}
-}
-function cydHashLog2Q8FromDiff(d){if(!(d>0))return 0xFF00;const log2True=223.999978314;let exp=0;let m=d;while(m>=1){m*=0.5;exp++;}while(m>0&&m<0.5){m*=2;exp--;}const u=2*m;const z=u-1;const log2m=-1+(z-0.5*z*z+(z*z*z)/3)/0.69314718056;let log2h=log2True-(exp+log2m);if(log2h<0)log2h=0;if(log2h>255.996)log2h=255.996;return (log2h*256)|0;}
-function cydDiffQ8FromHashQ8(h){return (224<<8)-h;}
-function cydSynthSamples(n){const out=[];for(let i=0;i<n;i++){const bits=255-((Math.random()*3)|0)-((Math.random()<0.1)?((Math.random()*12)|0):0);const frac=(Math.random()*255)|0;out.push((bits<<8)|frac);}return out;}
-function cydParseDiff(v){if(typeof v==='number')return v;const m=String(v||'').trim().match(/^([0-9.]+)\s*([KMGTPE]?)/i);if(!m)return 0;const k={'':1,K:1e3,M:1e6,G:1e9,T:1e12,P:1e15,E:1e18}[m[2].toUpperCase()]||1;return parseFloat(m[1])*k;}
-function cydProtoYDiff(dq8,topQ8,botQ8,plotY,plotH){const span=topQ8-botQ8;if(span<=0)return plotY+(plotH>>1);let v=topQ8-dq8;if(v<0)v=0;if(v>span)v=span;return plotY+2+(((v*(plotH-5))/span)|0);}
-function cydDrawProtoX(ctx,x,y,col){ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x-2.5,y-2.5);ctx.lineTo(x+2.5,y+2.5);ctx.moveTo(x-2.5,y+2.5);ctx.lineTo(x+2.5,y-2.5);ctx.stroke();}
-function cydFmtDiffShort(n){n=Number(n)||0;if(n>=1e12)return (n/1e12>=100?(n/1e12).toFixed(0):(n/1e12).toFixed(1))+'T';if(n>=1e9)return (n/1e9).toFixed(1)+'G';if(n>=1e6)return (n/1e6).toFixed(1)+'M';if(n>=1e3)return (n/1e3).toFixed(1)+'K';if(n>=1)return n.toFixed(1);if(n>0)return n.toExponential(1);return '--';}
-function cydDrawProtocol(ctx,p,d,ls){
-const W=ls?320:240,H=ls?240:320;const plotX=ls?8:6,plotY=28,plotW=W-(ls?16:12);const footH=ls?44:52,footY=H-footH-4,plotH=footY-plotY-4;
-const hr=parseFloat(d.hashrate)||0;const netDiff=(d.net_diff&&d.net_diff>0)?Number(d.net_diff):133e12;
-let samples=Array.isArray(d.hash_samples)?d.hash_samples.slice():null;
-if(!samples||!samples.length)samples=cydSynthSamples(40);
-const best=(d.best_diff_raw>0)?Number(d.best_diff_raw):cydParseDiff(d.best_diff);
-const tgtQ8=cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(netDiff));
-let bestQ8=best>0?cydDiffQ8FromHashQ8(cydHashLog2Q8FromDiff(best)):null;
-const topQ8=tgtQ8,botQ8=0;const n=samples.length;
-let bestI=-1,maxQ=-1e9;for(let i=0;i<n;i++){const q=cydDiffQ8FromHashQ8(samples[i]);if(q>maxQ){maxQ=q;bestI=i;}}
-if(bestQ8==null||maxQ>bestQ8)bestQ8=maxQ;const bestIsSample=bestI>=0&&maxQ>=bestQ8-8;
-ctx.font='8px sans-serif';const G=Math.ceil(ctx.measureText('1G').width)+8,sx0=G+10,sxSpan=plotW-sx0-14;
-const yTop=plotY+2,yBot=plotY+plotH-16;
-const Y=q=>{const span=topQ8-botQ8;let v=topQ8-q;if(v<0)v=0;if(v>span)v=span;return yTop+Math.round(v*(yBot-yTop)/span);};
-cydDrawPanel(ctx,p,plotX,plotY,plotW,plotH,6);
-const ticks=['1K','1M','1G'];ctx.textAlign='right';
-for(let t=0;t<3;t++){const q=((t+1)*10)<<8;if(q>=topQ8-(4<<8))break;const ty=Y(q);ctx.fillStyle=p.edge||'#30363d';for(let x=plotX+G+2;x<plotX+plotW-4;x+=4)ctx.fillRect(x,ty,1,1);ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText(ticks[t],plotX+G-4,ty+3);}
-ctx.strokeStyle=p.edge||'#334155';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(plotX+G+0.5,yTop);ctx.lineTo(plotX+G+0.5,yBot);ctx.lineTo(plotX+plotW-4,yBot+0.5);ctx.stroke();
-ctx.fillStyle=p.dim;ctx.fillText('<1',plotX+G-4,yBot+3);
-const warn=p.warn||'#f59e0b';const netLab=(d.market&&d.market.diff)?d.market.diff:cydFmtDiffShort(netDiff);
-ctx.fillStyle=warn;ctx.fillRect(plotX+G,yTop,plotW-G-4,2);ctx.fillText(netLab,plotX+G-4,yTop+6);
-ctx.font='bold 8px sans-serif';ctx.fillText('BLOCK THRESHOLD \u00b7 '+netLab+' diff',plotX+plotW-6,yTop+12);
-ctx.fillStyle=p.dim;ctx.font='7px sans-serif';ctx.fillText('hash < target \u2192 valid block',plotX+plotW-6,yTop+22);
-ctx.textAlign='left';ctx.font='8px sans-serif';ctx.fillText('RARER \u2191',plotX+G+4,yTop+12);
-const xAt=i=>plotX+sx0+((i*sxSpan)/Math.max(1,n-1));
-for(let i=0;i<n;i++){if(bestIsSample&&i===bestI)continue;cydDrawProtoX(ctx,xAt(i),Y(cydDiffQ8FromHashQ8(samples[i])),p.bad||'#f87171');}
-if(n>0){ctx.strokeStyle=p.dim;ctx.lineWidth=1;ctx.beginPath();ctx.arc(xAt(n-1),Y(cydDiffQ8FromHashQ8(samples[n-1])),5,0,Math.PI*2);ctx.stroke();}
-if(bestQ8!=null){const bx=bestIsSample?xAt(bestI):plotX+sx0,by=Y(bestQ8);ctx.fillStyle=p.meter;ctx.beginPath();ctx.arc(bx,by,4,0,Math.PI*2);ctx.fill();ctx.strokeStyle=warn;ctx.beginPath();ctx.arc(bx,by,5,0,Math.PI*2);ctx.stroke();
-const bv=bestIsSample?Math.pow(2,maxQ/256):best;const blab='\u2605 BEST '+((!bestIsSample&&d.best_diff)?d.best_diff:cydFmtDiffShort(bv));ctx.font='bold 9px sans-serif';const lw=ctx.measureText(blab).width;const right=bx+8+lw<plotX+plotW-4;ctx.textAlign=right?'left':'right';ctx.fillText(blab,right?bx+8:bx-8,by>yTop+30?by-6:by+14);ctx.textAlign='left';}
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.textAlign='center';ctx.fillText('recent samples \u00b7 newest \u2192',plotX+G+(plotW-G)/2,plotY+plotH-4);ctx.textAlign='left';
-cydDrawPanel(ctx,p,plotX,footY,plotW,footH,6);
-ctx.fillStyle=p.meter;ctx.beginPath();ctx.moveTo(plotX+10,footY+(ls?22:24));ctx.lineTo(plotX+18,footY+(ls?8:10));ctx.lineTo(plotX+15,footY+(ls?16:18));ctx.fill();ctx.beginPath();ctx.moveTo(plotX+14,footY+(ls?14:16));ctx.lineTo(plotX+22,footY+(ls?14:16));ctx.lineTo(plotX+16,footY+(ls?28:30));ctx.fill();
-ctx.fillStyle=p.meter;ctx.font='bold 20px sans-serif';ctx.fillText((hr>0?hr.toFixed(0):'--')+' KH/s',plotX+28,footY+(ls?26:21));
-ctx.fillStyle=p.text;const attT='\u2248 '+(hr>0?(hr*1000).toFixed(0):'--')+' attempts/sec';if(ls){ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText(attT,plotX+plotW-8,footY+24);ctx.textAlign='left';}else{ctx.font='10px sans-serif';ctx.fillText(attT,plotX+28,footY+35);}
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE \u00b7 MINING UNINTERRUPTED',plotX+28,footY+(ls?36:47));
+function cydScheduleRefresh() {
+  if (cydRefreshTimer) clearTimeout(cydRefreshTimer);
+  if (!cydAutoRefresh) return;
+  cydRefreshTimer = setTimeout(function() {
+    cydFetchScreenshot(false);
+    cydScheduleRefresh();
+  }, 2500);
 }
 
-function cydHumanHashes(mh){let h=(Number(mh)||0)*1e6;const u=['','K','M','B','T','Q'];let i=0;while(h>=1000&&i<5){h/=1000;i++;}return i?(h>=100?h.toFixed(1):h.toFixed(2))+u[i]:h.toFixed(0);}
-function cydUpShort(s){const m=String(s||'').match(/^(\d+)\s+(\d+):(\d+)/);if(!m)return '--';const d=+m[1],h=+m[2],mi=+m[3];return d>0?d+'d':(h>0?h+'h':mi+'m');}
-function cydStar(ctx,cx,cy,r,col){ctx.fillStyle=col;ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*0.42:r;ctx.lineTo(cx+rr*Math.cos(a),cy+rr*Math.sin(a));}ctx.closePath();ctx.fill();}
-function cydMineCard(ctx,p,x,y,w,h,lbl,val,col,star){cydDrawPanel(ctx,p,x,y,w,h,4);ctx.font='10px sans-serif';const lw=ctx.measureText(lbl).width+(star?12:0);let lx=x+(w-lw)/2;if(star){cydStar(ctx,lx+4,y+10,5,p.gold);lx+=12;}
-ctx.fillStyle=p.dim;ctx.textAlign='left';ctx.fillText(lbl,lx,y+14);ctx.textAlign='center';ctx.fillStyle=col;ctx.font='bold '+(h>=60?22:18)+'px sans-serif';ctx.fillText(val,x+w/2,y+(h>=60?50:35));ctx.textAlign='left';}
-function cydDrawMine(ctx,p,d,ls){
-const hr=parseFloat(d.hashrate)||0;const cx=ls?100:120,cy=ls?116:128,R=ls?86:98,Ri=ls?74:84,segs=30;
-const filled=Math.round(Math.min(hr/1200,1)*segs);const base=Math.PI/2;
-for(let i=0;i<segs;i++){const a0=base+(45+i*9)*Math.PI/180,a1=base+(45+i*9+7)*Math.PI/180;let col=(i>=27)?'#3a1010':p.track;if(i<filled)col=(i>=27)?p.bad:(i>=24?p.warn:p.meter);
-ctx.lineWidth=R-Ri;ctx.strokeStyle=col;ctx.beginPath();ctx.arc(cx,cy,(R+Ri)/2,a0,a1);ctx.stroke();}
-ctx.textAlign='center';ctx.fillStyle=p.dim;ctx.font=(ls?10:11)+'px sans-serif';ctx.fillText('HASHRATE',cx,cy-(ls?30:33));
-ctx.fillStyle=p.text;ctx.font='bold '+(ls?32:38)+'px sans-serif';ctx.fillText(hr>0?hr.toFixed(1):'0.0',cx,cy+(ls?6:6));
-ctx.fillStyle=p.meter;ctx.font=(ls?12:13)+'px sans-serif';ctx.fillText('KH/s',cx,cy+(ls?24:28));
-ctx.fillStyle=p.dim;ctx.font=(ls?8:10)+'px sans-serif';ctx.fillText(cydHumanHashes(d.mhashes)+' hashes attempted',cx,cy+(ls?48:56));ctx.textAlign='left';
-const sh=(parseInt(d.shares)||0).toLocaleString('en-US'),best=d.best_diff||'--';
-if(ls){cydMineCard(ctx,p,198,34,114,76,'SHARES',sh,p.text,false);cydMineCard(ctx,p,198,116,114,76,'BEST',best,p.gold,true);}
-else{cydMineCard(ctx,p,6,222,112,42,'SHARES',sh,p.text,false);cydMineCard(ctx,p,122,222,112,42,'BEST',best,p.gold,true);}
-const sx=ls?8:6,sy=ls?198:270,sw=ls?304:228,shh=ls?38:44;cydDrawPanel(ctx,p,sx,sy,sw,shh,6);
-const wk=(d.workers!==undefined)?+d.workers:1,bl=parseInt(d.blocks)||0;
-const cells=[[String(wk),wk===1?'worker':'workers'],[cydUpShort(d.uptime),'uptime'],[String(bl),bl===1?'block':'blocks']];
-ctx.strokeStyle=p.edge;ctx.lineWidth=1;for(let i=1;i<3;i++){const x=Math.round(sx+sw*i/3)+.5;ctx.beginPath();ctx.moveTo(x,sy+8);ctx.lineTo(x,sy+shh-8);ctx.stroke();}
-for(let i=0;i<3;i++){const ccx=sx+sw*(i+0.5)/3,by=sy+shh/2+6;ctx.font='bold '+(ls?15:16)+'px sans-serif';const wv=ctx.measureText(cells[i][0]).width;ctx.font='10px sans-serif';const wl=ctx.measureText(cells[i][1]).width;const x0=ccx-(wv+4+wl)/2;
-ctx.fillStyle=p.text;ctx.font='bold '+(ls?15:16)+'px sans-serif';ctx.fillText(cells[i][0],x0,by);ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(cells[i][1],x0+wv+4,by);}
-}
-function cydDrawStripPortrait(ctx,p,cells){
-cydDrawPanel(ctx,p,6,266,228,48,8);
-ctx.strokeStyle=p.edge;
-for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(6+i*57,272);ctx.lineTo(6+i*57,308);ctx.stroke();}
-for(let i=0;i<4;i++){
-const c=cells[i]||{l:'',v:''};const cx=9+i*57;
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText(c.l,cx,280);
-ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(c.v,cx,298);
-}
+function cydToggleAutoRefresh(cb) {
+  cydAutoRefresh = cb ? cb.checked : !cydAutoRefresh;
+  const el = document.getElementById('cyd-auto-refresh');
+  if (el) el.checked = cydAutoRefresh;
+  if (cydAutoRefresh) {
+    cydFetchScreenshot(true);
+    cydScheduleRefresh();
+  } else if (cydRefreshTimer) {
+    clearTimeout(cydRefreshTimer);
+  }
 }
 
-function cydDrawClockStrip(ctx,p,ls,cells){
-const sx=ls?8:6,sy=ls?198:266,sw=ls?304:228,sh=ls?38:48;
-cydDrawPanel(ctx,p,sx,sy,sw,sh,8);
-ctx.strokeStyle=p.edge;ctx.lineWidth=1;
-for(let i=1;i<3;i++){const x=Math.round(sx+sw*i/3)+.5;ctx.beginPath();ctx.moveTo(x,sy+8);ctx.lineTo(x,sy+sh-8);ctx.stroke();}
-for(let i=0;i<3;i++){
-const c=cells[i]||{l:'',v:'',col:p.text};const cx=sx+8+(sw*i)/3;
-ctx.fillStyle=p.dim;ctx.font=(ls?10:9)+'px sans-serif';ctx.fillText(c.l,cx,sy+(ls?14:14));
-ctx.fillStyle=c.col||p.text;ctx.font='bold '+(ls?14:13)+'px sans-serif';ctx.fillText(c.v,cx,sy+(ls?30:34));
-}
-}
-const CYD_WD=['SUN','MON','TUE','WED','THU','FRI','SAT'],CYD_MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-function cydFmtDate(s){let dt=null;const m=String(s||'').match(/^(\d+)\/(\d+)\/(\d+)$/);if(m)dt=new Date(+m[3],+m[2]-1,+m[1]);else dt=new Date();return CYD_WD[dt.getDay()]+'  '+dt.getDate()+' '+CYD_MON[dt.getMonth()]+' '+dt.getFullYear();}
-let cydHist=[],cydHistLast=0;
-function cydNoteHash(d){const now=Date.now();const h=parseFloat(d&&d.hashrate);if(!(h>=0)||now-cydHistLast<900)return;cydHistLast=now;cydHist.push(h);if(cydHist.length>60)cydHist.shift();}
-function cydDrawHist(ctx,p,x0,y0,area,slots,step,bw){let mx=1;for(const v of cydHist)if(v>mx)mx=v;mx*=1.08;const base=y0+area;const n=cydHist.length;
-for(let i=0;i<slots;i++){const slot=i-(slots-n);const x=x0+i*step;if(slot<0){ctx.fillStyle=p.track;ctx.fillRect(x,base-2,bw,2);continue;}let bh=area*cydHist[slot]/mx;if(bh<2)bh=2;ctx.fillStyle=p.meter;ctx.fillRect(x,base-bh,bw,bh);}}
-function cydDrawClock(ctx,p,d,ls){
-const hr=parseFloat(d.hashrate)||0;
-const tm=(d&&d.time?d.time:'--:--').substring(0,5);
-const date=cydFmtDate(d.date);
-const temp=(d.temp!==undefined&&d.temp!=='')?String(d.temp):'';
-const tC=parseInt(temp,10);const hot=(!isNaN(tC)&&tC>=70);
-const up=cydUpShort(d.uptime);
-const isHash=d&&(d.status==='hashing');
-const offline=d&&(d.status==='offline'||d.wifi===false);
-let link='ONLINE',linkCol=p.good;
-if(offline){link='OFFLINE';linkCol=p.bad;}
-else if(hot){link='HOT';linkCol=p.warn;}
-else if(!isHash){link='LINKING';linkCol=p.warn;}
-if(ls){
-cydDrawPanel(ctx,p,8,30,152,70,8);
-ctx.fillStyle=p.text;ctx.font='bold 36px sans-serif';ctx.fillText(tm,14,62);
-ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(date,14,88);
-cydDrawPanel(ctx,p,168,30,144,70,8);
-ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('CURRENT HASHRATE',176,46);
-const hv=hr>0?hr.toFixed(1):'0.0';ctx.fillStyle=p.text;ctx.font='bold 28px sans-serif';ctx.fillText(hv,176,78);
-const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-serif';ctx.fillText('KH/s',176+nw+6,78);
-cydDrawPanel(ctx,p,8,106,304,84,8);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',16,120);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',304,120);ctx.textAlign='left';
-const barsX=16,barsY=128,barArea=50,slots=60,step=(288)/slots,bw=Math.max(1,step-1);
-cydDrawHist(ctx,p,barsX,barsY,barArea,slots,step,bw);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',16,182);
-}else{
-cydDrawPanel(ctx,p,6,30,228,78,8);
-ctx.textAlign='center';ctx.fillStyle=p.text;ctx.font='bold 42px sans-serif';ctx.fillText(tm,120,72);
-ctx.fillStyle=p.dim;ctx.font='12px sans-serif';ctx.fillText(date,120,98);ctx.textAlign='left';
-cydDrawPanel(ctx,p,6,114,228,52,8);
-ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText('CURRENT HASHRATE',14,130);
-const hv=hr>0?hr.toFixed(1):'0.0';ctx.fillStyle=p.text;ctx.font='bold 26px sans-serif';ctx.fillText(hv,14,156);
-const nw=ctx.measureText(hv).width;ctx.fillStyle=p.meter;ctx.font='12px sans-serif';ctx.fillText('KH/s',14+nw+6,156);
-cydDrawPanel(ctx,p,6,172,228,88,8);
-ctx.fillStyle=p.dim;ctx.font='9px sans-serif';ctx.fillText('HASHRATE HISTORY',14,186);ctx.textAlign='right';ctx.fillText('LAST 60 SECONDS',226,186);ctx.textAlign='left';
-const barsX=14,barsY=194,barArea=42,slots=60,step=216/slots,bw=Math.max(1,step-1);
-cydDrawHist(ctx,p,barsX,barsY,barArea,slots,step,bw);
-ctx.fillStyle=p.dim;ctx.font='8px sans-serif';ctx.fillText('LIVE SAMPLE · MINER HASHING CONTINUOUSLY',14,248);
-}
-cydDrawClockStrip(ctx,p,ls,[
-{l:'TEMP',v:temp?temp+'°C':'--',col:hot?p.warn:p.text},
-{l:'UPTIME',v:up,col:p.text},
-{l:'ONLINE',v:link,col:linkCol}
-]);
-}
-function cydRenderPortrait(ctx,p,d){
-cydDrawHeaderPortrait(ctx,p,d);
-const hr=parseFloat(d.hashrate)||0;
-if(cydPreviewScr===0){
-cydDrawMine(ctx,p,d,false);
-}else if(cydPreviewScr===1){
-cydDrawMarket(ctx,p,d,false);
-}else if(cydPreviewScr===2){
-cydDrawClock(ctx,p,d,false);
-}else if(cydPreviewScr===3){
-cydDrawProtocol(ctx,p,d,false);
-}
+function cydToggleFollow() {
+  const af = document.getElementById('cyd-auto-follow');
+  cydAutoFollow = af ? af.checked : true;
+  if (cydAutoFollow && cydPreviewScr !== cydDevScr) {
+    cydSelectTab(cydDevScr, false);
+  }
 }
 
-function cydDrawHeaderLandscape(ctx,p,d){
-ctx.fillStyle=p.bg;ctx.fillRect(0,0,320,26);
-const screenNames=['MINE','MARKET','CLOCK','PROTOCOL'];
-const title=screenNames[cydPreviewScr]||'MINE';
-const wordmark=(cydPreviewScr===1||cydPreviewScr===2||cydPreviewScr===3);
-const hideTime=(cydPreviewScr===2);
-ctx.fillStyle=p.text;ctx.font='bold 12px sans-serif';ctx.fillText(title,10,16);
-const tw=ctx.measureText(title).width;
-const isHash=d&&(d.status==='hashing');
-const stCol=isHash?p.good:(d&&d.status==='connecting'?p.warn:p.dim);
-const stTxt=isHash?'HASHING':(d&&d.status==='connecting'?'LINKING':(wordmark?'IDLE':'SETUP'));
-let sx;
-if(wordmark){ctx.fillStyle=p.dim;ctx.fillText('|',tw+12,16);ctx.fillStyle=stCol;ctx.font='bold 12px sans-serif';ctx.fillText(stTxt,tw+20,16);sx=tw+20+ctx.measureText(stTxt).width+6;}
-else{ctx.fillStyle=stCol;ctx.font='bold 9px sans-serif';ctx.fillText(stTxt,tw+14,16);sx=tw+14+ctx.measureText(stTxt).width+6;}
-if(cydPreviewScr===2&&isHash){ctx.fillStyle=p.good;ctx.beginPath();ctx.arc(sx+3,13,3,0,Math.PI*2);ctx.fill();sx+=14;}
-const dotW=7,dotH=3,gap=2;let startX=hideTime?220:160;if(startX<sx+4)startX=sx+4;
-for(let i=0;i<4;i++){ctx.fillStyle=(i===cydPreviewScr)?p.meter:p.track;ctx.fillRect(startX+i*(dotW+gap),12,dotW,dotH);}
-if(!hideTime){const tm=(d&&d.time)?d.time:'12:00:00';ctx.fillStyle=p.text;ctx.font='13px sans-serif';ctx.textAlign='right';ctx.fillText(tm,316,17);const tmw=ctx.measureText(tm).width;if(d&&d.ip){ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(d.ip,316-tmw-14,16);}ctx.textAlign='left';}
-ctx.strokeStyle=p.edge;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(10,26);ctx.lineTo(314,26);ctx.stroke();
+function cydSnapshot() {
+  cydFetchScreenshot(true);
 }
 
-function cydDrawStripLandscape(ctx,p,cells){
-cydDrawPanel(ctx,p,8,198,304,38,6);
-ctx.strokeStyle=p.edge;
-for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(8+i*76,204);ctx.lineTo(8+i*76,230);ctx.stroke();}
-for(let i=0;i<4;i++){
-const c=cells[i]||{l:'',v:''};const cx=14+i*76;
-ctx.fillStyle=p.dim;ctx.font='10px sans-serif';ctx.fillText(c.l,cx,211);
-ctx.fillStyle=p.text;ctx.font='bold 14px sans-serif';ctx.fillText(c.v,cx,228);
-}
-}
-
-function cydRenderLandscape(ctx,p,d){
-cydDrawHeaderLandscape(ctx,p,d);
-const hr=parseFloat(d.hashrate)||0;
-if(cydPreviewScr===0){
-cydDrawMine(ctx,p,d,true);
-}else if(cydPreviewScr===1){
-cydDrawMarket(ctx,p,d,true);
-}else if(cydPreviewScr===2){
-cydDrawClock(ctx,p,d,true);
-}else if(cydPreviewScr===3){
-cydDrawProtocol(ctx,p,d,true);
-}
+function cydSelectTab(idx, isUserClick) {
+  if (isUserClick === undefined) isUserClick = true;
+  cydPreviewScr = (typeof idx === 'number' && idx >= 0 && idx < 4) ? idx : 0;
+  if (isUserClick) {
+    const af = document.getElementById('cyd-auto-follow');
+    if (af && af.checked && idx !== cydDevScr) {
+      af.checked = false;
+      cydAutoFollow = false;
+    }
+  }
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('ctab-' + i);
+    if (el) {
+      if (i === cydPreviewScr) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  }
+  const btn = document.getElementById('cyd-switch-btn');
+  if (btn) btn.textContent = 'Switch Device to Screen ' + cydPreviewScr;
+  cydFetchScreenshot(true);
 }
 
-function cydRender(){
-const cvs=document.getElementById('cyd-canvas');if(!cvs)return;
-const d=cydLastStats||{};cydNoteHash(d);
-const afEl=document.getElementById('cyd-auto-follow');cydAutoFollow=afEl?afEl.checked:true;
-if(d.is_portrait!==undefined&&cydAutoFollow){cydIsPortrait=!!d.is_portrait;}
-const lbl=document.getElementById('cyd-bezel-lbl');
-const btnOrient=document.getElementById('cyd-orient-btn');
-if(cydIsPortrait){
-cvs.width=240;cvs.height=320;
-cvs.classList.remove('landscape');
-if(lbl)lbl.innerHTML='ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT (PORTRAIT)';
-if(btnOrient)btnOrient.textContent='Portrait (240×320)';
-}else{
-cvs.width=320;cvs.height=240;
-cvs.classList.add('landscape');
-if(lbl)lbl.innerHTML='ESP32-2432S028R &bull; 2.8&quot; 320&times;240 SPI TFT (LANDSCAPE)';
-if(btnOrient)btnOrient.textContent='Landscape (320×240)';
+function cydPrevScreen() {
+  cydSelectTab((cydPreviewScr + 3) % 4, true);
 }
-const ctx=cvs.getContext('2d');const p=cydGetPalette(d.theme);
-ctx.fillStyle=p.bg;ctx.fillRect(0,0,cvs.width,cvs.height);
-if(cydIsPortrait)cydRenderPortrait(ctx,p,d);
-else cydRenderLandscape(ctx,p,d);
+
+function cydNextScreen() {
+  cydSelectTab((cydPreviewScr + 1) % 4, true);
+}
+
+function cydSwitchPhysical() {
+  const btn = document.getElementById('cyd-switch-btn');
+  if (btn) btn.disabled = true;
+  fetch('/api/screen?id=' + cydPreviewScr, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.screen !== undefined) {
+        cydDevScr = data.screen;
+        cydUpdateDevBadge();
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (btn) btn.disabled = false;
+      setTimeout(() => cydFetchScreenshot(true), 300);
+    });
+}
+
+function cydUpdateDevBadge() {
+  const b = document.getElementById('cyd-device-badge');
+  const scrName = CYD_SCREEN_NAMES[cydDevScr] || 'SCR ' + cydDevScr;
+  if (b) {
+    b.innerHTML = "<span id='cyd-live-pulse' class='cyd-pulse-dot'></span>Device: SCR " +
+                  cydDevScr + ' (' + scrName + ')';
+  }
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('ctab-' + i);
+    if (el) {
+      const dot = el.querySelector('.cyd-live-dot');
+      if (i === cydDevScr) {
+        if (!dot) {
+          const s = document.createElement('span');
+          s.className = 'cyd-live-dot';
+          s.title = 'Active on hardware';
+          el.prepend(s);
+        }
+      } else if (dot) {
+        dot.remove();
+      }
+    }
+  }
+}
+
+function cydToggleOrientation() {
+  const af = document.getElementById('cyd-auto-follow');
+  if (af) {
+    af.checked = false;
+    cydAutoFollow = false;
+  }
+  cydIsPortrait = !cydIsPortrait;
+  cydRender();
+  cydFetchScreenshot(true);
+}
+
+function cydRender() {
+  const frame = document.getElementById('cyd-screen-frame');
+  const img = document.getElementById('cyd-screen-img');
+  if (!frame || !img) return;
+
+  const d = cydLastStats || {};
+  const afEl = document.getElementById('cyd-auto-follow');
+  cydAutoFollow = afEl ? afEl.checked : true;
+
+  if (d.is_portrait !== undefined && cydAutoFollow) {
+    cydIsPortrait = !!d.is_portrait;
+  }
+
+  const lbl = document.getElementById('cyd-bezel-lbl');
+  const btnOrient = document.getElementById('cyd-orient-btn');
+
+  if (cydIsPortrait) {
+    frame.classList.remove('landscape');
+    img.width = 240;
+    img.height = 320;
+    if (lbl) lbl.innerHTML = 'ESP32-2432S028R &bull; 2.8&quot; 240&times;320 SPI TFT <span class="cyd-lbl-tag">PORTRAIT</span>';
+    if (btnOrient) btnOrient.textContent = 'Portrait (240×320)';
+  } else {
+    frame.classList.add('landscape');
+    img.width = 320;
+    img.height = 240;
+    if (lbl) lbl.innerHTML = 'ESP32-2432S028R &bull; 2.8&quot; 320&times;240 SPI TFT <span class="cyd-lbl-tag">LANDSCAPE</span>';
+    if (btnOrient) btnOrient.textContent = 'Landscape (320×240)';
+  }
+}
+
+// Initial bootstrap
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    cydUpdateDevBadge();
+    cydRender();
+    cydScheduleRefresh();
+  });
+} else {
+  cydUpdateDevBadge();
+  cydRender();
+  cydScheduleRefresh();
 }
 )rawjs";
 

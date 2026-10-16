@@ -187,16 +187,6 @@ uint16_t hashLog2Q8FromDifficulty(double difficulty)
   return (uint16_t)(log2h * 256.0);
 }
 
-// Full double-SHA256 of an 80-byte header (native byte order). Used only on
-// the sample mask so the early-out miner paths stay untouched.
-static void hashSampleSha256dHeader(const uint8_t hdr80[80], uint32_t nonce, uint8_t out[32])
-{
-  uint8_t hdr[80];
-  memcpy(hdr, hdr80, 80);
-  ((uint32_t *)(hdr + 76))[0] = nonce;
-  mbedtls_sha256(hdr, 80, out, 0);
-  mbedtls_sha256(out, 32, out, 0);
-}
 
 
 
@@ -311,6 +301,7 @@ MinerStatus getMinerStatus(void)
   s.rejected = s_sharesRejected;
   s.subscribed = isMinerSuscribed;
   s.poolDifficulty = s_poolDifficulty;
+  s.hwLoop = activeHwShaLoopName();
   return s;
 }
 
@@ -989,6 +980,7 @@ void runStratumWorker(void *name) {
       hashes += res->nonce_count;
       if (res->difficulty > currentPoolDifficulty && job_pool == res->id && res->nonce != 0xFFFFFFFF)
       {
+        hashSamplePushDigest(res->hash);
         if (!client.connected())
           break;
         unsigned long sumbit_id = 0;
@@ -1065,16 +1057,6 @@ void minerWorkerSw(void * task_id)
         #ifdef DEBUG_MINING
         (*myDebugCounter)++;
         #endif
-        // Display sample (~1/16384): full SHA256d off the early-out path.
-        // mbedtls may use the HW SHA engine — serialize with g_hwShaMutex.
-        if ((nonce_n & HASH_SAMPLE_MASK) == 0)
-        {
-          uint8_t sample_hash[32];
-          g_hwShaMutex.lock();
-          hashSampleSha256dHeader(job->sha_buffer, nonce_n, sample_hash);
-          g_hwShaMutex.unlock();
-          hashSamplePushDigest(sample_hash);
-        }
         if (nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash))
         {
           double diff_hash = diff_from_target(hash);
@@ -1804,6 +1786,13 @@ static const struct { pl_mine_fn fn; const char *name; } s_pl_loops[] = {
 #define PL_LOOP_PLAIN (PL_LOOP_COUNT - 1)
 static unsigned s_pl_loop = 0;
 
+const char *activeHwShaLoopName(void)
+{
+  if (s_pl_loop < PL_LOOP_COUNT)
+    return s_pl_loops[s_pl_loop].name;
+  return "unknown";
+}
+
 // Known-answer test: for the header hdr[i] = 0x9E3779B9 * (i + 1), these are
 // the only candidates among the 262144 nonces from 0x1000 up. A loop passes
 // if it reports exactly these, in order -- one wrong hash among the 262144
@@ -1887,6 +1876,11 @@ static void pl_health(bool confirmed)
                   unconfirmed, hits, s_pl_loops[s_pl_loop].name);
   }
   hits = unconfirmed = 0;
+}
+#else
+const char *activeHwShaLoopName(void)
+{
+  return "default";
 }
 #endif
 
@@ -1975,10 +1969,6 @@ void minerWorkerHw(void * task_id)
       result->difficulty = job->difficulty;
       uint8_t job_in_work = job->id & 0xFF;
       memcpy(sha_buffer, job->sha_buffer, 80);
-      #ifdef PIPELINED_ASM_MINING
-      uint32_t sample_done = 0;
-      uint32_t sample_swapped_end = 0;
-      #endif
 
       g_hwShaMutex.lock();
       esp_sha_lock_engine(SHA2_256);
@@ -2075,10 +2065,6 @@ void minerWorkerHw(void * task_id)
         #ifdef DEBUG_MINING
         debugHashesHw += result->nonce_count;
         #endif
-        // Stash sample window for after we drop the SHA engine (mbedtls may
-        // also take the HW SHA lock — must not nest under esp_sha_lock_engine).
-        sample_done = result->nonce_count;
-        sample_swapped_end = pipelined_swapped_cursor;
       }
 #else
       for (uint32_t n = 0; n < job->nonce_count; ++n)
@@ -2108,41 +2094,17 @@ void minerWorkerHw(void * task_id)
 
         nerd_sha_hal_wait_idle();
         sha_ll_load(SHA2_256);
+        if (nerd_sha_ll_read_digest_swap_if(hash))
         {
-          uint32_t nonce_n = job->nonce_start + n;
-          if ((nonce_n & HASH_SAMPLE_MASK) == 0)
+          //~5 per second
+          double diff_hash = diff_from_target(hash);
+          if (diff_hash > result->difficulty)
           {
-            // Force a full digest read for the display sample (rare). The HW
-            // TEXT regs hold big-endian words: byte-swap like _swap_if does so
-            // byte 31 is the numeric MSB (was unswapped -> bogus sample diff).
-            nerd_sha_ll_read_digest(hash);
-            for (int w = 0; w < 8; w++)
-              ((uint32_t *)hash)[w] = __builtin_bswap32(((uint32_t *)hash)[w]);
-            hashSamplePushDigest(hash);
-            // Same share filter as _swap_if: sample nonces must still count.
-            if (hash[31] == 0 && hash[30] == 0)
+            if (isSha256Valid(hash))
             {
-              double diff_hash = diff_from_target(hash);
-              if (diff_hash > result->difficulty && isSha256Valid(hash))
-              {
-                result->difficulty = diff_hash;
-                result->nonce = nonce_n;
-                memcpy(result->hash, hash, sizeof(hash));
-              }
-            }
-          }
-          else if (nerd_sha_ll_read_digest_swap_if(hash))
-          {
-            //~5 per second
-            double diff_hash = diff_from_target(hash);
-            if (diff_hash > result->difficulty)
-            {
-              if (isSha256Valid(hash))
-              {
-                result->difficulty = diff_hash;
-                result->nonce = nonce_n;
-                memcpy(result->hash, hash, sizeof(hash));
-              }
+              result->difficulty = diff_hash;
+              result->nonce = job->nonce_start+n;
+              memcpy(result->hash, hash, sizeof(hash));
             }
           }
         }
@@ -2157,25 +2119,6 @@ void minerWorkerHw(void * task_id)
 #endif // PIPELINED_ASM_MINING
       esp_sha_unlock_engine(SHA2_256);
       g_hwShaMutex.unlock();
-      #ifdef PIPELINED_ASM_MINING
-      // Display-only samples off the hot path / off the SHA engine lock.
-      // ~1/16384 of the nonces just hashed; mbedtls under g_hwShaMutex.
-      if (sample_done > 0)
-      {
-        uint32_t swapped_start = sample_swapped_end - sample_done;
-        g_hwShaMutex.lock();
-        for (uint32_t s = swapped_start; s != sample_swapped_end; ++s)
-        {
-          uint32_t native = __builtin_bswap32(s);
-          if ((native & HASH_SAMPLE_MASK) != 0)
-            continue;
-          uint8_t sample_hash[32];
-          hashSampleSha256dHeader(pipelined_native_header_cache, native, sample_hash);
-          hashSamplePushDigest(sample_hash);
-        }
-        g_hwShaMutex.unlock();
-      }
-      #endif
       #ifdef DEBUG_MINING
       debugChunkEndUs = esp_timer_get_time();
       #endif
@@ -2369,6 +2312,23 @@ void runMonitor(void *name)
       applyPendingSettings();
       backlightTick();
       drawCurrentScreen(mElapsed);
+
+      // Safely feed 1 display sample per second into the Screen 3 scatter buffer
+      // using pure software hashing (never touches hardware SHA or blocks Core 1).
+      if (client.connected() && isMinerSuscribed)
+      {
+        uint8_t sw_hdr[80];
+        memcpy(sw_hdr, mMiner.bytearray_blockheader, 80);
+        uint32_t r_nonce = (uint32_t)rand();
+        ((uint32_t *)(sw_hdr + 76))[0] = r_nonce;
+        uint32_t sw_mids[8];
+        uint32_t sw_bake[16];
+        nerd_mids(sw_mids, sw_hdr);
+        nerd_sha256_bake(sw_mids, sw_hdr + 64, sw_bake);
+        uint8_t s_hash[32];
+        nerd_sha256d_baked(sw_mids, sw_hdr + 64, sw_bake, s_hash);
+        hashSamplePushDigest(s_hash);
+      }
 
       // Monitor state when hashrate is 0.0
       if (elapsedKHs == 0)

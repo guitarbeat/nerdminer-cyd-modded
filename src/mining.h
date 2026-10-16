@@ -113,8 +113,10 @@ struct MinerStatus
   uint32_t rejected;    // ...and refused
   bool subscribed;      // connected and subscribed to the pool
   double poolDifficulty;
+  const char *hwLoop;
 };
 MinerStatus getMinerStatus(void);
+const char *activeHwShaLoopName(void);
 
 void minerWorkerSw(void * task_id);
 void minerWorkerHw(void * task_id);
