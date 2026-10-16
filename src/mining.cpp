@@ -2367,6 +2367,7 @@ void runMonitor(void *name)
       }
 
       applyPendingSettings();
+      backlightTick();
       drawCurrentScreen(mElapsed);
 
       // Monitor state when hashrate is 0.0

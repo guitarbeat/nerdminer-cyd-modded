@@ -30,6 +30,10 @@
 #define DEFAULT_LEDCOLOR	0xF7931A	// 0xRRGGBB (Bitcoin Amber)
 #define DEFAULT_LEDBRIGHTNESS	255
 #define DEFAULT_LEDSCREENOFF	false
+#define DEFAULT_SCREENTIMEOUT	0	// minutes, 0 = never
+#define DEFAULT_NIGHTDIM	false
+#define DEFAULT_NIGHTBRIGHTNESS	40	// backlight duty 1-255
+#define DEFAULT_NIGHTFADE	60	// minutes, half before and half after sunset / sunrise
 
 // JSON config files
 #define JSON_CONFIG_FILE	"/config.json"
@@ -73,6 +77,12 @@
 #define JSON_SPIFFS_KEY_LEDCOLOR	"ledColor"
 #define JSON_SPIFFS_KEY_LEDBRIGHTNESS	"ledBrightness"
 #define JSON_SPIFFS_KEY_LEDSCREENOFF	"ledScreenOff"
+#define JSON_SPIFFS_KEY_SCREENTIMEOUT	"screenTimeout"
+#define JSON_SPIFFS_KEY_NIGHTDIM	"nightDim"
+#define JSON_SPIFFS_KEY_NIGHTBRIGHTNESS	"nightBrightness"
+#define JSON_SPIFFS_KEY_NIGHTFADE	"nightFade"
+#define JSON_SPIFFS_KEY_LATITUDE	"latitude"
+#define JSON_SPIFFS_KEY_LONGITUDE	"longitude"
 
 // settings
 struct TSettings
@@ -100,6 +110,13 @@ struct TSettings
 	uint32_t ledColor{ DEFAULT_LEDCOLOR };	// 0xRRGGBB
 	int ledBrightness{ DEFAULT_LEDBRIGHTNESS };	// 1-255
 	bool ledScreenOff{ DEFAULT_LEDSCREENOFF };	// LED off while the screen is off
+	// Backlight timeout & night dimming
+	int ScreenTimeout{ DEFAULT_SCREENTIMEOUT };	// minutes without a touch until the backlight goes off, 0 = never
+	bool nightDim{ DEFAULT_NIGHTDIM };
+	int NightBrightness{ DEFAULT_NIGHTBRIGHTNESS };
+	int NightFade{ DEFAULT_NIGHTFADE };
+	float Latitude{ 0 };	// decimal degrees, north positive; 0,0 = not set
+	float Longitude{ 0 };	// decimal degrees, east positive
 };
 
 #endif // _STORAGE_H_

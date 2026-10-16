@@ -13,6 +13,7 @@
 #include "mining.h"
 #include "webCydTwin.h"
 #include "drivers/displays/rgbLed.h"
+#include "cities.h"
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -162,6 +163,27 @@ static void handleSetTheme()
   saveSettingsToFlash();
 
   String json = "{\"status\":\"ok\",\"theme\":" + String(th) + "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
+static void handleSetInvert()
+{
+  bool inv = false;
+  if (webCfgServer.hasArg("val"))
+  {
+    String v = webCfgServer.arg("val");
+    inv = (v == "1" || v.equalsIgnoreCase("true"));
+  }
+  else if (webCfgServer.hasArg("invert"))
+  {
+    String v = webCfgServer.arg("invert");
+    inv = (v == "1" || v.equalsIgnoreCase("true"));
+  }
+  Settings.invertColors = inv;
+  setDisplayInvert(inv);
+  saveSettingsToFlash();
+
+  String json = "{\"status\":\"ok\",\"invert\":" + String(inv ? "true" : "false") + "}";
   webCfgServer.send(200, "application/json", json);
 }
 
@@ -379,18 +401,29 @@ if(el)el.classList.add('active');
 if(col){document.documentElement.style.setProperty('--amber',col);}
 fetch('/api/theme?id='+id,{method:'POST'}).then(r=>r.json()).then(d=>{
 const t=document.getElementById('thm-toast');
-if(t){t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
+if(t){t.textContent='\u2713 Live theme applied instantly to CYD screen!';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
 }).catch(e=>{});}
+function toggleInvert(inv){
+fetch('/api/invert?val='+(inv?'1':'0'),{method:'POST'}).then(r=>r.json()).then(d=>{
+const t=document.getElementById('thm-toast');
+if(t){t.textContent='\u2713 Live color inversion applied to CYD screen!';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
+}).catch(e=>{});}
+function pickCity(v){
+if(!v)return;
+const p=v.split(',');
+if(p.length===2){
+document.getElementById('f-lat').value=p[0];
+document.getElementById('f-lon').value=p[1];
+}
+}
 function pollReboot(){let s=8;document.getElementById('overlay').style.display='flex';
 const t=setInterval(()=>{s--;if(s>=0)document.getElementById('cd').textContent=s;
 if(s<=0){clearInterval(t);checkBack();}},1000);}
 function checkBack(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(checkBack,1000));}
 document.getElementById('cfg-form').addEventListener('submit',function(e){
 const r=document.querySelector("select[name='rot']");
-const inv=document.querySelector("input[name='invert']");
 const initR=this.dataset.initRot;
-const initInv=(this.dataset.initInv==='1');
-if((r&&r.value!==initR)||(inv&&inv.checked!==initInv)){
+if(r&&r.value!==initR){
 setTimeout(pollReboot,100);
 }
 });
@@ -689,11 +722,11 @@ static void handleRoot()
               "View Worker on Public-Pool.io &#8599;</a></div>");
   }
 
-  page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "' data-init-inv='" + String(Settings.invertColors ? "1" : "0") + "'>";
+  page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
   page += F("<div class='cfg-story'>"
             "<div class='cfg-story-hdr'>"
             "<span class='cfg-title'>Settings</span>"
-            "<span class='cfg-tag'>Applied live (reboots only on orientation/inversion change)</span>"
+            "<span class='cfg-tag'>Applied live (reboots only on orientation change)</span>"
             "</div>"
             "<div class='cfg-flow'>"
             "<!-- 1. Solo Pool & Stratum -->"
@@ -746,7 +779,7 @@ static void handleRoot()
             "<input type='range' name='brightness' id='b-slider' min='10' max='255' value='");
   page += String(Settings.Brightness) + F("' oninput='updateBright(this.value)'>"
             "<label class='checkbox-label' style='white-space:nowrap;align-items:center'>"
-            "<input type='checkbox' name='invert'");
+            "<input type='checkbox' name='invert' id='cb-invert' onchange='toggleInvert(this.checked)'");
   if (Settings.invertColors) page += F(" checked");
   page += F("> Invert colors</label></div>"
             "<div style='margin-top:8px;'>"
@@ -787,7 +820,40 @@ static void handleRoot()
             "<input type='hidden' id='f-theme' name='theme' value='");
   page += String(curTheme) + F("'>"
             "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Live theme applied instantly to CYD screen!</div>"
-            "</div></div>"
+            "</div>");
+#ifdef HAS_BACKLIGHT_CONTROL
+  page += F("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--card-border);'>"
+            "<div style='font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;'>🌙 Backlight Timeout &amp; Night Dimming</div>"
+            "<div style='display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:14px;'>"
+            "<span>Sleep timeout: <input type='number' name='screenoff' class='blank-input' style='width:52px' min='0' max='1440' value='");
+  page += String(Settings.ScreenTimeout);
+  page += F("'> min <span class='cfg-help' style='display:inline;'>(0 = never; wake on touch or BOOT)</span></span>"
+            "</div><div style='margin-top:10px;'>"
+            "<label class='checkbox-label'>"
+            "<input type='checkbox' name='nightdim'");
+  if (Settings.nightDim) page += F(" checked");
+  page += F("> <span><strong>Automatic Night Dimming:</strong> Fade backlight to <input type='number' name='nightbright' class='blank-input' style='width:52px' min='1' max='255' value='");
+  page += String(Settings.NightBrightness);
+  page += F("'> at sunset over a <input type='number' name='nightfade' class='blank-input' style='width:52px' min='0' max='240' value='");
+  page += String(Settings.NightFade);
+  page += F("'> min window.</span></label>"
+            "</div><div style='margin-top:10px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:14px;'>"
+            "<span>Location: <select onchange='pickCity(this.value)' class='blank-select'>"
+            "<option value=''>Pick Nearest City...</option>");
+  for (unsigned i = 0; i < sizeof(kCities) / sizeof(kCities[0]); i++)
+  {
+    page += "<option value='" + String(kCities[i].latitude, 2) + "," + String(kCities[i].longitude, 2) + "'>" + String(kCities[i].name) + "</option>";
+  }
+  page += F("</select></span>"
+            "<span>Lat: <input type='text' id='f-lat' name='lat' class='blank-input' style='width:75px' value='");
+  page += String(Settings.Latitude, 2);
+  page += F("'></span><span>Lon: <input type='text' id='f-lon' name='lon' class='blank-input' style='width:75px' value='");
+  page += String(Settings.Longitude, 2);
+  page += F("'></span></div><div class='cfg-help' style='margin-top:6px;'>📍 ");
+  page += nightDimStatus();
+  page += F("</div></div>");
+#endif
+  page += F("</div>"
             "<!-- 4. Timezone, Currency & Stats Persistence -->"
             "<div class='cfg-p'>"
             "Set the on-screen clock to <select id='tz-select' onchange='applyTz(this.value)' class='blank-select'>"
@@ -1133,10 +1199,23 @@ static void handleSave()
     next.ledBrightness = constrain(webCfgServer.arg("ledbright").toInt(), 1, 255);
   next.ledScreenOff = webCfgServer.hasArg("ledscreen");
 #endif
+#ifdef HAS_BACKLIGHT_CONTROL
+  if (webCfgServer.hasArg("screenoff"))
+    next.ScreenTimeout = max(0, (int)webCfgServer.arg("screenoff").toInt());
+  next.nightDim = webCfgServer.hasArg("nightdim");
+  if (webCfgServer.hasArg("nightbright"))
+    next.NightBrightness = constrain((int)webCfgServer.arg("nightbright").toInt(), 1, 255);
+  if (webCfgServer.hasArg("nightfade"))
+    next.NightFade = max(0, (int)webCfgServer.arg("nightfade").toInt());
+  if (webCfgServer.hasArg("lat"))
+    next.Latitude = webCfgServer.arg("lat").toFloat();
+  if (webCfgServer.hasArg("lon"))
+    next.Longitude = webCfgServer.arg("lon").toFloat();
+#endif
 
   saveSettingsToFlash(&next);
 
-  const bool restart = next.invertColors != before.invertColors || next.screenRotation != before.screenRotation || next.flipDisplay != before.flipDisplay;
+  const bool restart = next.screenRotation != before.screenRotation || next.flipDisplay != before.flipDisplay;
   if (!restart)
   {
     const bool poolChanged = next.PoolAddress != before.PoolAddress || next.PoolPort != before.PoolPort ||
@@ -1156,6 +1235,8 @@ static void handleSave()
     Settings.saveStats = next.saveStats;
     Settings.displayTheme = next.displayTheme;
     setDisplayTheme(Settings.displayTheme);
+    Settings.invertColors = next.invertColors;
+    setDisplayInvert(Settings.invertColors);
     Settings.Brightness = next.Brightness;
     ledcWrite(0, Settings.Brightness);
 #ifdef HAS_RGB_LED
@@ -1164,6 +1245,16 @@ static void handleSave()
     Settings.ledBrightness = next.ledBrightness;
     Settings.ledScreenOff = next.ledScreenOff;
     rgbLedTick();
+#endif
+#ifdef HAS_BACKLIGHT_CONTROL
+    Settings.ScreenTimeout = next.ScreenTimeout;
+    Settings.nightDim = next.nightDim;
+    Settings.NightBrightness = next.NightBrightness;
+    Settings.NightFade = next.NightFade;
+    Settings.Latitude = next.Latitude;
+    Settings.Longitude = next.Longitude;
+    if (next.ScreenTimeout != before.ScreenTimeout)
+      wakeScreen();
 #endif
 
     String msg = poolChanged ? F("Settings saved! Reconnecting to pool with new settings...")
@@ -1262,6 +1353,7 @@ void setup_webConfig(void)
   webCfgServer.on("/api/reset-session", HTTP_POST, handleResetSession);
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
   webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);
+  webCfgServer.on("/api/invert", HTTP_POST, handleSetInvert);
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);

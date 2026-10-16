@@ -32,6 +32,7 @@
 #include "drivers/storage/storage.h"
 #include "currency.h"
 #include "rgbLed.h"
+#include "display.h"
 
 #define WIDTH 130
 #define HEIGHT 170
@@ -1665,6 +1666,16 @@ int esp32_2432S028R_GetTheme()
   return currentThemeIdx;
 }
 
+void esp32_2432S028R_SetInvert(bool inv)
+{
+  Settings.invertColors = inv;
+  invertColors = inv;
+#if defined(TFT_INVERSION_ON)
+  invertColors = !invertColors;
+#endif
+  tft.invertDisplay(invertColors);
+}
+
 // ------------------------------------------------------- saved UI choices --
 // Last-viewed page lives in its own NVS namespace (the
 // pool/wallet/brightness/invert/flip settings are in the main config file).
@@ -1992,7 +2003,11 @@ void esp32_2432S028R_AlternateScreenState(void)
   }
   else
   {
+#ifdef HAS_BACKLIGHT_CONTROL
+    g_currentDuty = backlightLevel();
+#else
     g_currentDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
+#endif
     ledcWrite(0, g_currentDuty);
   }
 #ifdef HAS_RGB_LED
@@ -2101,7 +2116,9 @@ static void touchTask(void *)
       if (++downCount == 2 && !wasDown) // two consecutive samples: real press, act once per touch
       {
         wasDown = true;
-        if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
+        if (ledcRead(0) == 0)
+          pendingTouch = TA_BACKLIGHT; // dark screen: any touch wakes it
+        else if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
           pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
         else
           pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
@@ -2150,6 +2167,10 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
   unsigned long currentMillis = millis();
   int action = pendingTouch;
   pendingTouch = TA_NONE;
+  if (action != TA_NONE)
+  {
+    noteScreenActivity();
+  }
   DisplayDriver *drv = currentDisplayDriver;
   switch (action)
   {

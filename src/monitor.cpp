@@ -338,6 +338,18 @@ void getTime(unsigned long* currentHours, unsigned long* currentMinutes, unsigne
   *currentSeconds = currentTime % 60;
 }
 
+// UTC now; false until the clock has been set from NTP. With sync (monitor
+// task only) the NTP call is made here when it is due, as getTime() does.
+bool getUtcTime(time_t &utc, bool sync){
+  if (sync) {
+    unsigned long h, m, s;
+    getTime(&h, &m, &s);
+  }
+  if (mTriggerUpdate == 0) return false;
+  utc = (time_t)(initialTime + (millis() - mTriggerUpdate) / 1000) - 3600L * Settings.Timezone;
+  return true;
+}
+
 String getDate(){
   
   unsigned long elapsedTime = (millis() - mTriggerUpdate) / 1000; // Tiempo transcurrido en segundos

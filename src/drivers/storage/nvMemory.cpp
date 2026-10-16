@@ -54,6 +54,12 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] = Settings->ledBrightness;
         json[JSON_SPIFFS_KEY_LEDSCREENOFF] = Settings->ledScreenOff;
 #endif
+        json[JSON_SPIFFS_KEY_SCREENTIMEOUT] = Settings->ScreenTimeout;
+        json[JSON_SPIFFS_KEY_NIGHTDIM] = Settings->nightDim;
+        json[JSON_SPIFFS_KEY_NIGHTBRIGHTNESS] = Settings->NightBrightness;
+        json[JSON_SPIFFS_KEY_NIGHTFADE] = Settings->NightFade;
+        json[JSON_SPIFFS_KEY_LATITUDE] = Settings->Latitude;
+        json[JSON_SPIFFS_KEY_LONGITUDE] = Settings->Longitude;
 
         // Open config file
         File configFile = SPIFFS.open(JSON_CONFIG_FILE, "w");
@@ -158,6 +164,12 @@ bool nvMemory::loadConfig(TSettings* Settings)
                     Settings->ledBrightness = json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] | DEFAULT_LEDBRIGHTNESS;
                     Settings->ledScreenOff = json[JSON_SPIFFS_KEY_LEDSCREENOFF] | DEFAULT_LEDSCREENOFF;
 #endif
+                    Settings->ScreenTimeout = json[JSON_SPIFFS_KEY_SCREENTIMEOUT] | DEFAULT_SCREENTIMEOUT;
+                    Settings->nightDim = json[JSON_SPIFFS_KEY_NIGHTDIM] | DEFAULT_NIGHTDIM;
+                    Settings->NightBrightness = json[JSON_SPIFFS_KEY_NIGHTBRIGHTNESS] | DEFAULT_NIGHTBRIGHTNESS;
+                    Settings->NightFade = json[JSON_SPIFFS_KEY_NIGHTFADE] | DEFAULT_NIGHTFADE;
+                    Settings->Latitude = json[JSON_SPIFFS_KEY_LATITUDE] | 0.0f;
+                    Settings->Longitude = json[JSON_SPIFFS_KEY_LONGITUDE] | 0.0f;
                     return true;
                 }
                 else

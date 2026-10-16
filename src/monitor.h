@@ -170,6 +170,7 @@ clock_data_t getClockData_t(unsigned long mElapsed);
 String getPoolAPIUrl(void);
 // Full URL for a mempool API path on the user-configured host.
 String mempoolUrl(const char *path);
+bool getUtcTime(time_t &utc, bool sync = false);
 
 void requestCurrencyChange(const char *code);
 String currencySetting(void);
