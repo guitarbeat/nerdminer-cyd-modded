@@ -31,3 +31,13 @@
 - **Geometric Icon Accuracy & Minimal Clutter**:
   - Never assemble icons with ad-hoc triangles without testing polygon symmetry. Prefer clean, mathematically balanced vector vertices or 1-bit bitmaps.
   - Keep metric card headers clean and centered; avoid decorative stars, dots, or unneeded glyphs.
+
+## Mining Performance & Hardware Architecture (ESP32 Classic / D0WD)
+
+- **SHA Hardware / DPORT Bus Contention Prevention**:
+  - Never call `mbedtls` or touch DPORT/SHA hardware registers from Core 0 during active mining on classic ESP32 (D0WD).
+  - On dual-core ESP32 classic, any concurrent DPORT register access while Core 1 executes the 247-cycle assembly loop (`pipelined_hw_mine_classic_v2.S`) causes silent silicon register corruption.
+  - The firmware safety governor `pl_health` detects these verification failures and demotes the hardware loop to `fast, wide margins` (317 cycles, dropping HW hashrate from ~974 KH/s to ~757 KH/s, locking total rate at ~845 KH/s).
+  - All display telemetry sampling (such as Screen 3 scatter plot or hash digests) MUST be decoupled: push real share digests from `runStratumWorker`, or sample at low rate in `runMonitor` using pure software SHA (`nerd_sha256d_baked`).
+  - Core 0 is restricted to pure software hashing and WiFi/web telemetry.
+
