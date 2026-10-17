@@ -453,8 +453,8 @@ void suffix_string(double val, char *buf, size_t bufsiz, int sigdigits)
 		val /= peta;
 		dval = val / kilo;
         suffix[0] = 'E';
-        if (dval > 999.99)
-            dval = 999.99;
+        if (dval >= 999.95)
+            dval = 999.9;
 	} else if (val >= peta) {
 		val /= tera;
 		dval = val / kilo;

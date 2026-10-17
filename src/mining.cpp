@@ -150,6 +150,8 @@ static inline uint16_t hashLog2Q8FromDigest(const uint8_t h[32])
 void hashSamplePushDigest(const uint8_t hash[32])
 {
   uint16_t v = hashLog2Q8FromDigest(hash);
+  if (v == 0)
+    return;
   uint8_t i = g_hashSampleHead;
   g_hashSamples[i] = v;
   g_hashSampleHead = (uint8_t)((i + 1u) % HASH_SAMPLE_N);
@@ -158,9 +160,13 @@ void hashSamplePushDigest(const uint8_t hash[32])
   g_hashSampleLatest = v;
   // Every plotted sample is a real hash: keep best_diff >= any plotted point
   // so BEST is always the top of the scatter (diff = 2^(224 - log2 hash)).
-  double d = ldexp(1.0, 224 - (int)(v >> 8)) / (1.0 + (double)(v & 0xFF) / 256.0);
-  if (d > best_diff)
-    best_diff = d;
+  int bit = (int)(v >> 8);
+  if (bit <= 224 && bit > 0)
+  {
+    double d = ldexp(1.0, 224 - bit) / (1.0 + (double)(v & 0xFF) / 256.0);
+    if (d > best_diff && d < 1e16)
+      best_diff = d;
+  }
 }
 
 uint16_t hashLog2Q8FromDifficulty(double difficulty)
@@ -2181,7 +2187,7 @@ void restoreStat() {
 
   uint32_t nv_crc;
   nvs_get_u32(stat_handle, "crc32", &nv_crc);
-  if (nv_crc != crc)
+  if (nv_crc != crc || best_diff > 1e16 || best_diff < 0.0 || isnan(best_diff) || isinf(best_diff))
   {
     best_diff = 0.0;
     Mhashes = 0;
