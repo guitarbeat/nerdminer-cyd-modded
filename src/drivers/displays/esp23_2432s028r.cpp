@@ -1517,8 +1517,8 @@ static void paintLoading(TFT_eSPI &d)
   int x0 = cx - wn / 2;
   int textY = isPortrait() ? 180 : 152;
   text(d, "NERDMINER", x0, textY, 26, C_TEXT, C_BG);
-  text(d, CURRENT_VERSION, cx, textY + 40, 12, C_DIM, C_BG, Align::TopCenter);
-  text(d, "INITIALIZING", cx, textY + 58, 9, C_DIM, C_BG, Align::TopCenter);
+  text(d, CURRENT_VERSION, cx, textY + 38, 14, C_GOLD, C_BG, Align::TopCenter);
+  text(d, "INITIALIZING", cx, textY + 58, 11, C_DIM, C_BG, Align::TopCenter);
 }
 
 static void paintSetup(TFT_eSPI &d)
