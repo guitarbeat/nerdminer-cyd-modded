@@ -141,7 +141,7 @@ static inline bool isPortrait()
 
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
 static inline int gCX() { return isPortrait() ? 120 : 100; }
-static inline int gCY() { return isPortrait() ? 128 : 116; }
+static inline int gCY() { return isPortrait() ? 106 : 116; }
 static inline int gR()  { return isPortrait() ? 98 : 86; }
 static inline int gRI() { return isPortrait() ? 84 : 74; }
 
@@ -560,117 +560,7 @@ struct HdrV
 
 static void drawHeader(const HdrV &h)
 {
-  char k[80];
-  snprintf(k, sizeof(k), "%s|%s|%d|%d|%d|%d", h.time.c_str(), h.ip.c_str(), h.bars, h.status, isPortrait() ? 1 : 0, h.screen);
-  if (!need(W_HDR, k))
-    return;
-  const int X0 = 10, W = (isPortrait() ? 240 : 320) - X0;
-  if (!wBegin(W, HDR_H, C_BG))
-    return;
-
-  // Dynamic Screen Title in the top-left corner
-  static const char *const SCREEN_TITLES[4] = {
-      "MINE",
-      "MARKET",
-      "CLOCK",
-      "ARCH"
-  };
-  const char *title = (h.screen >= 0 && h.screen < 4) ? SCREEN_TITLES[h.screen] : "MINER";
-  // MARKET / PROTOCOL / CLOCK: compact "TITLE|HASHING" wordmark (mock).
-  // CLOCK: no top-right clock — the hero IS the time.
-  const bool wordmark = (h.screen == SCR_ARCH || h.screen == SCR_MARKET || h.screen == SCR_CLOCK);
-  const bool hideTime = (h.screen == SCR_CLOCK);
-  if (wordmark)
-  {
-    text(wgt, title, 0, 5, 12, C_TEXT, C_BG);
-    int wm0 = textW(title, 12);
-    text(wgt, "|", wm0 + 1, 5, 12, C_DIM, C_BG);
-    const char *lab = (h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE");
-    uint16_t col = (h.status == NM_hashing) ? C_GOOD : (h.status == NM_Connecting ? C_WARN : C_DIM);
-    text(wgt, lab, wm0 + 8, 5, 12, col, C_BG);
-  }
-  else
-  {
-    text(wgt, title, 0, 5, 13, C_TEXT, C_BG);
-  }
-  int wm = wordmark
-               ? (textW(title, 12) + 8 + textW((h.status == NM_hashing) ? "HASHING" : (h.status == NM_Connecting ? "LINKING" : "IDLE"), 12))
-               : textW(title, 13);
-
-  // Status: purely typographic indicator with no dot prefix to save space
-  const char *label = "SETUP";
-  uint16_t col = C_DIM;
-  if (h.status == NM_hashing)
-  {
-    label = "HASHING";
-    col = C_GOOD;
-  }
-  else if (h.status == NM_Connecting)
-  {
-    label = "LINKING";
-    col = C_WARN;
-  }
-  int sx = wm + (isPortrait() ? 8 : 12);
-  // Wordmark already shows HASHING — skip duplicate.
-  if (!wordmark)
-    text(wgt, label, sx, 6, 9, col, C_BG);
-  else
-    sx = wm + 4;
-
-  // Optional green status dot (CLOCK / hashing) after the wordmark
-  if (h.screen == SCR_CLOCK && h.status == NM_hashing)
-  {
-    wgt.fillCircle(sx + 6, 13, 3, C_GOOD);
-    sx += 14;
-  }
-
-  // Time (right-aligned) — omitted on CLOCK (hero owns the clock)
-  int gapRight = W - 8;
-  if (!hideTime)
-  {
-    text(wgt, h.time.c_str(), W - 4, 5, 13, C_TEXT, C_BG, Align::TopRight);
-    int timeW = textW(h.time.c_str(), 13);
-    int timeLeft = (W - 4) - timeW;
-    gapRight = timeLeft - 8;
-    // Local IP (landscape only, quiet secondary information to the left of time)
-    if (!isPortrait() && h.ip.length())
-    {
-      int ipRight = timeLeft - 14;
-      text(wgt, h.ip.c_str(), ipRight, 6, 10, C_DIM, C_BG, Align::TopRight);
-      gapRight = ipRight - textW(h.ip.c_str(), 10) - 10;
-    }
-  }
-
-  // ── CarCYD-inspired nav dots: 4 clean indicator dots in the mid-header gap ──
-  {
-    const int nScreens = 4;
-    const int dotPitch = 9; // spacing between centers
-    int totalW = (nScreens - 1) * dotPitch + 8;
-    int dotY = 13; // vertical center in 26px header
-
-    int statusEnd = wordmark ? sx : (sx + textW(label, 9) + 6);
-    int center = (statusEnd + gapRight) / 2;
-    int dotX0 = center - totalW / 2 + 4;
-    if (dotX0 < statusEnd + 8) dotX0 = statusEnd + 8;
-
-    for (int i = 0; i < nScreens; i++)
-    {
-      int cx = dotX0 + i * dotPitch;
-      if (i == h.screen)
-      {
-        // Active screen: illuminated rounded pill
-        wgt.fillRoundRect(cx - 4, dotY - 2, 9, 5, 2, C_METER);
-      }
-      else
-      {
-        // Inactive screens: subtle circular dots in C_DIM
-        wgt.fillCircle(cx, dotY, 2, C_DIM);
-      }
-    }
-  }
-
-  wEnd(X0, 0);
-  done(W_HDR, k);
+  (void)h;
 }
 
 static void drawPulse(unsigned long frame)
@@ -763,10 +653,10 @@ struct MineV
 // Mine layout (mock): big ring + hero, two equal cards, 3-cell footer strip.
 //   Portrait : ring cy=128 r=98, cards y=222..264, strip y=270..314
 //   Landscape: ring left cx=100 cy=116 r=86, cards right column, strip y=198
-#define MINE_CARD_PY 222
-#define MINE_CARD_PH 42
-#define MINE_STRIP_PY 270
-#define MINE_STRIP_PH 44
+#define MINE_CARD_PY 190
+#define MINE_CARD_PH 54
+#define MINE_STRIP_PY 252
+#define MINE_STRIP_PH 60
 
 static void mineStripGeom(int &x, int &y, int &w, int &h)
 {
@@ -815,11 +705,11 @@ static void drawMineCard(int id, int x, int y, int w, int h, const char *label, 
   panel(wgt, 0, 0, w, h, 8, C_PANEL, C_EDGE, C_BG);
   int lw = textW(label, 10);
   int lx = (w - lw) / 2;
-  text(wgt, label, lx, 5, 10, C_DIM, C_PANEL);
-  unsigned vs = h >= 60 ? 24 : 20;
+  text(wgt, label, lx, 6, 10, C_DIM, C_PANEL);
+  unsigned vs = h >= 50 ? 22 : 20;
   if (strlen(value) > 8)
     vs -= 4;
-  text(wgt, value, w / 2, h >= 60 ? 26 : 19, vs, valCol, C_PANEL, Align::TopCenter);
+  text(wgt, value, w / 2, h >= 50 ? 23 : 19, vs, valCol, C_PANEL, Align::TopCenter);
   wEnd(x, y);
   done(id, k);
 }
@@ -837,10 +727,10 @@ static void drawMineStrip(const StripV &s)
     if (!wBegin(cw, ch, C_PANEL))
       continue;
     int c = cw / 2;
-    unsigned vs = isPortrait() ? 15 : 14, ls = 10;
+    unsigned vs = isPortrait() ? 17 : 14, ls = 10;
     uint16_t vCol = (i == 2 ? C_GOLD : C_TEXT);
-    text(wgt, s.v[i].c_str(), c, 4, vs, vCol, C_PANEL, Align::TopCenter);
-    text(wgt, s.l[i].c_str(), c, 22, ls, C_DIM, C_PANEL, Align::TopCenter);
+    text(wgt, s.v[i].c_str(), c, 7, vs, vCol, C_PANEL, Align::TopCenter);
+    text(wgt, s.l[i].c_str(), c, 31, ls, C_DIM, C_PANEL, Align::TopCenter);
     wEnd(x + (w * i) / 3 + 2, y + 3);
     done(W_P0 + i, k);
   }
@@ -864,9 +754,9 @@ static void paintMine(const MineV &m)
     {
       int c = hw / 2;
       text(wgt, "HASHRATE", c, 4, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
-      unsigned sz = P ? (m.hash.length() <= 5 ? 40 : 34) : (m.hash.length() <= 5 ? 36 : 30);
+      unsigned sz = P ? (m.hash.length() <= 5 ? 42 : 36) : (m.hash.length() <= 5 ? 36 : 30);
       text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", c, P ? 62 : 52, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 64 : 52, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
       wEnd(cx - c, cy - (P ? 38 : 34));
       done(W_HERO, k);
     }
@@ -1587,9 +1477,6 @@ static void paintSetup(TFT_eSPI &d)
 static void paintChrome(TFT_eSPI &d, int scr)
 {
   clearScreen(d);
-  int hy = dY(HDR_H);
-  if (hy >= 0 && hy < d.height())
-    d.drawFastHLine(0, hy, isPortrait() ? 240 : 320, C_EDGE);
   switch (scr)
   {
   case SCR_MINE:
