@@ -179,7 +179,8 @@ static unsigned long histLastMs = 0;
 // Every widget remembers the "key" it last drew so it only repaints on change.
 enum WidgetId
 {
-  W_HDR,
+  W_HDR_BADGE,
+  W_HDR_TIME,
   W_HERO,
   W_TOTAL,
   W_T0, // 4 tiles
@@ -581,6 +582,8 @@ static void gaugeDraw(TFT_eSPI &d, float v)
 struct HdrV
 {
   String time;
+  String time12;
+  String blocks;
   String ip;
   int bars;
   int status;
@@ -589,7 +592,39 @@ struct HdrV
 
 static void drawHeader(const HdrV &h)
 {
-  (void)h;
+  const bool P = isPortrait();
+  const int bx = P ? 6 : 8;
+  const int tx = P ? 166 : 244;
+  const int wBadge = 48, hBadge = 22;
+  const int wClock = 68, hClock = 20;
+
+  // Top-left trophy badge (x=6/8, y=4, w=48, h=22)
+  String kBadge = "hbdg|" + h.blocks + "|" + (P ? "P" : "L");
+  if (need(W_HDR_BADGE, kBadge))
+  {
+    if (wBegin(wBadge, hBadge, C_BG))
+    {
+      panel(wgt, 0, 0, wBadge, hBadge, 6, C_PANEL, C_EDGE, C_BG);
+      uint16_t trophyCol = (h.blocks.toInt() > 0) ? C_GOLD : C_DIM;
+      drawTrophy(wgt, 6, 5, trophyCol);
+      uint16_t blockNumCol = (h.blocks.toInt() > 0) ? C_GOLD : C_TEXT;
+      text(wgt, h.blocks.c_str(), 32, 4, 13, blockNumCol, C_PANEL, Align::TopCenter);
+      wEnd(bx, 4);
+      done(W_HDR_BADGE, kBadge);
+    }
+  }
+
+  // Top-right 12-hour clock (x=166/244, y=4, w=68, h=20)
+  String kClock = "hclk|" + h.time12 + "|" + (P ? "P" : "L");
+  if (need(W_HDR_TIME, kClock))
+  {
+    if (wBegin(wClock, hClock, C_BG))
+    {
+      text(wgt, h.time12.c_str(), 66, 3, 13, C_TEXT, C_BG, Align::TopRight);
+      wEnd(tx, 4);
+      done(W_HDR_TIME, kClock);
+    }
+  }
 }
 
 static void drawPulse(unsigned long frame)
@@ -772,37 +807,6 @@ static void paintMine(const MineV &m)
   const bool P = isPortrait();
   int cx = G_CX;
   int cy = G_CY;
-
-  if (P)
-  {
-    // Top-left trophy badge (x=6, y=4, w=48, h=22)
-    String kBadge = "bdg|" + m.blocks;
-    if (need(W_T2, kBadge))
-    {
-      if (wBegin(48, 22, C_BG))
-      {
-        panel(wgt, 0, 0, 48, 22, 6, C_PANEL, C_EDGE, C_BG);
-        uint16_t trophyCol = (m.blocks.toInt() > 0) ? C_GOLD : C_DIM;
-        drawTrophy(wgt, 6, 5, trophyCol);
-        uint16_t blockNumCol = (m.blocks.toInt() > 0) ? C_GOLD : C_TEXT;
-        text(wgt, m.blocks.c_str(), 32, 4, 13, blockNumCol, C_PANEL, Align::TopCenter);
-        wEnd(6, 4);
-        done(W_T2, kBadge);
-      }
-    }
-
-    // Top-right 12-hour clock (x=166, y=4, w=68, h=20)
-    String kClock = "mclk|" + m.time12;
-    if (need(W_T3, kClock))
-    {
-      if (wBegin(68, 20, C_BG))
-      {
-        text(wgt, m.time12.c_str(), 66, 3, 13, C_TEXT, C_BG, Align::TopRight);
-        wEnd(166, 4);
-        done(W_T3, kClock);
-      }
-    }
-  }
 
   // hero readout inside the ring: HASHRATE / value / KH/s
   String k = m.hash + "|" + (P ? "P" : "L");
@@ -1705,6 +1709,9 @@ static HdrV liveHeader(const String &time)
 {
   HdrV h;
   h.time = time;
+  String t = (time.length() && time != "--") ? time : getTime();
+  h.time12 = fmt12HourTime(t);
+  h.blocks = String(valids);
   h.ip = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String();
   h.bars = wifiBars();
   h.status = uiStatus();
@@ -2306,6 +2313,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     {
       if (haveMine)
       {
+        lastMine.hdr = liveHeader(getTime());
         lastMine.time12 = fmt12HourTime(getTime());
         uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
         uint32_t blkSec = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
@@ -2346,6 +2354,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     {
       if (haveMarket)
       {
+        lastMarket.hdr = liveHeader(getTime());
         paintMarket(lastMarket);
       }
       else
@@ -2373,6 +2382,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     {
       if (haveClock)
       {
+        lastClock.hdr = liveHeader(getTime());
         paintClock(lastClock);
       }
       else
@@ -2401,6 +2411,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     {
       if (haveArch)
       {
+        lastArch.hdr = liveHeader(getTime());
         paintArchitecture(lastArch);
       }
       else

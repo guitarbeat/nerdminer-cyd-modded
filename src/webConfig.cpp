@@ -286,27 +286,70 @@ static void handleUpdateUpload()
 
 static const char DASH_STYLE[] PROGMEM = R"rawcss(
 :root{
---bg:#07090d;--card:#10141c;--card-2:#0c1017;--card-border:#1e2631;--input-bg:#0a0e14;
---text:#eef2f8;--muted:#7a8799;--dim:#4b5666;--amber:#f7931a;--green:#22c55e;--warn:#f59e0b;--red:#ef4444;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r:6px;
+--bg:#07090e;--card:#0f141d;--card-2:#0a0d13;--card-border:#1c2432;--input-bg:#080b10;
+--text:#eef2f8;--muted:#7d8c9e;--dim:#4e5a6b;--amber:#f7931a;--green:#22c55e;--warn:#f59e0b;--red:#ef4444;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 48px max(14px,env(safe-area-inset-left));line-height:1.5;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left));line-height:1.5;-webkit-font-smoothing:antialiased}
 code{font-family:var(--mono);font-size:.88em;background:var(--input-bg);border:1px solid var(--card-border);padding:0 4px;border-radius:3px;word-break:break-all}
-.container{max-width:680px;margin:0 auto}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0 14px;border-bottom:1px solid var(--card-border);margin-bottom:18px}
+.container{max-width:1160px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0 14px;border-bottom:1px solid var(--card-border);margin-bottom:16px}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
-.logo-box{width:34px;height:34px;border-radius:var(--r);background:var(--amber);display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:19px;flex-shrink:0;transition:background .3s}
-.brand-title{font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
+.logo-box{width:36px;height:36px;border-radius:var(--r);background:var(--amber);display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px;flex-shrink:0;box-shadow:0 0 16px rgba(247,147,26,0.3);transition:background .3s}
+.brand-title{font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
 .brand-subtitle{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status-badge{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:4px 11px;font-size:11px;font-weight:800;letter-spacing:1px;flex-shrink:0}
+.status-badge{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:800;letter-spacing:1px;flex-shrink:0}
 .status-badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;color:var(--muted)}
-.status-badge:has(.txt-green)::before{color:var(--green);box-shadow:0 0 6px var(--green)}
+.status-badge:has(.txt-green)::before{color:var(--green);box-shadow:0 0 8px var(--green)}
 .status-badge:has(.txt-amber)::before{color:var(--warn)}
 .txt-green{color:var(--green)}
 .txt-amber{color:var(--warn)}
 .txt-gray{color:var(--muted)}
+
+.diag-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--card-border);border:1px solid var(--card-border);border-radius:var(--r);overflow:hidden;margin-bottom:18px;box-shadow:0 4px 16px rgba(0,0,0,0.2)}
+@media(min-width:480px){.diag-strip{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:960px){.diag-strip{grid-template-columns:repeat(6,1fr)}}
+.diag-item{background:var(--card);padding:10px 14px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.diag-label{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:2px}
+.diag-val{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#st-uptime{font-size:13px}
+.diag-sub{font-size:11px;font-weight:400;color:var(--muted)}
+.btn-reset-stats{align-self:flex-start;background:transparent;border:1px solid var(--card-border);border-radius:4px;color:var(--muted);padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-reset-stats:hover{color:var(--amber);border-color:var(--amber)}
+
+.console-layout{display:grid;grid-template-columns:310px 1fr;gap:20px;align-items:start}
+@media(max-width:960px){.console-layout{grid-template-columns:1fr}}
+@media(min-width:961px){.console-sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:14px}}
+.console-main{display:flex;flex-direction:column;min-width:0}
+
+.console-tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:6px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none}
+.console-tabs::-webkit-scrollbar{display:none}
+.tab-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s ease}
+.tab-btn:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+.tab-btn.active{color:var(--amber);background:rgba(247,147,26,0.1);border-color:rgba(247,147,26,0.3)}
+.tab-icon{font-size:14px}
+.tab-pane{display:none}
+.tab-pane.active{display:flex;flex-direction:column;gap:14px}
+
+.telemetry-bento{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+.tele-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;box-shadow:0 4px 16px rgba(0,0,0,0.25);display:flex;flex-direction:column;gap:10px}
+.tele-card-hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px}
+.tele-card-title{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:6px}
+.tele-hero-val{font-size:24px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.2}
+.tele-hero-val.amber{color:var(--amber)}
+.tele-hero-sub{font-size:11px;color:var(--muted);font-weight:500}
+.tele-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12.5px}
+.tele-row:last-child{border-bottom:none}
+.hl-key{color:var(--amber);font-weight:700}
+.hl-val{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+
+.pool-banner{background:var(--card);border:1px solid var(--card-border);border-left:3px solid var(--amber);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pool-info{font-size:13px;min-width:0}
+.pool-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:12px;padding:8px 12px;border-radius:var(--r);transition:opacity .15s}
+.pool-btn:hover{opacity:.85}
+
 details.edu-acc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:8px;overflow:hidden}
 details.edu-acc[open]{border-color:var(--amber)}
 summary.edu-sum{padding:11px 14px;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none;transition:background .15s}
@@ -314,39 +357,13 @@ summary.edu-sum::-webkit-details-marker{display:none}
 summary.edu-sum:hover{background:rgba(247,147,26,0.06)}
 summary.edu-sum::after{content:'+';font-size:16px;color:var(--amber);font-weight:700}
 details.edu-acc[open] summary.edu-sum::after{content:'\2212'}
-.edu-body{padding:12px 14px 16px;border-top:1px solid var(--card-border);font-size:14px;line-height:1.6;color:#c9d1d9}
-.fields-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:10px 0}
-@media(min-width:480px){.fields-grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:640px){.fields-grid{grid-template-columns:repeat(3,1fr)}}
-.field-box{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:10px 12px}
-.field-name{font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;justify-content:space-between;gap:6px}
-.field-bytes{font-size:10px;font-weight:700;color:var(--amber);font-family:var(--mono)}
-.field-desc{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4}
-.field-sum{background:var(--input-bg);border-radius:var(--r);padding:8px 12px;font-size:12px;color:var(--text);margin-top:8px}
-.story-flow{display:flex;flex-direction:column;gap:14px}
-.story-p{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.6;color:#c9d1d9}
-.story-num{font-size:10px;font-weight:800;color:var(--bg);background:var(--muted);border-radius:4px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:3px}
-.story-text{flex:1}
-.hl-key{color:var(--amber);font-weight:700}
-.hl-val{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
-.diag-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--card-border);border:1px solid var(--card-border);border-radius:var(--r);overflow:hidden;margin-bottom:18px}
-@media(min-width:480px){.diag-strip{grid-template-columns:repeat(3,1fr)}}
-.diag-item{background:var(--card);padding:10px 12px;display:flex;flex-direction:column;justify-content:center;min-width:0}
-.diag-label{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:2px}
-.diag-val{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#st-uptime{font-size:14px}
-.diag-sub{font-size:11px;font-weight:400;color:var(--muted)}
-.btn-reset-stats{align-self:flex-start;background:transparent;border:1px solid var(--card-border);border-radius:4px;color:var(--muted);padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;transition:color .15s,border-color .15s}
-.btn-reset-stats:hover{color:var(--amber);border-color:var(--amber)}
-.pool-banner{background:var(--card);border:1px solid var(--card-border);border-left:3px solid var(--amber);border-radius:var(--r);padding:12px 14px;margin-bottom:18px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
-.pool-info{font-size:14px;min-width:0}
-.pool-btn{display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:13px;padding:9px 14px;border-radius:var(--r);transition:opacity .15s}
-.pool-btn:hover{opacity:.85}
+.edu-body{padding:12px 14px 16px;border-top:1px solid var(--card-border);font-size:13px;line-height:1.6;color:#c9d1d9}
+
 input[type=text],input[type=number],input[type=password],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:14px;font-family:var(--mono);outline:none;transition:border-color .15s,box-shadow .15s,background .15s;min-height:42px;box-sizing:border-box}
 input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.18);background:#0d1117}
 input::placeholder{color:var(--dim)}
 select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238592a3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
-.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:16px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 .cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#111620;border-bottom:1px solid var(--card-border);gap:10px;flex-wrap:wrap}
 .cfg-card-title{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
 .cfg-badge{font-size:10px;font-weight:700;color:var(--amber);background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.25);border-radius:999px;padding:2px 8px;letter-spacing:.5px}
@@ -394,7 +411,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .btn-save:active{transform:translateY(1px)}
 .btn-restart{background:transparent;border:1px solid rgba(239,68,68,.4);border-radius:var(--r);color:#f87171;padding:10px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;width:100%;transition:background .15s}
 .btn-restart:hover{background:rgba(239,68,68,0.08)}
-.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;margin-bottom:18px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
+.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 .ota-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
 .ota-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;max-width:56ch}
 .ota-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -405,7 +422,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .ota-progress-bar{height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden}
 .ota-progress-fill{height:100%;width:0%;background:var(--amber);transition:width .1s linear}
 .ota-status{font-size:12px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
-.guide-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 18px}
+.guide-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 14px}
 @media(min-width:480px){.guide-grid{grid-template-columns:repeat(2,1fr)}}
 .guide-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;font-size:13px;color:var(--muted);line-height:1.65;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 .guide-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
@@ -421,6 +438,11 @@ button:focus-visible,a:focus-visible,.theme-card:focus-visible{outline:2px solid
 )rawcss";
 
 static const char DASH_JS[] PROGMEM = R"rawjs(
+function switchTab(tId){
+document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.id==='tbtn-'+tId));
+document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+tId));
+try{localStorage.setItem('cyd_tab',tId);}catch(e){}
+}
 function choosePreset(h,p,pass,note){document.getElementById('f-pool').value=h;document.getElementById('f-port').value=p;document.getElementById('f-pass').value=pass;const n=document.getElementById('preset-note');if(n)n.textContent=note;if(window.event&&window.event.target){document.querySelectorAll('.preset-pill').forEach(b=>b.classList.remove('active'));window.event.target.classList.add('active');}}
 function setPool(h,p,pass){choosePreset(h,p,pass,'Switched pool to '+h+':'+p);}
 function updateBright(v){document.getElementById('b-val').textContent=v+' ('+Math.round(v*100/255)+'%)';}
@@ -498,6 +520,7 @@ if(confirm('Reset current session shares and session best difficulty? (Lifetime 
 fetch('/api/reset-session',{method:'POST'}).then(r=>r.json()).then(()=>{pollStats();}).catch(()=>{});}}
 function updateStats(d){
 const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;
+const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;
 const mhashes=Number(d.mhashes)||0,totHashes=mhashes*1e6,shares=parseInt(d.shares)||0,diff=parseFloat(d.best_diff)||0;
 const eHps=document.getElementById('dyn-hps');if(eHps)eHps.textContent=hps.toLocaleString();
 const eHpd=document.getElementById('dyn-hpd');if(eHpd)eHpd.textContent=fmtNum(hpd);
@@ -669,8 +692,8 @@ const eR=document.getElementById('sim-result');if(eR)eR.textContent=simIsHist?'S
 function calcFromBtc(v){const n=parseFloat(v);if(isNaN(n))return;document.getElementById('calc-sats').value=Math.round(n*1e8).toLocaleString();document.getElementById('calc-bits').value=(n*1e6).toLocaleString();document.getElementById('calc-mbtc').value=(n*1e3).toLocaleString();}
 function calcFromSats(v){const s=parseFloat(String(v).replace(/,/g,''));if(isNaN(s))return;document.getElementById('calc-btc').value=(s/1e8).toFixed(8);document.getElementById('calc-bits').value=(s/100).toLocaleString();document.getElementById('calc-mbtc').value=(s/1e5).toLocaleString();}
 function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}
-function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1000).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1000).toLocaleString();}
 function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}
+try{const lastT=localStorage.getItem('cyd_tab');if(lastT&&document.getElementById('tbtn-'+lastT)){switchTab(lastT);}}catch(e){}
 )rawjs";
 
 // The settings as the page should show them: what is in use, or what was
@@ -698,7 +721,7 @@ static void handleRoot()
   const CoinProfile &coin = getActiveCoinProfile();
 
   String page;
-  page.reserve(24000);
+  page.reserve(32000);
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
@@ -724,15 +747,14 @@ static void handleRoot()
   else
     page += F("txt-gray'>IDLE</span>");
 
-  page += F("</div></header>");
-  appendCydTwinHtml(page);
-  page += F("<div class='diag-strip'>"
+  page += F("</div></header>"
+            "<div class='diag-strip'>"
+            "<div class='diag-item'><span class='diag-label'>Live Hashrate</span><span class='diag-val' style='color:var(--amber);'><span id='st-top-hr'>");
+  page += d.currentHashRate.length() ? d.currentHashRate : String("--");
+  page += F("</span> <span class='diag-sub'>KH/s</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Core Temp</span><span class='diag-val'><span id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
   page += F("</span>&deg;C</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Uptime</span><span class='diag-val' id='st-uptime'>");
-  page += formatUptimeWeb(d.timeMining);
-  page += F("</span></div>"
             "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
   page += String(g_stratumPing) + F("</span> ms</span></div>"
             "<div class='diag-item'><span class='diag-label'>Wi-Fi Signal</span><span class='diag-val'><span id='st-wifi'>");
@@ -740,9 +762,11 @@ static void handleRoot()
   page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
   page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
-            "</div>");
-
+            "<div class='diag-item'><span class='diag-label'>Session Stats</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
+            "</div>"
+            "<div class='console-layout'>"
+            "<aside class='console-sidebar'>");
+  appendCydTwinHtml(page);
   if (isPublicPool && cleanWallet.length() > 0)
   {
     page += F("<div class='pool-banner'>"
@@ -754,8 +778,81 @@ static void handleRoot()
     page += htmlEscape(cleanWallet) + F("' target='_blank' rel='noopener' class='pool-btn'>"
               "View Worker on Public-Pool.io &#8599;</a></div>");
   }
+  page += F("</aside>"
+            "<main class='console-main'>"
+            "<nav class='console-tabs' role='tablist'>"
+            "<button type='button' class='tab-btn active' id='tbtn-telemetry' onclick=\"switchTab('telemetry')\"><span class='tab-icon'>&#128202;</span> Telemetry</button>"
+            "<button type='button' class='tab-btn' id='tbtn-stratum' onclick=\"switchTab('stratum')\"><span class='tab-icon'>&#9935;&#65039;</span> Pool &amp; Wallet</button>"
+            "<button type='button' class='tab-btn' id='tbtn-display' onclick=\"switchTab('display')\"><span class='tab-icon'>&#127912;</span> Display</button>"
+            "<button type='button' class='tab-btn' id='tbtn-pow' onclick=\"switchTab('pow')\"><span class='tab-icon'>&#128300;</span> PoW Workshop</button>"
+            "<button type='button' class='tab-btn' id='tbtn-system' onclick=\"switchTab('system')\"><span class='tab-icon'>&#128736;&#65039;</span> System &amp; OTA</button>"
+            "</nav>");
 
   page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
+
+  // Tab 1: Live Telemetry Bento
+  page += F("<section class='tab-pane active' id='pane-telemetry'>"
+            "<div class='telemetry-bento'>"
+            "<div class='tele-card'>"
+            "<div class='tele-card-hdr'>"
+            "<div class='tele-card-title'>&#9889; Nonce Engine &amp; Speed</div>"
+            "<span class='cfg-badge'>DUAL-CORE</span>"
+            "</div>"
+            "<div class='tele-hero-val amber'><span id='dyn-hps'>");
+  float hr = d.currentHashRate.toFloat();
+  unsigned long hps = (unsigned long)(hr * 1000.0f);
+  page += (hps > 0 ? String(hps) : F("0"));
+  page += F("</span> <span style='font-size:13px;color:var(--muted);font-weight:600;'>H/s</span></div>"
+            "<div class='tele-hero-sub'><span id='dyn-hpd'>--</span> hashes / 24h</div>"
+            "<div class='tele-row'><span>Total Work Done</span><span class='hl-val'><span id='dyn-totwork'>");
+  uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
+  if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
+  else page += String((unsigned long)mhashes) + F(" million");
+  page += F("</span></span></div>"
+            "<div class='tele-row'><span>Mining Uptime</span><span class='hl-val' id='dyn-uptime'>");
+  page += (d.timeMining.length() ? d.timeMining : F("--"));
+  page += F("</span></div>"
+            "</div>"
+            "<div class='tele-card'>"
+            "<div class='tele-card-hdr'>"
+            "<div class='tele-card-title'>&#127919; Valid Pool Shares</div>"
+            "<span class='cfg-badge'>STRATUM V1</span>"
+            "</div>"
+            "<div class='tele-hero-val'><span id='dyn-shares'>");
+  page += (d.completedShares.length() ? d.completedShares : F("0"));
+  page += F("</span> <span style='font-size:13px;color:var(--muted);font-weight:600;'>shares</span></div>"
+            "<div class='tele-hero-sub'>Avg 1 share per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
+            "<div class='tele-row'><span>Session Best Diff</span><span class='hl-key'>Diff <span id='dyn-diff'>");
+  page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
+  page += F("</span></span></div>"
+            "<div class='tele-row'><span>Historical Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
+            "</div>"
+            "<div class='tele-card'>"
+            "<div class='tele-card-hdr'>"
+            "<div class='tele-card-title'>&#127942; Solo Block Bounty</div>"
+            "<span class='cfg-badge'>100% TO YOU</span>"
+            "</div>"
+            "<div class='tele-hero-val amber'>3.125 BTC <span style='font-size:13px;color:var(--muted);font-weight:600;'>+ fees</span></div>"
+            "<div class='tele-hero-sub'>Estimated bounty value: $200k+ USD</div>"
+            "<div class='tele-row'><span>Target Proximity</span><span class='hl-val'><span id='dyn-netpct'>--</span> of <span id='dyn-netdiff'>100T</span></span></div>"
+            "<div class='tele-row'><span>Daily Probability</span><span class='hl-val'><span id='dyn-dayodds'>--</span> / day</span></div>"
+            "<div class='tele-row'><span>Annual Odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span> / yr (avg <span id='dyn-avgwait'>--</span>)</span></div>"
+            "</div>"
+            "<div class='tele-card'>"
+            "<div class='tele-card-hdr'>"
+            "<div class='tele-card-title'>&#128267; Silicon Efficiency</div>"
+            "<span class='cfg-badge'>~1.2 WATT</span>"
+            "</div>"
+            "<div class='tele-hero-val'>~1.0 MH/s <span style='font-size:13px;color:var(--muted);font-weight:600;'>@ 1.2W</span></div>"
+            "<div class='tele-hero-sub'>Energy cost: &lt;1 kWh/month (~$0.15/mo)</div>"
+            "<div class='tele-row'><span>Global Network Share</span><span class='hl-val'><span id='dyn-netpow'>--</span> of 700 EH/s</span></div>"
+            "<div class='tele-row'><span>Hardware Architecture</span><span class='hl-val'>Xtensa LX6 240MHz HW SHA</span></div>"
+            "</div>"
+            "</div>"
+            "</section>");
+
+  // Tab 2: Stratum Pool & Wallet
+  page += F("<section class='tab-pane' id='pane-stratum'>");
 
   // Card 1: Solo Pool & Stratum Connection
   page += F("<div class='cfg-card'>"
@@ -851,7 +948,9 @@ static void handleRoot()
   page += String(coin.ticker) + F(" + fees) directly on-chain to this address. Append <code>.worker_name</code> to set your pool identifier (e.g., <code>");
   page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</span>"
             "</div>"
-            "</div></div>");
+            "</div></div>"
+            "</section>"
+            "<section class='tab-pane' id='pane-display'>");
 
   // Card 3: Display, Orientation & Illumination
   page += F("<div class='cfg-card'>"
@@ -984,61 +1083,6 @@ static void handleRoot()
 #endif
   page += F("</div></div>");
 
-  // Card 4: System, Clock & Data Feeds
-  page += F("<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>"
-            "<span>System, Clock &amp; Data Feeds</span>"
-            "</div>"
-            "<span class='cfg-badge'>NODE TELEMETRY</span>"
-            "</div>"
-            "<div class='cfg-card-body'>"
-            "<div class='form-grid-3'>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='tz-select'>Timezone Preset</label>"
-            "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
-            "<option value=''>Preset Timezones...</option>"
-            "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
-            "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
-            "<option value='-6'>UTC-6 (US Central / CST)</option>"
-            "<option value='-5'>UTC-5 (US Eastern / EST)</option>"
-            "<option value='-4'>UTC-4 (Atlantic / AST)</option>"
-            "<option value='0'>UTC+0 (London / GMT)</option>"
-            "<option value='1'>UTC+1 (Central Europe / CET)</option>"
-            "<option value='2'>UTC+2 (Eastern Europe / EET)</option>"
-            "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
-            "<option value='9'>UTC+9 (Japan, Korea)</option>"
-            "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
-            "</select></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-tz'>UTC Offset (Hours)</label>"
-            "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
-  page += String(Settings.Timezone) + F("'></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-currency'>Fiat Currency</label>"
-            "<select name='currency' id='f-currency' class='form-control'>");
-  for (int i = 0; i < kCurrencyCount; i++)
-  {
-    page += "<option value='" + String(kCurrencies[i].code) + "'";
-    if (Settings.Currency.equalsIgnoreCase(kCurrencies[i].code))
-      page += " selected";
-    page += ">" + String(kCurrencies[i].label) + "</option>";
-  }
-  page += F("</select></div></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-mempool'>Mempool API Endpoint</label>"
-            "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
-  page += htmlEscape(Settings.MempoolHost) + F("'>"
-            "<span class='form-hint'>Mempool REST endpoint for block height, fee estimates, and difficulty (e.g. <code>https://mempool.space</code> or local node <code>http://umbrel.local:3006</code>).</span>"
-            "</div>"
-            "<div class='form-group'>"
-            "<label class='form-check'>"
-            "<input type='checkbox' name='savestats'");
-  if (Settings.saveStats) page += F(" checked");
-  page += F("> <span><strong>Persist Lifetime Work in Flash:</strong> Retain total hashes and submitted share count across power cycles and restarts.</span></label>"
-            "</div></div></div>");
-
 #ifdef HAS_RGB_LED
   // Card 5: Hardware RGB Status LED
   page += F("<div class='cfg-card'>"
@@ -1083,81 +1127,20 @@ static void handleRoot()
             "</div></div>");
 #endif
 
-  page += F("<div class='actions'>"
-            "<button type='submit' class='btn-save'>Save &amp; Apply Settings</button>"
-            "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
+  page += F("</section>"); // closes pane-display
+
+  // Tab 4: PoW Workshop & Architecture
+  page += F("<section class='tab-pane' id='pane-pow'>"
+            "<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg>"
+            "<span>Interactive Workshop &amp; PoW Simulator</span>"
             "</div>"
-            "</form>"
-            "<div class='ota-box'>"
-            "<div class='ota-title'>Over-The-Air (OTA) Firmware Flasher</div>"
-            "<div class='ota-desc'>Upload compiled <code>firmware.bin</code> directly over Wi-Fi. The device verifies binary integrity, flashes partition, and reboots automatically.</div>"
-            "<div class='ota-row'>"
-            "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:9px;border:1px solid var(--card-border);border-radius:var(--r);'>"
-            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload &amp; Flash</button>"
+            "<span class='cfg-badge'>80-BYTE CANDIDATE</span>"
             "</div>"
-            "<div class='ota-progress-box' id='ota-progress-box'>"
-            "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
-            "<div class='ota-status' id='ota-status'>Ready</div>"
-            "</div>"
-            "</div>"
-            "<div class='guide-grid'>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>👆 CYD Touch Regions</div>"
-            "<div class='guide-row'><span class='guide-key'>Top-Left Wordmark</span><span class='guide-val'>Cycle Accent Color</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Top-Right Corner</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Screen Center</span><span class='guide-val'>Cycle Screens (0 &rarr; 1 &rarr; 2 &rarr; 3)</span></div>"
-            "</div>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>🔨 Physical BOOT Button</div>"
-            "<div class='guide-row'><span class='guide-key'>1 Tap</span><span class='guide-val'>Next Screen View</span></div>"
-            "<div class='guide-row'><span class='guide-key'>2 Taps</span><span class='guide-val'>Rotate Display 90&deg;</span></div>"
-            "<div class='guide-row'><span class='guide-key'>3 Taps</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Hold 5 Seconds</span><span class='guide-val'>Factory Reset Config &amp; Reboot</span></div>"
-            "</div></div>"
-            "<details class='edu-acc' name='cyd-main' open>"
-            "<summary class='edu-sum'><span>📖 Live Telemetry &amp; Solo Mining Mathematics</span></summary>"
-            "<div class='edu-body'>"
-            "<div class='guide-grid' style='margin:0 0 10px;'>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>⚡ Nonce Engine &amp; Work</div>"
-            "<div>&bull; <strong>Speed:</strong> <strong class='hl-val'><span id='dyn-hps'>");
-  float hr = d.currentHashRate.toFloat();
-  unsigned long hps = (unsigned long)(hr * 1000.0f);
-  page += (hps > 0 ? String(hps) : F("0"));
-  page += F("</span> H/s</strong> (<span id='dyn-hpd'>--</span> hashes/day)</div>"
-            "<div>&bull; <strong>Total Done:</strong> <strong class='hl-val'><span id='dyn-totwork'>");
-  uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
-  if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
-  else page += String((unsigned long)mhashes) + F(" million");
-  page += F("</span></strong> in <span id='dyn-uptime'>");
-  page += (d.timeMining.length() ? d.timeMining : F("--"));
-  page += F("</span></div>"
-            "</div>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>🎯 Valid Pool Shares &amp; Rarity</div>"
-            "<div>&bull; <strong>Accepted:</strong> <strong class='hl-key'><span id='dyn-shares'>");
-  page += (d.completedShares.length() ? d.completedShares : F("0"));
-  page += F("</span> shares</strong> (avg. 1 per <span id='dyn-hpshare'>--</span> / <span id='dyn-tpshare'>--</span>)</div>"
-            "<div>&bull; <strong>Session Best:</strong> Diff <strong class='hl-key'><span id='dyn-diff'>");
-  page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
-  page += F("</span></strong> (1 in <span id='dyn-rarity'>--</span> rarity)</div>"
-            "</div>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>🏆 Solo Block Odds &amp; Jackpot</div>"
-            "<div>&bull; <strong>Target Proximity:</strong> <strong class='hl-val'><span id='dyn-netpct'>--</span></strong> of <span id='dyn-netdiff'>100T</span> net diff</div>"
-            "<div>&bull; <strong>Odds:</strong> <strong class='hl-val'><span id='dyn-dayodds'>--</span>/day</strong> (<span id='dyn-yrodds'>--</span>/yr; est. wait <span id='dyn-avgwait'>--</span>)</div>"
-            "<div>&bull; <strong>Bounty:</strong> <strong class='hl-key'>3.125 BTC</strong> + fees (worth $200k+ USD) paid 100% to your wallet</div>"
-            "</div>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>🔋 Silicon Efficiency &amp; Footprint</div>"
-            "<div>&bull; <strong>Global Hashpower:</strong> <strong class='hl-val'><span id='dyn-netpow'>--</span></strong> of Bitcoin's worldwide ~700 EH/s</div>"
-            "<div>&bull; <strong>Energy:</strong> ~1.2 W power draw (&lt;1 kWh/month, costs pennies to run)</div>"
-            "</div></div>"
-            "</div></details>"
-            "<details class='edu-acc' name='cyd-main'>"
-            "<summary class='edu-sum'><span>⚡ Interactive Workshop &amp; PoW Simulator</span></summary>"
-            "<div class='edu-body'>"
-            "<p style='font-size:13px;color:var(--muted);margin-bottom:12px;'>"
+            "<div class='cfg-card-body'>"
+            "<p style='font-size:13px;color:var(--muted);margin-bottom:8px;'>"
             "Inspect the exact 80-byte block header format your CYD iterates at ~1 MHz. Step through historical nonces or test the avalanche effect in real time:"
             "</p>"
             "<div style='display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;'>"
@@ -1233,11 +1216,9 @@ static void handleRoot()
             "<div style='font-size:11px;color:var(--muted);line-height:1.4;'>"
             "1 BTC = 100M Satoshis (<code>1 sat = 10<sup>-8</sup> BTC</code>). Bitcoin Core stores all balances as 64-bit integer sats. Integer truncation of 33 subsidy halvings yields exactly <strong>20,999,999.9769 BTC</strong>."
             "</div></div>"
-            "</div></details>"
-            "<details class='edu-acc' name='cyd-main'>"
-            "<summary class='edu-sum'><span>📚 First-Principles Architecture &amp; Silicon Limits</span></summary>"
-            "<div class='edu-body'>"
-            "<details class='edu-acc' name='cyd-faq'>"
+            "</div></div>"
+            "<div style='font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:8px 0 6px 4px;'>📚 First-Principles Architecture &amp; Silicon Limits</div>"
+            "<details class='edu-acc' name='cyd-faq' open>"
             "<summary class='edu-sum'><span>1. Cryptographic Foundations &amp; The 80-Byte Candidate</span></summary>"
             "<div class='edu-body'>"
             "&bull; <strong>The Avalanche Effect:</strong> SHA-256 compresses arbitrary data into a deterministic 256-bit (32-byte) digest. Altering a single bit scrambles the output completely. Because preimage recovery is computationally intractable, finding candidate blocks requires exhaustive brute-force search.<br>"
@@ -1265,12 +1246,104 @@ static void handleRoot()
             "&bull; <strong>Fixed 21M Supply:</strong> Fixed issuance cap of <strong>20,999,999.9769 BTC</strong>. Subsidy halves every 210,000 blocks via bitwise shift (<code>&gt;&gt; 1</code>), reaching zero at block 6,929,999 around <strong>Year 2140</strong>.<br>"
             "&bull; <strong>Satoshi's Gambler's Ruin Finality:</strong> In Section 11 of the 2008 Whitepaper, Satoshi modeled double-spend races against a 10% hash attacker. After <strong>6 confirmations (~1 hour)</strong>, catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>, establishing 6 confirmations as the worldwide benchmark for irreversible settlement."
             "</div></details>"
-            "</div></details>"
+            "</section>"); // closes pane-pow
+
+  // Tab 5: System & OTA
+  page += F("<section class='tab-pane' id='pane-system'>");
+
+  // Card 4: System, Clock & Data Feeds
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>"
+            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>"
+            "<span>System, Clock &amp; Data Feeds</span>"
             "</div>"
+            "<span class='cfg-badge'>NODE TELEMETRY</span>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-grid-3'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='tz-select'>Timezone Preset</label>"
+            "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
+            "<option value=''>Preset Timezones...</option>"
+            "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
+            "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
+            "<option value='-6'>UTC-6 (US Central / CST)</option>"
+            "<option value='-5'>UTC-5 (US Eastern / EST)</option>"
+            "<option value='-4'>UTC-4 (Atlantic / AST)</option>"
+            "<option value='0'>UTC+0 (London / GMT)</option>"
+            "<option value='1'>UTC+1 (Central Europe / CET)</option>"
+            "<option value='2'>UTC+2 (Eastern Europe / EET)</option>"
+            "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
+            "<option value='9'>UTC+9 (Japan, Korea)</option>"
+            "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
+            "</select></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-tz'>UTC Offset (Hours)</label>"
+            "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
+  page += String(Settings.Timezone) + F("'></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-currency'>Fiat Currency</label>"
+            "<select name='currency' id='f-currency' class='form-control'>");
+  for (int i = 0; i < kCurrencyCount; i++)
+  {
+    page += "<option value='" + String(kCurrencies[i].code) + "'";
+    if (Settings.Currency.equalsIgnoreCase(kCurrencies[i].code))
+      page += " selected";
+    page += ">" + String(kCurrencies[i].label) + "</option>";
+  }
+  page += F("</select></div></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-mempool'>Mempool API Endpoint</label>"
+            "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
+  page += htmlEscape(Settings.MempoolHost) + F("'>"
+            "<span class='form-hint'>Mempool REST endpoint for block height, fee estimates, and difficulty (e.g. <code>https://mempool.space</code> or local node <code>http://umbrel.local:3006</code>).</span>"
+            "</div>"
+            "<div class='form-group'>"
+            "<label class='form-check'>"
+            "<input type='checkbox' name='savestats'");
+  if (Settings.saveStats) page += F(" checked");
+  page += F("> <span><strong>Persist Lifetime Work in Flash:</strong> Retain total hashes and submitted share count across power cycles and restarts.</span></label>"
+            "</div></div></div>"
+            "<div class='ota-box'>"
+            "<div class='ota-title'>Over-The-Air (OTA) Firmware Flasher</div>"
+            "<div class='ota-desc'>Upload compiled <code>firmware.bin</code> directly over Wi-Fi. The device verifies binary integrity, flashes partition, and reboots automatically.</div>"
+            "<div class='ota-row'>"
+            "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:9px;border:1px solid var(--card-border);border-radius:var(--r);'>"
+            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload &amp; Flash</button>"
+            "</div>"
+            "<div class='ota-progress-box' id='ota-progress-box'>"
+            "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
+            "<div class='ota-status' id='ota-status'>Ready</div>"
+            "</div>"
+            "</div>"
+            "<div class='guide-grid'>"
+            "<div class='guide-card'>"
+            "<div class='guide-title'>👆 CYD Touch Regions</div>"
+            "<div class='guide-row'><span class='guide-key'>Top-Left Wordmark</span><span class='guide-val'>Cycle Accent Color</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Top-Right Corner</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Screen Center</span><span class='guide-val'>Cycle Screens (0 &rarr; 1 &rarr; 2 &rarr; 3)</span></div>"
+            "</div>"
+            "<div class='guide-card'>"
+            "<div class='guide-title'>🔨 Physical BOOT Button</div>"
+            "<div class='guide-row'><span class='guide-key'>1 Tap</span><span class='guide-val'>Next Screen View</span></div>"
+            "<div class='guide-row'><span class='guide-key'>2 Taps</span><span class='guide-val'>Rotate Display 90&deg;</span></div>"
+            "<div class='guide-row'><span class='guide-key'>3 Taps</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Hold 5 Seconds</span><span class='guide-val'>Factory Reset Config &amp; Reboot</span></div>"
+            "</div></div>"
+            "</section>"); // closes pane-system
+
+  page += F("<div class='actions'>"
+            "<button type='submit' class='btn-save'>Save &amp; Apply All Settings</button>"
+            "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
+            "</div>"
+            "</form>"
+            "</main>"
+            "</div>"  // closes console-layout
+            "</div>"  // closes container
             "<div id='overlay'>"
             "<div class='spinner'></div>"
             "<h3 style='margin-bottom:8px'>Restarting NerdMiner</h3>"
-            "<p style='color:var(--muted);font-size:14px;max-width:320px'>Reconnecting in <span id='cd'>8</span> seconds...</p>"
             "</div>"
             "<script src='/cyd-twin.js'></script>"
             "<script src='/dash.js'></script>");
