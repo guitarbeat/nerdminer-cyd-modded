@@ -398,6 +398,42 @@ static String fmtHashCount(const String &mhashes)
   return String(b);
 }
 
+static String fmtHashCountU64(uint64_t rawHashes)
+{
+  double h = (double)rawHashes;
+  static const char *u[] = {"", "K", "M", "B", "T", "Q"};
+  int i = 0;
+  while (h >= 1000.0 && i < 5)
+  {
+    h /= 1000.0;
+    i++;
+  }
+  char b[24];
+  if (i == 0)
+    snprintf(b, sizeof(b), "%.0f", h);
+  else
+    snprintf(b, sizeof(b), h >= 100 ? "%.1f%s" : "%.2f%s", h, u[i]);
+  return String(b);
+}
+
+static String fmtBlockTime(uint32_t sec)
+{
+  uint32_t m = sec / 60;
+  uint32_t s = sec % 60;
+  char b[16];
+  if (m >= 60)
+  {
+    uint32_t h = m / 60;
+    m = m % 60;
+    snprintf(b, sizeof(b), "%uh%02um", h, m);
+  }
+  else
+  {
+    snprintf(b, sizeof(b), "%02u:%02u", m, s);
+  }
+  return String(b);
+}
+
 // compact uptime: "2d", "5h", "12m"
 static String fmtUptimeShort(const String &s)
 {
@@ -718,10 +754,10 @@ static void drawTile(int id, int x, int y, int w, int h, const char *label, cons
 struct MineV
 {
   HdrV hdr;
-  String hash, shares, best, tmpl, blocks, total;
+  String hash, shares, best, tmpl, blocks, total, blockHashes;
   float kh;
   bool flash;
-  StripV strip; // 3 cells: v = big value, l = trailing label ("1" "worker")
+  StripV strip; // 3 cells: v = value, l = label
 };
 
 // Mine layout (mock): big ring + hero, two equal cards, 3-cell footer strip.
@@ -800,12 +836,11 @@ static void drawMineStrip(const StripV &s)
       continue;
     if (!wBegin(cw, ch, C_PANEL))
       continue;
-    unsigned vs = isPortrait() ? 16 : 15, ls = isPortrait() ? 10 : 11;
-    int wv = textW(s.v[i].c_str(), vs), wl = textW(s.l[i].c_str(), ls);
-    int x0 = (cw - (wv + 4 + wl)) / 2;
-    int ty = (ch - vs) / 2;
-    text(wgt, s.v[i].c_str(), x0, ty, vs, C_TEXT, C_PANEL);
-    text(wgt, s.l[i].c_str(), x0 + wv + 4, ty + (vs - ls) - 1, ls, C_DIM, C_PANEL);
+    int c = cw / 2;
+    unsigned vs = isPortrait() ? 15 : 14, ls = 10;
+    uint16_t vCol = (i == 2 ? C_GOLD : C_TEXT);
+    text(wgt, s.v[i].c_str(), c, 4, vs, vCol, C_PANEL, Align::TopCenter);
+    text(wgt, s.l[i].c_str(), c, 22, ls, C_DIM, C_PANEL, Align::TopCenter);
     wEnd(x + (w * i) / 3 + 2, y + 3);
     done(W_P0 + i, k);
   }
@@ -819,38 +854,34 @@ static void paintMine(const MineV &m)
   int cx = G_CX;
   int cy = G_CY;
 
-  // hero readout inside the ring: HASHRATE / value / KH/s / hashes attempted
-  String k = m.hash + "|" + m.total + "|" + (P ? "P" : "L");
+  // hero readout inside the ring: HASHRATE / value / KH/s
+  String k = m.hash + "|" + (P ? "P" : "L");
   if (need(W_HERO, k))
   {
     // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
-    const int hw = P ? 124 : 110, hh = P ? 126 : 106;
+    const int hw = P ? 124 : 110, hh = P ? 86 : 76;
     if (wBegin(hw, hh, C_BG))
     {
       int c = hw / 2;
-      text(wgt, "HASHRATE", c, 2, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
-      unsigned sz = P ? (m.hash.length() <= 5 ? 38 : 32) : (m.hash.length() <= 5 ? 34 : 28);
-      text(wgt, m.hash.c_str(), c, P ? 16 : 14, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", c, P ? 54 : 46, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
-      String cnt = fmtHashCount(m.total);
-      text(wgt, cnt.c_str(), c, P ? 70 : 64, P ? 18 : 13, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "HASHES", c, P ? 90 : 80, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "ATTEMPTED", c, P ? 104 : 92, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
-      wEnd(cx - c, cy - (P ? 44 : 40));
+      text(wgt, "HASHRATE", c, 4, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      unsigned sz = P ? (m.hash.length() <= 5 ? 40 : 34) : (m.hash.length() <= 5 ? 36 : 30);
+      text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 62 : 52, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
+      wEnd(cx - c, cy - (P ? 38 : 34));
       done(W_HERO, k);
     }
   }
 
-  uint16_t sharesCol = m.flash ? C_GOOD : C_TEXT;
+  uint16_t blockCol = m.flash ? C_GOOD : C_TEXT;
   if (P)
   {
-    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "SHARES", m.shares.c_str(), sharesCol);
-    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "BEST", m.best.c_str(), C_GOLD);
+    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "THIS BLOCK", m.blockHashes.c_str(), blockCol);
+    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "LIFETIME", m.total.c_str(), C_TEXT);
   }
   else
   {
-    drawMineCard(W_T0, 198, 34, 114, 76, "SHARES", m.shares.c_str(), sharesCol);
-    drawMineCard(W_T1, 198, 116, 114, 76, "BEST", m.best.c_str(), C_GOLD);
+    drawMineCard(W_T0, 198, 34, 114, 76, "THIS BLOCK", m.blockHashes.c_str(), blockCol);
+    drawMineCard(W_T1, 198, 116, 114, 76, "LIFETIME", m.total.c_str(), C_TEXT);
   }
 
   drawMineStrip(m.strip);
@@ -1774,16 +1805,16 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.shares = commas(data.completedShares);
   m.best = data.bestDiff;
   m.tmpl = commas(data.templates);
-  m.blocks = data.valids;
-  m.total = data.totalMHashes;
+  m.total = fmtHashCount(data.totalMHashes);
+  m.blockHashes = fmtHashCountU64(data.blockHashes);
   m.kh = kh;
   m.flash = millis() < shareFlashUntil;
-  m.strip.v[0] = String(pData.workersCount);
-  m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
+  m.strip.v[0] = fmtBlockTime(data.blockTimeSec);
+  m.strip.l[0] = "BLK TIME";
   m.strip.v[1] = fmtUptimeShort(data.timeMining);
-  m.strip.l[1] = "uptime";
-  m.strip.v[2] = data.valids;
-  m.strip.l[2] = data.valids.toInt() == 1 ? "block" : "blocks";
+  m.strip.l[1] = "UPTIME";
+  m.strip.v[2] = data.bestDiff;
+  m.strip.l[2] = "BEST";
   lastMine = m;
   haveMine = true;
   paintMine(m);
@@ -2338,16 +2369,18 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         suffix_string(best_diff, bestBuf, 16, 0);
         m.best = String(bestBuf);
         m.tmpl = commas(String(templates));
-        m.blocks = String(valids);
-        m.total = String(Mhashes);
+        m.total = fmtHashCount(String(Mhashes));
+        m.blockHashes = fmtHashCountU64(g_currentBlockHashes);
         m.kh = m.hash.toFloat();
         m.flash = false;
-        m.strip.v[0] = String(pData.workersCount);
-        m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
+        uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+        uint32_t blkSec = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
+        m.strip.v[0] = fmtBlockTime(blkSec);
+        m.strip.l[0] = "BLK TIME";
         m.strip.v[1] = fmtUptimeShort(String((unsigned long)upTime));
-        m.strip.l[1] = "uptime";
-        m.strip.v[2] = String(valids);
-        m.strip.l[2] = valids == 1 ? "block" : "blocks";
+        m.strip.l[1] = "UPTIME";
+        m.strip.v[2] = m.best;
+        m.strip.l[2] = "BEST";
         paintMine(m);
       }
       gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);

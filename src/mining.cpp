@@ -68,6 +68,13 @@ uint32_t totalKHashes = 0;
 uint32_t elapsedKHs = 0;
 uint64_t upTime = 0;
 
+volatile uint64_t g_currentBlockHashes = 0;
+volatile uint64_t g_lastBlockHashes = 0;
+volatile uint32_t g_blockStartTimeSec = 0;
+volatile uint32_t g_lastBlockDurationSec = 0;
+double g_blockBestDiff = 0.0;
+static String s_activePrevBlockHash = "";
+
 // Per-path attempt counters, only used to print a HW vs SW hashrate
 // breakdown under DEBUG_MINING so real hardware can be A/B tested
 // (see FORCE_SW_MINING in mining.h). Each miner task only ever touches
@@ -750,6 +757,27 @@ void runStratumWorker(void *name) {
                                               }
                                             }
                                           }
+                                          // Track Bitcoin Block Epoch by comparing 32-byte prev_block_hash
+                                          if (mJob.prev_block_hash.length() > 0)
+                                          {
+                                            if (s_activePrevBlockHash.length() == 0)
+                                            {
+                                              s_activePrevBlockHash = mJob.prev_block_hash;
+                                              g_blockStartTimeSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+                                            }
+                                            else if (mJob.prev_block_hash != s_activePrevBlockHash)
+                                            {
+                                              uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+                                              g_lastBlockDurationSec = (nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
+                                              g_lastBlockHashes = g_currentBlockHashes;
+                                              g_currentBlockHashes = 0;
+                                              g_blockStartTimeSec = nowSec;
+                                              g_blockBestDiff = 0.0;
+                                              s_activePrevBlockHash = mJob.prev_block_hash;
+                                              Serial.printf("[EPOCH] New Bitcoin block: %s (Prev: %llu hashes in %u s)\n",
+                                                            mJob.prev_block_hash.c_str(), g_lastBlockHashes, g_lastBlockDurationSec);
+                                            }
+                                          }
 
                                           last_job_time = millis();
                                           mLastTXtoPool = last_job_time;
@@ -914,6 +942,7 @@ void runStratumWorker(void *name) {
       uint32_t nonces_done = 0;
       std::vector<uint32_t> nonce_vector = i2c_harvest_slaves(i2c_slave_vector, job_pool & 0xFF, nonces_done);
       hashes += nonces_done;
+      g_currentBlockHashes += nonces_done;
       for (size_t n = 0; n < nonce_vector.size(); ++n)
       {
         std::shared_ptr<JobResult> result = std::make_shared<JobResult>();
@@ -984,6 +1013,11 @@ void runStratumWorker(void *name) {
       job_result_list.pop_front();
 
       hashes += res->nonce_count;
+      g_currentBlockHashes += res->nonce_count;
+      if (res->difficulty > g_blockBestDiff && res->difficulty < 2.0e30)
+      {
+        g_blockBestDiff = res->difficulty;
+      }
       if (res->difficulty > currentPoolDifficulty && job_pool == res->id && res->nonce != 0xFFFFFFFF)
       {
         hashSamplePushDigest(res->hash);
@@ -2225,6 +2259,8 @@ void resetStat() {
     Serial.printf("[MONITOR] Resetting NVS stats\n");
     templates = hashes = Mhashes = totalKHashes = elapsedKHs = upTime = shares = valids = 0;
     best_diff = 0.0;
+    g_currentBlockHashes = g_lastBlockHashes = g_lastBlockDurationSec = 0;
+    g_blockBestDiff = 0.0;
     saveStat();
 }
 
@@ -2233,6 +2269,8 @@ void resetSessionStats() {
     shares = 0;
     valids = 0;
     best_diff = 0.0;
+    g_currentBlockHashes = 0;
+    g_blockBestDiff = 0.0;
 }
 
 void runMonitor(void *name)

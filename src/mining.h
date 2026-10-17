@@ -131,6 +131,11 @@ extern volatile uint32_t g_acceptedShares;
 extern double g_networkDifficulty;
 extern double best_diff;
 extern bool g_usingFallback;
+extern volatile uint64_t g_currentBlockHashes;
+extern volatile uint64_t g_lastBlockHashes;
+extern volatile uint32_t g_blockStartTimeSec;
+extern volatile uint32_t g_lastBlockDurationSec;
+extern double g_blockBestDiff;
 
 typedef struct{
   uint8_t bytearray_target[32];

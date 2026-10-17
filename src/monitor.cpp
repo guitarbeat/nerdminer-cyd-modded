@@ -497,6 +497,10 @@ mining_data getMiningData(unsigned long mElapsed)
   data.valids = valids;
   data.temp = String(temperatureRead(), 0);
   data.currentTime = getTime();
+  data.blockHashes = g_currentBlockHashes;
+  uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+  data.blockTimeSec = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
+  data.lastBlockHashes = g_lastBlockHashes;
 
   return data;
 }

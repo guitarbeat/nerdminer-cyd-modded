@@ -108,6 +108,9 @@ typedef struct {
   String valids;
   String temp;
   String currentTime;
+  uint64_t blockHashes;
+  uint32_t blockTimeSec;
+  uint64_t lastBlockHashes;
 }mining_data;
 
 typedef struct {
