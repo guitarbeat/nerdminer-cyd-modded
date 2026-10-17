@@ -289,12 +289,13 @@ static void textPair(TFT_eSPI &d, int cx, int y, const char *val, const char *un
   text(d, unit, x0 + wv + 4, y + (size - usz), usz, cu, bg);
 }
 
-// structural cell: crisp 1px hairline border, flat surface
+// structural cell: crisp 1px hairline border, flat surface with rounded corners
 static void panel(TFT_eSPI &d, int x, int y, int w, int h, int r, uint16_t fill, uint16_t edge, uint16_t behind)
 {
-  int py = dY(y);
-  d.fillRect(x, py, w, h, fill);
-  d.drawRect(x, py, w, h, edge);
+  int py = (&d == (TFT_eSPI*)&wgt) ? y : dY(y);
+  d.fillRoundRect(x, py, w, h, r, fill);
+  d.drawRoundRect(x, py, w, h, r, edge);
+  (void)behind;
 }
 
 // horizontal gradient bar (alt -> accent) with softly rounded ends
@@ -775,15 +776,14 @@ static void drawMineCard(int id, int x, int y, int w, int h, const char *label, 
     return;
   if (!wBegin(w, h, C_BG))
     return;
-  wgt.fillRect(0, 0, w, h, C_PANEL);
-  wgt.drawRect(0, 0, w, h, C_EDGE);
+  panel(wgt, 0, 0, w, h, 8, C_PANEL, C_EDGE, C_BG);
   int lw = textW(label, 10);
   int lx = (w - lw) / 2;
-  text(wgt, label, lx, 4, 10, C_DIM, C_PANEL);
+  text(wgt, label, lx, 5, 10, C_DIM, C_PANEL);
   unsigned vs = h >= 60 ? 24 : 20;
   if (strlen(value) > 8)
     vs -= 4;
-  text(wgt, value, w / 2, h >= 60 ? 26 : 17, vs, valCol, C_PANEL, Align::TopCenter);
+  text(wgt, value, w / 2, h >= 60 ? 26 : 19, vs, valCol, C_PANEL, Align::TopCenter);
   wEnd(x, y);
   done(id, k);
 }
@@ -831,17 +831,16 @@ static void paintMine(const MineV &m)
   if (need(W_HERO, k))
   {
     // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
-    const int hw = P ? 124 : 110, hh = P ? 126 : 106;
+    const int hw = P ? 146 : 124, hh = P ? 126 : 106;
     if (wBegin(hw, hh, C_BG))
     {
       int c = hw / 2;
-      text(wgt, "HASHRATE", c, 2, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      text(wgt, "HASHRATE", c, 4, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
       unsigned sz = P ? (m.hash.length() <= 5 ? 38 : 32) : (m.hash.length() <= 5 ? 34 : 28);
-      text(wgt, m.hash.c_str(), c, P ? 16 : 14, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", c, P ? 54 : 46, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
-      String cnt = fmtHashCount(m.total);
-      text(wgt, cnt.c_str(), c, P ? 71 : 62, P ? 18 : 14, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "TOTAL HASHES", c, P ? 93 : 80, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      text(wgt, m.hash.c_str(), c, P ? 18 : 15, sz, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 58 : 48, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
+      String att = fmtHashCount(m.total) + " hashes attempted";
+      text(wgt, att.c_str(), c, P ? 80 : 66, 9, C_DIM, C_BG, Align::TopCenter);
       wEnd(cx - c, cy - (P ? 44 : 40));
       done(W_HERO, k);
     }
