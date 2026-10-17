@@ -132,6 +132,7 @@ extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
 extern bool g_usingFallback;
 extern global_data gData;
+extern volatile uint32_t valids;
 
 static inline bool isPortrait()
 {
@@ -141,7 +142,7 @@ static inline bool isPortrait()
 
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
 static inline int gCX() { return isPortrait() ? 120 : 100; }
-static inline int gCY() { return isPortrait() ? 106 : 116; }
+static inline int gCY() { return isPortrait() ? 110 : 116; }
 static inline int gR()  { return isPortrait() ? 98 : 86; }
 static inline int gRI() { return isPortrait() ? 84 : 74; }
 
@@ -477,6 +478,34 @@ static String fmtTotalHashes(const String &mhashes)
   return "0 Hashes";
 }
 
+static String fmt12HourTime(const String &t24)
+{
+  int h = 0, m = 0, s = 0;
+  if (sscanf(t24.c_str(), "%d:%d:%d", &h, &m, &s) < 2)
+  {
+    if (sscanf(t24.c_str(), "%d:%d", &h, &m) < 2)
+      return t24.length() ? t24 : String("--");
+  }
+  const char *period = (h >= 12) ? "PM" : "AM";
+  int h12 = h % 12;
+  if (h12 == 0) h12 = 12;
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%d:%02d %s", h12, m, period);
+  return String(buf);
+}
+
+// 12x12 vector trophy icon
+static void drawTrophy(TFT_eSPI &d, int x, int y, uint16_t col)
+{
+  d.fillRect(x + 2, y, 8, 4, col);
+  d.fillTriangle(x + 2, y + 4, x + 9, y + 4, x + 5, y + 7, col);
+  d.fillTriangle(x + 3, y + 4, x + 8, y + 4, x + 6, y + 7, col);
+  d.fillRect(x + 5, y + 7, 2, 3, col);
+  d.fillRect(x + 2, y + 10, 8, 2, col);
+  d.drawPixel(x + 1, y + 1, col); d.drawPixel(x, y + 2, col); d.drawPixel(x + 1, y + 3, col);
+  d.drawPixel(x + 10, y + 1, col); d.drawPixel(x + 11, y + 2, col); d.drawPixel(x + 10, y + 3, col);
+}
+
 static const char *wifiSignalLabel(int rssi)
 {
   if (rssi > -55) return "Excellent";
@@ -644,7 +673,7 @@ static void drawTile(int id, int x, int y, int w, int h, const char *label, cons
 struct MineV
 {
   HdrV hdr;
-  String hash, shares, best, tmpl, blocks, total, blockHashes;
+  String hash, shares, best, tmpl, blocks, total, blockHashes, time12;
   float kh;
   bool flash;
   StripV strip; // 3 cells: v = value, l = label
@@ -743,6 +772,37 @@ static void paintMine(const MineV &m)
   const bool P = isPortrait();
   int cx = G_CX;
   int cy = G_CY;
+
+  if (P)
+  {
+    // Top-left trophy badge (x=6, y=4, w=48, h=22)
+    String kBadge = "bdg|" + m.blocks;
+    if (need(W_T2, kBadge))
+    {
+      if (wBegin(48, 22, C_BG))
+      {
+        panel(wgt, 0, 0, 48, 22, 6, C_PANEL, C_EDGE, C_BG);
+        uint16_t trophyCol = (m.blocks.toInt() > 0) ? C_GOLD : C_DIM;
+        drawTrophy(wgt, 6, 5, trophyCol);
+        uint16_t blockNumCol = (m.blocks.toInt() > 0) ? C_GOLD : C_TEXT;
+        text(wgt, m.blocks.c_str(), 32, 4, 13, blockNumCol, C_PANEL, Align::TopCenter);
+        wEnd(6, 4);
+        done(W_T2, kBadge);
+      }
+    }
+
+    // Top-right 12-hour clock (x=166, y=4, w=68, h=20)
+    String kClock = "mclk|" + m.time12;
+    if (need(W_T3, kClock))
+    {
+      if (wBegin(68, 20, C_BG))
+      {
+        text(wgt, m.time12.c_str(), 66, 3, 13, C_TEXT, C_BG, Align::TopRight);
+        wEnd(166, 4);
+        done(W_T3, kClock);
+      }
+    }
+  }
 
   // hero readout inside the ring: HASHRATE / value / KH/s
   String k = m.hash + "|" + (P ? "P" : "L");
@@ -1692,8 +1752,10 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.shares = commas(data.completedShares);
   m.best = data.bestDiff;
   m.tmpl = commas(data.templates);
+  m.blocks = data.valids.length() ? data.valids : String("0");
   m.total = fmtHashCount(data.totalMHashes);
   m.blockHashes = fmtHashCountU64(data.blockHashes);
+  m.time12 = fmt12HourTime(data.currentTime);
   m.kh = kh;
   m.flash = millis() < shareFlashUntil;
   m.strip.v[0] = fmtBlockTime(data.blockTimeSec);
@@ -2244,6 +2306,12 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     {
       if (haveMine)
       {
+        lastMine.time12 = fmt12HourTime(getTime());
+        uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+        uint32_t blkSec = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
+        lastMine.strip.v[0] = fmtBlockTime(blkSec);
+        lastMine.blockHashes = fmtHashCountU64(g_currentBlockHashes);
+        lastMine.blocks = String(valids);
         paintMine(lastMine);
       }
       else
@@ -2256,8 +2324,10 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         suffix_string(best_diff, bestBuf, 16, 0);
         m.best = String(bestBuf);
         m.tmpl = commas(String(templates));
+        m.blocks = String(valids);
         m.total = fmtHashCount(String(Mhashes));
         m.blockHashes = fmtHashCountU64(g_currentBlockHashes);
+        m.time12 = fmt12HourTime(getTime());
         m.kh = m.hash.toFloat();
         m.flash = false;
         uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
@@ -2432,6 +2502,7 @@ void cydDumpScreens(void)
     m.tmpl = "412";
     m.blocks = "0";
     m.total = "58213";
+    m.time12 = "9:47 PM";
     m.kh = 672.4f;
     m.flash = acc == 1;
     m.strip.v[0] = "1";
