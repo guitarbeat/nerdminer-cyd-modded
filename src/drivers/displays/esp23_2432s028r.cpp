@@ -804,14 +804,7 @@ static void drawMineStrip(const StripV &s)
     int wv = textW(s.v[i].c_str(), vs), wl = textW(s.l[i].c_str(), ls);
     int x0 = (cw - (wv + 4 + wl)) / 2;
     int ty = (ch - vs) / 2;
-    uint16_t vCol = C_TEXT;
-    if (i == 0 && s.v[i].endsWith("F"))
-    {
-      int tf = s.v[i].toInt();
-      if (tf >= 140) vCol = C_BAD;
-      else if (tf >= 125) vCol = C_WARN;
-    }
-    text(wgt, s.v[i].c_str(), x0, ty, vs, vCol, C_PANEL);
+    text(wgt, s.v[i].c_str(), x0, ty, vs, C_TEXT, C_PANEL);
     text(wgt, s.l[i].c_str(), x0 + wv + 4, ty + (vs - ls) - 1, ls, C_DIM, C_PANEL);
     wEnd(x + (w * i) / 3 + 2, y + 3);
     done(W_P0 + i, k);
@@ -831,16 +824,18 @@ static void paintMine(const MineV &m)
   if (need(W_HERO, k))
   {
     // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
-    const int hw = P ? 146 : 124, hh = P ? 126 : 106;
+    const int hw = P ? 124 : 110, hh = P ? 126 : 106;
     if (wBegin(hw, hh, C_BG))
     {
       int c = hw / 2;
-      text(wgt, "HASHRATE", c, 4, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      text(wgt, "HASHRATE", c, 2, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
       unsigned sz = P ? (m.hash.length() <= 5 ? 38 : 32) : (m.hash.length() <= 5 ? 34 : 28);
-      text(wgt, m.hash.c_str(), c, P ? 18 : 15, sz, C_TEXT, C_BG, Align::TopCenter);
-      text(wgt, "KH/s", c, P ? 58 : 48, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
-      String att = fmtHashCount(m.total) + " hashes attempted";
-      text(wgt, att.c_str(), c, P ? 80 : 66, 9, C_DIM, C_BG, Align::TopCenter);
+      text(wgt, m.hash.c_str(), c, P ? 16 : 14, sz, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "KH/s", c, P ? 54 : 46, P ? 13 : 12, C_METER, C_BG, Align::TopCenter);
+      String cnt = fmtHashCount(m.total);
+      text(wgt, cnt.c_str(), c, P ? 70 : 64, P ? 18 : 13, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "HASHES", c, P ? 90 : 80, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
+      text(wgt, "ATTEMPTED", c, P ? 104 : 92, P ? 13 : 11, C_TEXT, C_BG, Align::TopCenter);
       wEnd(cx - c, cy - (P ? 44 : 40));
       done(W_HERO, k);
     }
@@ -1783,14 +1778,12 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.total = data.totalMHashes;
   m.kh = kh;
   m.flash = millis() < shareFlashUntil;
-  float tC = temperatureRead();
-  float tF = tC * 1.8f + 32.0f;
-  m.strip.v[0] = String((int)roundf(tF)) + " F";
-  m.strip.l[0] = "TEMP";
+  m.strip.v[0] = String(pData.workersCount);
+  m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
   m.strip.v[1] = fmtUptimeShort(data.timeMining);
-  m.strip.l[1] = "UPTIME";
+  m.strip.l[1] = "uptime";
   m.strip.v[2] = data.valids;
-  m.strip.l[2] = "BLOCKS";
+  m.strip.l[2] = data.valids.toInt() == 1 ? "block" : "blocks";
   lastMine = m;
   haveMine = true;
   paintMine(m);
@@ -2349,14 +2342,12 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         m.total = String(Mhashes);
         m.kh = m.hash.toFloat();
         m.flash = false;
-        float tC = temperatureRead();
-        float tF = tC * 1.8f + 32.0f;
-        m.strip.v[0] = String((int)roundf(tF)) + " F";
-        m.strip.l[0] = "TEMP";
+        m.strip.v[0] = String(pData.workersCount);
+        m.strip.l[0] = pData.workersCount == 1 ? "worker" : "workers";
         m.strip.v[1] = fmtUptimeShort(String((unsigned long)upTime));
-        m.strip.l[1] = "UPTIME";
+        m.strip.l[1] = "uptime";
         m.strip.v[2] = String(valids);
-        m.strip.l[2] = "BLOCKS";
+        m.strip.l[2] = valids == 1 ? "block" : "blocks";
         paintMine(m);
       }
       gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);
