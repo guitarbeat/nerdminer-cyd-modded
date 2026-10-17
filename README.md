@@ -1,5 +1,6 @@
 # NerdMiner CYD Modded
 
+[![Latest Release](https://img.shields.io/github/v/release/guitarbeat/nerdminer-cyd-modded?style=for-the-badge&logo=github&color=blue)](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/latest)
 [![Web Flasher](https://img.shields.io/badge/Web%20Flasher-Launch%20Now-brightgreen?style=for-the-badge&logo=googlechrome)](https://guitarbeat.github.io/nerdminer-cyd-modded/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/guitarbeat/nerdminer-cyd-modded)
 [![Upstream: HenrysCat](https://img.shields.io/badge/Fork%20of-HenrysCat%2FNerdMiner--Modded-orange?style=for-the-badge&logo=git)](https://github.com/HenrysCat/NerdMiner-Modded)
@@ -19,6 +20,35 @@ Flash your board directly from Google Chrome, Edge, or any Web-Serial-compatible
 2. Open the [Web Flasher](https://guitarbeat.github.io/nerdminer-cyd-modded/).
 3. Select your hardware variant from the list.
 4. Click **Connect**, choose your serial port, and follow the on-screen instructions to flash.
+
+---
+
+## 📦 Pre-compiled Binaries ([Release v2.0.0](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/tag/v2.0.0))
+
+Prefer flashing offline with `esptool.py`, ESP Flash Download Tools, or via local OTA? Pre-built binaries are available for direct download:
+
+| Hardware Target | Full Factory Install (`0x00000`) | Firmware Update (`0x10000` / OTA) |
+| :--- | :--- | :--- |
+| **2.8" CYD (GPIO 27 Backlight)** | [`ESP32-2432S028R-BL27_factory.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028R-BL27_factory.bin) | [`ESP32-2432S028R-BL27_firmware.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028R-BL27_firmware.bin) |
+| **2.8" CYD (Standard GPIO 21)** | [`ESP32-2432S028R_factory.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028R_factory.bin) | [`ESP32-2432S028R_firmware.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028R_firmware.bin) |
+| **2.4" CYD (Single USB-C)** | [`ESP32-2432S024R_factory.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S024R_factory.bin) | [`ESP32-2432S024R_firmware.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S024R_firmware.bin) |
+| **2.8" CYD (Dual USB)** | [`ESP32-2432S028-2USB_factory.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028-2USB_factory.bin) | [`ESP32-2432S028-2USB_firmware.bin`](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/ESP32-2432S028-2USB_firmware.bin) |
+
+#### Cryptographic Verification
+Verify the SHA-256 hashes against the canonical manifest:
+```bash
+curl -sLO https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+#### Flashing via esptool.py
+```bash
+# Full Factory Flash (erases settings):
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ESP32-2432S028R-BL27_factory.bin
+
+# Firmware Update Only (preserves settings):
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 ESP32-2432S028R-BL27_firmware.bin
+```
 
 ---
 
@@ -91,14 +121,14 @@ The CYD firmware features a high-density, zero-overhead carousel of **4 speciali
 | **0** | **MINE**<br>*(Pulse Dashboard)* | • **Hero Segmented Hashrate Arc**: 270° tachometer sweep (0 to 1200 KH/s) with peak hold.<br>• **Hero Hashrate Readout**: High-contrast, large KH/s display.<br>• **Hashes Tested**: Humanized counter of lifetime attempts (e.g. `1.1G HASHES`).<br>• **Shares & Best**: Crisp stat cards showing submitted 32-bit shares and session **★ BEST** difficulty.<br>• **Telemetry Footer**: Current worker tag, session uptime, and blocks found (`0`). |
 | **1** | **MARKET**<br>*(Bitcoin Network)* | • **Hero Spot Price**: Real-time Bitcoin price formatted in USD (`$XX,XXX`).<br>• **Block Age & Height**: Time elapsed since last mined block (`Xm ago`) and current block height.<br>• **Network & Difficulty**: Global network hashrate (EH/s) and current difficulty (T).<br>• **Mempool Fee**: Half-hour transaction fee (sat/vB) with priority pill (**LOW**, **NORMAL**, **BUSY**).<br>• **Halving Progress Bar**: Visual progress bar and countdown to the next Bitcoin halving. |
 | **2** | **CLOCK**<br>*(Ambient Desk Clock)* | • **Ambient Digital Clock**: High-legibility 12h/24h time with pulsing colon and calendar date.<br>• **Current Hashrate Badge**: Compact live KH/s indicator.<br>• **60-Second Sparkline**: Rolling 60s hashrate bar chart populated by real hardware samples.<br>• **Health Telemetry Strip**: ESP32 core temperature (°C), system uptime, and Wi-Fi RSSI bars. |
-| **3** | **PROTOCOL**<br>*(Attempt Quality)* | • **Attempt Quality Scatter Plot**: Logarithmic difficulty Y-axis (higher = rarer hash attempt).<br>• **Live-Sampled Hardware Attempts**: Scatter points sampled at ~1 in 16,384 nonces for zero display latency.<br>• **Block Threshold Line**: Horizontal target line anchored to live network difficulty ($hash < target$).<br>• **In-Place Best Tracker**: Prominent marker tracking your closest candidate hash of the session.<br>• **Hashrate Footer**: Real-time KH/s status footer. |
+| **3** | **ARCH**<br>*(Architecture & Protocol)* | • **Attempt Quality Scatter Plot**: Logarithmic difficulty Y-axis (higher = rarer candidate hash attempt).<br>• **Live-Sampled Hardware Attempts**: Nonce candidates sampled at ~1 in 16,384 for zero display latency.<br>• **Block Threshold Line**: Horizontal target line anchored to live network difficulty ($hash < target$).<br>• **Header Geometry Breakdown**: Visualizes the 80-byte block header format and pipeline state.<br>• **In-Place Best Tracker**: Prominent marker tracking your closest candidate hash of the session.<br>• **Hashrate Footer**: Real-time KH/s status footer. |
 
 ---
 
 ### 👆 Touchscreen & Physical Controls
 
 #### Touch Zones (Resistive & Capacitive CYD)
-- **Tap Right Half**: Cycle forward to next screen (`MINE → MARKET → CLOCK → PROTOCOL → MINE`)
+- **Tap Right Half**: Cycle forward to next screen (`MINE → MARKET → CLOCK → ARCH → MINE`)
 - **Tap Left Half**: Cycle backward to previous screen
 - **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
 - **Ambient Light Sensor (LDR)**: Automatic dynamic dimming in dark environments on CYD boards with light sensor (GPIO 34)

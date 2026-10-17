@@ -82,6 +82,9 @@
   <body>
     <div class="content">
       <h1>NerdMiner CYD Modded Web Flasher</h1>
+      <div style="margin-bottom: 20px; padding: 10px 14px; background: rgba(247, 147, 26, 0.15); border: 1px solid rgba(247, 147, 26, 0.4); border-radius: 8px; font-size: 13px;">
+        🎉 <strong>Latest Milestone:</strong> <a href="https://github.com/guitarbeat/nerdminer-cyd-modded/releases/tag/v2.0.0" target="_blank"><strong>Release v2.0.0</strong></a> is live with the 4-Screen Telemetry Console, Hardware Screen Twin, and BL27 GPIO 27 backlight fix.
+      </div>
       <p>Choose your hardware to flash via browser:</p>
       <ul class="radios">
         <li>
@@ -114,18 +117,30 @@
       </p>
 
       <div style="margin-top: 24px; padding: 14px; background: rgba(127,127,127,0.1); border-radius: 8px; font-size: 13px; line-height: 1.6;">
-        <strong>🚀 Firmware Highlights:</strong>
+        <strong>🚀 v2.0.0 Firmware Highlights:</strong>
         <ul style="margin: 6px 0 0 18px; padding: 0;">
-          <li><strong>~1000 KH/s Hashrate:</strong> Pipelined hardware SHA-256 loop on classic ESP32.</li>
-          <li><strong>6 Live Display Themes:</strong> AxeOS-style hot-swapping via local web dashboard.</li>
-          <li><strong>On-Device Web Portal:</strong> Live stats, low-diff pool presets, and Proof of Work breakdown at <code>http://&lt;miner-ip&gt;/</code>.</li>
-          <li><strong>CYD Touch Controls:</strong> Tap wordmark for accent colors, tap top-right to toggle backlight.</li>
+          <li><strong>~1000 KH/s Hashrate:</strong> Hand-tuned 247-cycle hardware SHA-256 loop on classic ESP32 silicon with Poisson-verified PoW authenticity.</li>
+          <li><strong>4-Screen Telemetry Suite:</strong> MINE (tachometer arc gauge), MARKET (spot & halving), CLOCK (60s sparkline), and ARCH (PoW scatter).</li>
+          <li><strong>Hardware Screen Twin:</strong> Live pixel-perfect 240&times;320 BMP framebuffer streaming at <code>/api/screenshot</code> with auto-follow.</li>
+          <li><strong>Zero-Reboot Settings & OTA:</strong> Live configuration updates and wireless firmware updates via <code>/update</code>.</li>
+        </ul>
+      </div>
+
+      <div style="margin-top: 16px; padding: 14px; background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.3); border-radius: 8px; font-size: 13px; line-height: 1.6;">
+        <strong>📦 Offline Flashing & Pre-compiled Binaries:</strong>
+        <p style="margin: 4px 0 8px 0; color: var(--color-text-muted);">Prefer flashing offline via <code>esptool.py</code> or ESP Flash Download Tools?</p>
+        <ul style="margin: 0 0 0 18px; padding: 0;">
+          <li><a href="https://github.com/guitarbeat/nerdminer-cyd-modded/releases/tag/v2.0.0" target="_blank">Download Pre-compiled v2.0.0 Binaries (.bin)</a></li>
+          <li><a href="https://github.com/guitarbeat/nerdminer-cyd-modded/releases/download/v2.0.0/SHA256SUMS" target="_blank">Verify Checksums (SHA256SUMS)</a></li>
         </ul>
       </div>
 
       <div class="footer">
         ✨ <a href="https://github.com/guitarbeat/nerdminer-cyd-modded"
           >Project GitHub Repository</a
+        > &mdash;
+        <a href="https://github.com/guitarbeat/nerdminer-cyd-modded/releases"
+          >Releases & Changelog</a
         > &mdash;
         Installer powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a> 🛠️
     </div>
