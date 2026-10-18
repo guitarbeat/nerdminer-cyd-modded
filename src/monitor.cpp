@@ -36,7 +36,7 @@ bool invertColors = false;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "europe.pool.ntp.org", 3600, 60000);
 unsigned int bitcoin_price=0;
-String current_block = "793261";
+String current_block = "885000";
 global_data gData;
 pool_data pData;
 String poolAPIUrl;

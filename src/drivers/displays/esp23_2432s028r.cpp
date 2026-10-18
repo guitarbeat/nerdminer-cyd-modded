@@ -381,11 +381,11 @@ static String fmtDate(const String &s)
   return String(b);
 }
 
-// "233.8B" style humanised count of total hashes (input in MH).
+// "233.8 GH" style humanised count of total hashes (input in MH).
 static String fmtHashCount(const String &mhashes)
 {
   double h = mhashes.toDouble() * 1e6;
-  static const char *u[] = {"", "K", "M", "B", "T", "Q"};
+  static const char *u[] = {"H", "KH", "MH", "GH", "TH", "PH"};
   int i = 0;
   while (h >= 1000.0 && i < 5)
   {
@@ -394,16 +394,16 @@ static String fmtHashCount(const String &mhashes)
   }
   char b[24];
   if (i == 0)
-    snprintf(b, sizeof(b), "%.0f", h);
+    snprintf(b, sizeof(b), "%.0f H", h);
   else
-    snprintf(b, sizeof(b), h >= 100 ? "%.1f%s" : "%.2f%s", h, u[i]);
+    snprintf(b, sizeof(b), h >= 100 ? "%.1f %s" : "%.2f %s", h, u[i]);
   return String(b);
 }
 
 static String fmtHashCountU64(uint64_t rawHashes)
 {
   double h = (double)rawHashes;
-  static const char *u[] = {"", "K", "M", "B", "T", "Q"};
+  static const char *u[] = {"H", "KH", "MH", "GH", "TH", "PH"};
   int i = 0;
   while (h >= 1000.0 && i < 5)
   {
@@ -412,9 +412,9 @@ static String fmtHashCountU64(uint64_t rawHashes)
   }
   char b[24];
   if (i == 0)
-    snprintf(b, sizeof(b), "%.0f", h);
+    snprintf(b, sizeof(b), "%.0f H", h);
   else
-    snprintf(b, sizeof(b), h >= 100 ? "%.1f%s" : "%.2f%s", h, u[i]);
+    snprintf(b, sizeof(b), h >= 100 ? "%.1f %s" : "%.2f %s", h, u[i]);
   return String(b);
 }
 
@@ -733,12 +733,28 @@ static void chromeMine(TFT_eSPI &d)
   if (!shotOn)
     memset(segLvl, 0xFF, sizeof(segLvl));
   gaugeDraw(d, gaugeShown);
-  int x, y, w, h;
-  mineStripGeom(x, y, w, h);
-  panel(d, x, y, w, h, 8, C_PANEL, C_EDGE, C_BG);
-  int vy = dY(y);
-  for (int i = 1; i < 3; i++)
-    d.drawFastVLine(x + (w * i) / 3, vy + 8, h - 16, C_EDGE);
+  if (isPortrait())
+  {
+    // 2x2 Bento Grid panels (6px corner radius, matching other cards)
+    panel(d, 6, 172, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
+    panel(d, 122, 172, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
+    panel(d, 6, 218, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
+    panel(d, 122, 218, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
+    // Bottom 3-cell strip
+    panel(d, 6, 264, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
+    int vy = dY(264);
+    for (int i = 1; i < 3; i++)
+      d.drawFastVLine(6 + (228 * i) / 3, vy + 8, 34, C_EDGE);
+  }
+  else
+  {
+    panel(d, 198, 30, 114, 76, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 198, 112, 114, 76, 8, C_PANEL, C_EDGE, C_BG);
+    panel(d, 8, STRIP_Y, 304, STRIP_H, 8, C_PANEL, C_EDGE, C_BG);
+    int vy = dY(STRIP_Y);
+    for (int i = 1; i < 3; i++)
+      d.drawFastVLine(8 + (304 * i) / 3, vy + 8, STRIP_H - 16, C_EDGE);
+  }
 }
 
 // Crisp, iconic lightning bolt glyph (12x18)
@@ -766,35 +782,40 @@ static void drawMineCard(int id, int x, int y, int w, int h, const char *label, 
     return;
   if (!wBegin(w, h, C_BG))
     return;
-  panel(wgt, 0, 0, w, h, 8, C_PANEL, C_EDGE, C_BG);
+  panel(wgt, 0, 0, w, h, 6, C_PANEL, C_EDGE, C_BG);
   int lw = textW(label, 10);
   int lx = (w - lw) / 2;
-  text(wgt, label, lx, 6, 10, C_DIM, C_PANEL);
-  unsigned vs = h >= 50 ? 22 : 20;
-  if (strlen(value) > 8)
-    vs -= 4;
-  text(wgt, value, w / 2, h >= 50 ? 23 : 19, vs, valCol, C_PANEL, Align::TopCenter);
+  text(wgt, label, lx, 4, 10, C_DIM, C_PANEL);
+  unsigned vs = 16;
+  if (strlen(value) > 9)
+    vs = 13;
+  else if (strlen(value) > 7)
+    vs = 14;
+  text(wgt, value, w / 2, 20, vs, valCol, C_PANEL, Align::TopCenter);
   wEnd(x, y);
   done(id, k);
 }
 
 static void drawMineStrip(const StripV &s)
 {
-  int x, y, w, h;
-  mineStripGeom(x, y, w, h);
+  const bool P = isPortrait();
+  int x = P ? 6 : 8;
+  int y = P ? 264 : STRIP_Y;
+  int w = P ? 228 : 304;
+  int h = P ? 50 : STRIP_H;
   int cw = w / 3 - 4, ch = h - 6;
   for (int i = 0; i < 3; i++)
   {
-    String k = "m3|" + s.l[i] + "|" + s.v[i] + "|" + (isPortrait() ? "P" : "L");
+    String k = "m3|" + s.l[i] + "|" + s.v[i] + "|" + (P ? "P" : "L");
     if (!need(W_P0 + i, k))
       continue;
     if (!wBegin(cw, ch, C_PANEL))
       continue;
     int c = cw / 2;
-    unsigned vs = isPortrait() ? 17 : 14, ls = 10;
-    uint16_t vCol = (i == 2 ? C_GOLD : C_TEXT);
-    text(wgt, s.v[i].c_str(), c, 7, vs, vCol, C_PANEL, Align::TopCenter);
-    text(wgt, s.l[i].c_str(), c, 31, ls, C_DIM, C_PANEL, Align::TopCenter);
+    unsigned vs = P ? 16 : 14, ls = 10;
+    uint16_t vCol = (i == 2 ? C_WARN : C_TEXT);
+    text(wgt, s.v[i].c_str(), c, P ? 7 : 5, vs, vCol, C_PANEL, Align::TopCenter);
+    text(wgt, s.l[i].c_str(), c, P ? 27 : 21, ls, C_DIM, C_PANEL, Align::TopCenter);
     wEnd(x + (w * i) / 3 + 2, y + 3);
     done(W_P0 + i, k);
   }
@@ -826,16 +847,19 @@ static void paintMine(const MineV &m)
     }
   }
 
-  uint16_t blockCol = m.flash ? C_GOOD : C_TEXT;
+  uint16_t shareCol = m.flash ? C_GOOD : C_TEXT;
   if (P)
   {
-    drawMineCard(W_T0, 6, MINE_CARD_PY, 112, MINE_CARD_PH, "THIS BLOCK", m.blockHashes.c_str(), blockCol);
-    drawMineCard(W_T1, 122, MINE_CARD_PY, 112, MINE_CARD_PH, "LIFETIME", m.total.c_str(), C_TEXT);
+    // 2x2 Bento Grid: SHARES, BEST DIFF, THIS BLOCK, SESSION
+    drawMineCard(W_T0, 6, 172, 112, 42, "SHARES", m.shares.c_str(), shareCol);
+    drawMineCard(W_T1, 122, 172, 112, 42, "BEST DIFF", m.best.c_str(), C_WARN);
+    drawMineCard(W_T2, 6, 218, 112, 42, "THIS BLOCK", m.blockHashes.c_str(), C_TEXT);
+    drawMineCard(W_T3, 122, 218, 112, 42, "SESSION", m.total.c_str(), C_TEXT);
   }
   else
   {
-    drawMineCard(W_T0, 198, 34, 114, 76, "THIS BLOCK", m.blockHashes.c_str(), blockCol);
-    drawMineCard(W_T1, 198, 116, 114, 76, "LIFETIME", m.total.c_str(), C_TEXT);
+    drawMineCard(W_T0, 198, 30, 114, 76, "SHARES", m.shares.c_str(), shareCol);
+    drawMineCard(W_T1, 198, 112, 114, 76, "BEST DIFF", m.best.c_str(), C_WARN);
   }
 
   drawMineStrip(m.strip);
@@ -939,7 +963,9 @@ static void paintMarket(const MarketV &m)
     if (P)
     {
       text(d, btcPairLabel().c_str(), px + 8, dY(py + 4), 10, C_DIM, C_PANEL);
-      text(d, m.price.c_str(), px + w / 2, dY(py + 18), m.price.length() > 9 ? 26 : 30, C_GOLD, C_PANEL, Align::TopCenter);
+      String pr = (m.price.length() && m.price != "--") ? m.price : String("SYNCING...");
+      uint16_t prCol = (m.price.length() && m.price != "--") ? C_GOLD : C_WARN;
+      text(d, pr.c_str(), px + w / 2, dY(py + 18), pr.length() > 9 ? 24 : 30, prCol, C_PANEL, Align::TopCenter);
       int lw = textW(bl.c_str(), 10);
       int aw = ag.length() ? textW(ag.c_str(), 10) : 0;
       int tw = lw + (ag.length() ? 14 + aw : 0);
@@ -954,7 +980,9 @@ static void paintMarket(const MarketV &m)
     else
     {
       text(d, btcPairLabel().c_str(), px + 6, dY(py + 3), 10, C_DIM, C_PANEL);
-      text(d, m.price.c_str(), px + 6, dY(py + 18), 28, C_GOLD, C_PANEL);
+      String pr = (m.price.length() && m.price != "--") ? m.price : String("SYNCING...");
+      uint16_t prCol = (m.price.length() && m.price != "--") ? C_GOLD : C_WARN;
+      text(d, pr.c_str(), px + 6, dY(py + 18), 28, prCol, C_PANEL);
       text(d, bl.c_str(), px + w - 6, dY(py + 8), 14, C_TEXT, C_PANEL, Align::TopRight);
       if (ag.length())
         text(d, ag.c_str(), px + w - 6, dY(py + 30), 10, C_DIM, C_PANEL, Align::TopRight);
@@ -975,7 +1003,9 @@ static void paintMarket(const MarketV &m)
     if (!wBegin(w, h, C_PANEL))
       continue;
     text(wgt, lab[i], w / 2, P ? 5 : 3, 10, C_DIM, C_PANEL, Align::TopCenter);
-    text(wgt, val[i]->c_str(), w / 2, P ? 21 : 18, P ? 18 : 17, vc[i], C_PANEL, Align::TopCenter);
+    String vStr = (val[i]->length() && *val[i] != "--") ? *val[i] : String("SYNCING");
+    uint16_t vCol = (val[i]->length() && *val[i] != "--") ? vc[i] : C_DIM;
+    text(wgt, vStr.c_str(), w / 2, P ? 21 : 18, P ? (vStr == "SYNCING" ? 14 : 18) : 17, vCol, C_PANEL, Align::TopCenter);
     wEnd(g.hx + (i ? g.hw - g.cw : 0) + 2, g.ry + 2);
     done(W_M0 + i, kk);
   }
@@ -988,7 +1018,7 @@ static void paintMarket(const MarketV &m)
     int w = g.hw - 4, h = g.fh - 4;
     if (wBegin(w, h, C_PANEL))
     {
-      String fv = m.fee > 0 ? String(m.fee) : String("--");
+      String fv = m.fee > 0 ? String(m.fee) : String("SYNCING");
       uint16_t pc = C_DIM;
       const char *cls = feeClass(m.fee, pc);
       const CoinProfile &coin = getActiveCoinProfile();
@@ -1087,6 +1117,7 @@ struct ClockV
 {
   HdrV hdr;
   String hh, mm;
+  String period;
   bool colon;
   String date, hash;
   String temp, uptime, link; // strip cells
@@ -1169,23 +1200,30 @@ static void paintClock(const ClockV &c)
 
   // Hero: large centered HH:MM + date (portrait); landscape keeps date beside
   {
-    String k = c.hh + ":" + c.mm + "|" + String(c.colon) + "|" + c.date + (P ? "P" : "L");
+    String k = c.hh + ":" + c.mm + "|" + c.period + "|" + String(c.colon) + "|" + c.date + (P ? "P" : "L");
     if (need(W_HH, k))
     {
       int pw = P ? 220 : 144, ph = P ? 70 : 62;
       int px = P ? 10 : 12, py = P ? 34 : 34;
       TFT_eSPI &d = out();
       panel(d, px, py, pw, ph, 8, C_PANEL, C_EDGE, C_BG);
-      char tim[8];
+      char tim[16];
       snprintf(tim, sizeof(tim), "%s%s%s", c.hh.c_str(), c.colon ? ":" : " ", c.mm.c_str());
       if (P)
       {
-        text(d, tim, px + pw / 2, dY(py + 4), 42, C_TEXT, C_PANEL, Align::TopCenter);
+        int tw = textW(tim, 42);
+        int cx = px + pw / 2 - (c.period.length() ? 12 : 0);
+        text(d, tim, cx, dY(py + 4), 42, C_TEXT, C_PANEL, Align::TopCenter);
+        if (c.period.length())
+          text(d, c.period.c_str(), cx + tw / 2 + 5, dY(py + 10), 12, C_WARN, C_PANEL);
         text(d, c.date.c_str(), px + pw / 2, dY(py + 52), 12, C_DIM, C_PANEL, Align::TopCenter);
       }
       else
       {
+        int tw = textW(tim, 36);
         text(d, tim, px + 6, dY(py + 6), 36, C_TEXT, C_PANEL);
+        if (c.period.length())
+          text(d, c.period.c_str(), px + 6 + tw + 4, dY(py + 10), 11, C_WARN, C_PANEL);
         text(d, c.date.c_str(), px + 6, dY(py + 48), 10, C_DIM, C_PANEL);
       }
       done(W_HH, k);
@@ -1232,9 +1270,9 @@ static void paintClock(const ClockV &c)
     }
   }
 
-  // Bottom strip: TEMP | UPTIME | ONLINE (value warns if disconnect/hot)
+  // Bottom strip: TEMP | UPTIME | STATUS (value warns if disconnect/hot)
   {
-    const char *labs[3] = {"TEMP", "UPTIME", "ONLINE"};
+    const char *labs[3] = {"TEMP", "UPTIME", "STATUS"};
     String vals[3] = {c.temp, c.uptime, c.link};
     uint16_t cols[3] = {c.tempCol, C_TEXT, c.linkCol};
     int sy = P ? 269 : (STRIP_Y + 3);
@@ -1376,10 +1414,10 @@ static void paintProtocolPlot(const ArchitectureV &av)
     TFT_eSPI &d = out();
     panel(d, plotX, plotY, plotW, plotH, 6, C_PANEL, C_EDGE, C_BG);
 
-    const int G = textW("1G", 8) + 8;
+    const int G = textW("1G", 10) + 8;
     const int sx0 = plotX + G + 10;
     const int sxSpan = plotW - (G + 10) - 14;
-    const int yTop = plotY + 2, yBot = plotY + plotH - 16; // leave room for x caption
+    const int yTop = plotY + 16, yBot = plotY + plotH - 16; // leave room for top banner and x caption
     auto Y = [&](int32_t q) -> int {
       int32_t span = topQ8 - botQ8;
       if (span <= 0) return (yTop + yBot) / 2;
@@ -1397,21 +1435,24 @@ static void paintProtocolPlot(const ArchitectureV &av)
       int ty = Y(q);
       for (int x = plotX + G + 2; x < plotX + plotW - 4; x += 4)
         d.drawPixel(x, dY(ty), C_EDGE);
-      text(d, tk[t], plotX + G - 4, dY(ty - 4), 8, C_DIM, C_PANEL, Align::TopRight);
+      text(d, tk[t], plotX + G - 4, dY(ty - 5), 10, C_DIM, C_PANEL, Align::TopRight);
     }
     d.drawFastVLine(plotX + G, dY(yTop), yBot - yTop + 1, C_EDGE);
     // Baseline "<1".
     d.drawFastHLine(plotX + G, dY(yBot), plotW - G - 4, C_EDGE);
-    text(d, "<1", plotX + G - 4, dY(yBot - 4), 8, C_DIM, C_PANEL, Align::TopRight);
+    text(d, "<1", plotX + G - 4, dY(yBot - 5), 10, C_DIM, C_PANEL, Align::TopRight);
+
+    // Top banner above threshold line
+    text(d, "RARER ^", plotX + G + 6, dY(plotY + 3), 10, C_DIM, C_PANEL);
+    char tlab[48];
+    snprintf(tlab, sizeof(tlab), "TARGET: %s diff", av.netDiff.c_str());
+    text(d, tlab, plotX + plotW - 6, dY(plotY + 3), 10, C_WARN, C_PANEL, Align::TopRight);
+
     // Top: orange BLOCK THRESHOLD at live network difficulty.
     d.drawFastHLine(plotX + G, dY(yTop), plotW - G - 4, C_WARN);
     d.drawFastHLine(plotX + G, dY(yTop + 1), plotW - G - 4, C_WARN);
-    text(d, av.netDiff.c_str(), plotX + G - 4, dY(yTop), 8, C_WARN, C_PANEL, Align::TopRight);
-    char tlab[48];
-    snprintf(tlab, sizeof(tlab), "BLOCK THRESHOLD - %s diff", av.netDiff.c_str());
-    text(d, tlab, plotX + plotW - 6, dY(yTop + 4), 9, C_WARN, C_PANEL, Align::TopRight);
-    text(d, "hash < target -> valid block", plotX + plotW - 6, dY(yTop + 15), 8, C_DIM, C_PANEL, Align::TopRight);
-    text(d, "RARER ^", plotX + G + 4, dY(yTop + 4), 9, C_DIM, C_PANEL);
+    text(d, "TGT", plotX + G - 4, dY(yTop - 5), 10, C_WARN, C_PANEL, Align::TopRight);
+    text(d, "hash < target -> valid block", plotX + plotW - 6, dY(yTop + 4), 9, C_DIM, C_PANEL, Align::TopRight);
 
     if (count < 1)
     {
@@ -1440,13 +1481,13 @@ static void paintProtocolPlot(const ArchitectureV &av)
       d.drawCircle(bx, dY(by), 5, C_WARN);
       char blab[32];
       snprintf(blab, sizeof(blab), "* BEST %s", av.bestDiff.c_str());
-      int lw = textW(blab, 9);
+      int lw = textW(blab, 10);
       bool right = bx + 8 + lw < plotX + plotW - 4;
       int ly = (by > yTop + 30) ? by - 12 : by + 7;
-      text(d, blab, right ? bx + 8 : bx - 8, dY(ly), 9, C_METER, C_PANEL,
+      text(d, blab, right ? bx + 8 : bx - 8, dY(ly), 10, C_METER, C_PANEL,
            right ? Align::TopLeft : Align::TopRight);
     }
-    text(d, "recent samples - newest ->", plotX + G + (plotW - G) / 2, dY(plotY + plotH - 12), 10, C_DIM, C_PANEL, Align::TopCenter);
+    text(d, "recent samples - newest ->", plotX + G + (plotW - G) / 2, dY(plotY + plotH - 13), 10, C_DIM, C_PANEL, Align::TopCenter);
     done(W_PROTO_PLOT, kbuf);
   }
 
@@ -1457,6 +1498,7 @@ static void paintProtocolPlot(const ArchitectureV &av)
     return;
   if (!wBegin(plotW, footH, C_PANEL))
     return;
+  wgt.drawRoundRect(0, 0, plotW, footH, 6, C_EDGE);
   float kh = av.hashRate.toFloat();
   char rateBuf[24];
   if (kh > 0)
@@ -1769,8 +1811,10 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.strip.l[0] = "BLK TIME";
   m.strip.v[1] = fmtUptimeShort(data.timeMining);
   m.strip.l[1] = "UPTIME";
-  m.strip.v[2] = data.bestDiff;
-  m.strip.l[2] = "BEST";
+  float tC = data.temp.toFloat();
+  float tF = tC * 1.8f + 32.0f;
+  m.strip.v[2] = data.temp.length() ? (String((int)roundf(tF)) + " F") : String("-- F");
+  m.strip.l[2] = "TEMP";
   lastMine = m;
   haveMine = true;
   paintMine(m);
@@ -1823,11 +1867,24 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 
   ClockV c;
   c.hdr = liveHeader(data.currentTime);
-  int colon = data.currentTime.indexOf(':');
-  c.hh = colon > 0 ? data.currentTime.substring(0, colon) : String("--");
-  String rest = colon > 0 ? data.currentTime.substring(colon + 1) : String("--");
-  int colon2 = rest.indexOf(':');
-  c.mm = colon2 > 0 ? rest.substring(0, colon2) : rest;
+  int h = 0, m = 0, s = 0;
+  if (sscanf(data.currentTime.c_str(), "%d:%d:%d", &h, &m, &s) >= 2 ||
+      sscanf(data.currentTime.c_str(), "%d:%d", &h, &m) >= 2)
+  {
+    c.period = (h >= 12) ? "PM" : "AM";
+    int h12 = h % 12;
+    if (h12 == 0) h12 = 12;
+    c.hh = String(h12);
+    char mBuf[8];
+    snprintf(mBuf, sizeof(mBuf), "%02d", m);
+    c.mm = String(mBuf);
+  }
+  else
+  {
+    c.hh = "--";
+    c.mm = "--";
+    c.period = "";
+  }
   c.colon = (millis() / 1000) & 1;
   c.date = fmtDate(data.currentDate);
   c.hash = data.currentHashRate;
@@ -2344,8 +2401,10 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         m.strip.l[0] = "BLK TIME";
         m.strip.v[1] = fmtUptimeShort(String((unsigned long)upTime));
         m.strip.l[1] = "UPTIME";
-        m.strip.v[2] = m.best;
-        m.strip.l[2] = "BEST";
+        float tC = temperatureRead();
+        float tF = tC * 1.8f + 32.0f;
+        m.strip.v[2] = String((int)roundf(tF)) + " F";
+        m.strip.l[2] = "TEMP";
         paintMine(m);
       }
       gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);
@@ -2390,9 +2449,24 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         ClockV c;
         String t = getTime();
         c.hdr = liveHeader(t);
-        int colon = t.indexOf(':');
-        c.hh = colon > 0 ? t.substring(0, colon) : String("--");
-        c.mm = colon > 0 ? t.substring(colon + 1) : String("--");
+        int h = 0, m = 0, s = 0;
+        if (sscanf(t.c_str(), "%d:%d:%d", &h, &m, &s) >= 2 ||
+            sscanf(t.c_str(), "%d:%d", &h, &m) >= 2)
+        {
+          c.period = (h >= 12) ? "PM" : "AM";
+          int h12 = h % 12;
+          if (h12 == 0) h12 = 12;
+          c.hh = String(h12);
+          char mBuf[8];
+          snprintf(mBuf, sizeof(mBuf), "%02d", m);
+          c.mm = String(mBuf);
+        }
+        else
+        {
+          c.hh = "--";
+          c.mm = "--";
+          c.period = "";
+        }
         c.colon = true;
         c.date = fmtDate(getDate());
         c.hash = getCurrentHashRate(0);
