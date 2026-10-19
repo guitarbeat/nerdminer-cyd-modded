@@ -138,6 +138,78 @@ static void handleApiStats()
   webCfgServer.send(200, "application/json", buildStatsJson(d));
 }
 
+static void handleApiProfile()
+{
+  TaskStackMetrics t = getTaskStackMetrics();
+  String json = "{";
+  json += "\"hw_cycles_per_hash\":" + String((unsigned long)g_cycleProfile.hw_cycles_per_hash) + ",";
+  json += "\"hw_cycle_jitter\":" + String((unsigned long)g_cycleProfile.hw_cycle_jitter) + ",";
+  json += "\"sw_cycles_per_hash\":" + String((unsigned long)g_cycleProfile.sw_cycles_per_hash) + ",";
+  json += "\"chunk_gap_cycles\":" + String((unsigned long)g_cycleProfile.chunk_gap_cycles) + ",";
+  json += "\"hit_overhead_cycles\":" + String((unsigned long)g_cycleProfile.hit_overhead_cycles) + ",";
+  json += "\"total_hw_hashes\":" + String((unsigned long)g_cycleProfile.total_hw_hashes) + ",";
+  json += "\"total_sw_hashes\":" + String((unsigned long)g_cycleProfile.total_sw_hashes) + ",";
+  json += "\"dma_transfers\":" + String((unsigned long)g_dmaTransferCount) + ",";
+  json += "\"tasks\":{";
+  json += "\"monitor_stack_hwm\":" + String((unsigned long)t.monitor_stack_hwm) + ",";
+  json += "\"stratum_stack_hwm\":" + String((unsigned long)t.stratum_stack_hwm) + ",";
+  json += "\"miner_hw_stack_hwm\":" + String((unsigned long)t.miner_hw_stack_hwm) + ",";
+  json += "\"miner_sw_stack_hwm\":" + String((unsigned long)t.miner_sw_stack_hwm) + ",";
+  json += "\"touch_stack_hwm\":" + String((unsigned long)t.touch_stack_hwm);
+  json += "},";
+  json += "\"heap\":{";
+  json += "\"free_internal\":" + String((unsigned long)t.free_heap_internal) + ",";
+  json += "\"min_free\":" + String((unsigned long)t.min_free_heap) + ",";
+  json += "\"max_alloc\":" + String((unsigned long)t.max_alloc_heap) + ",";
+  json += "\"allocated_blocks\":" + String((unsigned long)t.allocated_blocks) + ",";
+  json += "\"free_blocks\":" + String((unsigned long)t.free_blocks);
+  json += "}";
+  json += "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
+static String hexString(const uint8_t *data, size_t len)
+{
+  String s = "";
+  s.reserve(len * 2);
+  const char hexChars[] = "0123456789abcdef";
+  for (size_t i = 0; i < len; ++i)
+  {
+    s += hexChars[(data[i] >> 4) & 0x0F];
+    s += hexChars[data[i] & 0x0F];
+  }
+  return s;
+}
+
+static void handleApiCryptoAudit()
+{
+  String json = "{";
+  json += "\"job_id\":" + String(g_cryptoAudit.job_id) + ",";
+  json += "\"pool_difficulty\":" + String(g_cryptoAudit.pool_difficulty, 8) + ",";
+  json += "\"active_midstate\":\"" + hexString(g_cryptoAudit.active_midstate, 32) + "\",";
+  json += "\"active_header_tail\":\"" + hexString(g_cryptoAudit.active_header_tail, 16) + "\",";
+  json += "\"pool_target\":\"" + hexString(g_cryptoAudit.pool_target, 32) + "\",";
+  json += "\"nonce_ranges\":{";
+  json += "\"hw_cursor\":" + String(g_cryptoAudit.hw_nonce_cursor) + ",";
+  json += "\"sw_cursor\":" + String(g_cryptoAudit.sw_nonce_cursor) + ",";
+  json += "\"nonce_collisions\":" + String(g_cryptoAudit.nonce_collisions);
+  json += "},";
+  json += "\"sample_count\":" + String(g_cryptoAudit.sample_count) + ",";
+  json += "\"samples\":[";
+  for (uint8_t i = 0; i < g_cryptoAudit.sample_count; ++i)
+  {
+    if (i > 0) json += ",";
+    json += "{";
+    json += "\"nonce\":" + String(g_cryptoAudit.samples[i].nonce) + ",";
+    json += "\"diff\":" + String(g_cryptoAudit.samples[i].difficulty, 8) + ",";
+    json += "\"hash\":\"" + hexString(g_cryptoAudit.samples[i].hash, 32) + "\"";
+    json += "}";
+  }
+  json += "]";
+  json += "}";
+  webCfgServer.send(200, "application/json", json);
+}
+
 static void handleResetSession()
 {
   resetSessionStats();
@@ -1578,6 +1650,8 @@ void setup_webConfig(void)
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);
+  webCfgServer.on("/api/profile", HTTP_GET, handleApiProfile);
+  webCfgServer.on("/api/crypto-audit", HTTP_GET, handleApiCryptoAudit);
   webCfgServer.on("/api/status", HTTP_GET, handleStatus);
   webCfgServer.on("/api/reset-session", HTTP_POST, handleResetSession);
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);

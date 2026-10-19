@@ -215,7 +215,28 @@ static String wkey[W_COUNT];
 // ---------------------------------------------------------- output target --
 // Everything draws either to the panel or to an offscreen shot.
 
-static TFT_eSprite wgt = TFT_eSprite(&tft); // scratch sprite reused by every widget
+class DmaWidgetSprite : public TFT_eSprite {
+public:
+  DmaWidgetSprite(TFT_eSPI *t) : TFT_eSprite(t) {}
+
+  bool initPersistent(int maxW, int maxH) {
+    setColorDepth(16);
+    void *p = createSprite(maxW, maxH);
+    return (p != nullptr);
+  }
+
+  void resize(int w, int h) {
+    _iwidth  = _dwidth  = _bitwidth = w;
+    _iheight = _dheight = h;
+    _sx = 0; _sy = 0; _sw = w; _sh = h;
+    cursor_x = 0; cursor_y = 0;
+  }
+
+  uint16_t* getBuffer() { return (uint16_t*)_img8; }
+};
+
+static DmaWidgetSprite wgt(&tft); // persistent DMA-ready scratch sprite
+static bool wgtReady = false;
 static TFT_eSprite shot = TFT_eSprite(&tft);
 static std::mutex g_displayMutex;
 static bool shotOn = false;
@@ -234,14 +255,17 @@ static void resetWidgets()
 
 static bool wBegin(int w, int h, uint16_t bg)
 {
-  wgt.setColorDepth(16);
-  wgt.createSprite(w, h);
-  if (!wgt.created())
+  if (!wgtReady)
   {
-    Serial.printf("[ui] sprite %dx%d alloc failed (free %u, max block %u)\n", w, h,
-                  ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-    return false;
+    wgtReady = wgt.initPersistent(240, 80);
+    if (!wgtReady)
+    {
+      Serial.printf("[ui] persistent DMA sprite 240x80 alloc failed (free %u, max block %u)\n",
+                    ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+      return false;
+    }
   }
+  wgt.resize(w, h);
   wgt.fillSprite(bg);
   return true;
 }
@@ -251,18 +275,23 @@ static void wEnd(int x, int y)
   if (shotOn)
   {
     wgt.pushToSprite(&shot, x, dY(y));
-    wgt.deleteSprite();
     return;
   }
-  wgt.pushSprite(x, y);
-  wgt.deleteSprite();
+  tft.dmaWait();
+  tft.pushImageDMA(x, y, wgt.width(), wgt.height(), wgt.getBuffer());
+  g_dmaTransferCount++;
 }
 
 
 // ------------------------------------------------------------ draw helpers --
 
 // fillScreen() is not virtual in TFT_eSPI, so it would ignore sprite targets
-static void clearScreen(TFT_eSPI &d) { d.fillRect(0, 0, d.width(), d.height(), C_BG); }
+static void clearScreen(TFT_eSPI &d)
+{
+  if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
+  d.fillRect(0, 0, d.width(), d.height(), C_BG);
+}
+
 
 static void text(TFT_eSPI &d, const char *s, int x, int y, unsigned size, uint16_t fg, uint16_t bg,
                  Align a = Align::TopLeft)
@@ -558,6 +587,7 @@ static void noteHashrate(float kh)
 
 static void gaugeDraw(TFT_eSPI &d, float v)
 {
+  if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
   float pos = v * G_SEGS;
   int cy = dY(G_CY);
   for (int i = 0; i < G_SEGS; i++)
@@ -1958,6 +1988,7 @@ static volatile int g_currentDuty = 255;
 void esp32_2432S028R_Init(void)
 {
   tft.init();
+  tft.initDMA(true);
   if (nvMem.loadConfig(&Settings))
   {
     invertColors = Settings.invertColors;

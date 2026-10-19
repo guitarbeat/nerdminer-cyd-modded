@@ -167,4 +167,61 @@ void hashSamplePushDigest(const uint8_t hash[32]);
 // log2_q8 of (truediffone / difficulty) for network target / best-diff markers.
 uint16_t hashLog2Q8FromDifficulty(double difficulty);
 
+// ---------------------------------------------------------------------------
+// Real-time Cycle Counter Profiling & FreeRTOS Stack Telemetry
+// ---------------------------------------------------------------------------
+struct MiningCycleProfile {
+  uint32_t hw_cycles_per_hash;    // filtered average CPU cycles per HW double-SHA256 hash
+  uint32_t hw_cycle_jitter;       // peak-to-average cycle variance (jitter)
+  uint32_t sw_cycles_per_hash;    // filtered average CPU cycles per SW double-SHA256 hash
+  uint32_t chunk_gap_cycles;      // CPU cycles between mining chunks
+  uint32_t hit_overhead_cycles;   // CPU cycles to verify a candidate in SW
+  uint32_t total_hw_hashes;       // cumulative hardware hashes
+  uint32_t total_sw_hashes;       // cumulative software hashes
+  uint32_t dma_transfers;         // total SPI DMA transfers executed
+  uint32_t core1_stalls;          // cycle contention / delay events
+};
+extern volatile MiningCycleProfile g_cycleProfile;
+extern volatile uint32_t g_dmaTransferCount;
+
+struct TaskStackMetrics {
+  uint32_t monitor_stack_hwm;
+  uint32_t stratum_stack_hwm;
+  uint32_t miner_hw_stack_hwm;
+  uint32_t miner_sw_stack_hwm;
+  uint32_t touch_stack_hwm;
+  uint32_t free_heap_internal;
+  uint32_t min_free_heap;
+  uint32_t max_alloc_heap;
+  uint32_t allocated_blocks;
+  uint32_t free_blocks;
+};
+TaskStackMetrics getTaskStackMetrics(void);
+
+// ---------------------------------------------------------------------------
+// Cryptographic Audit & Nonce Space Distribution Telemetry
+// ---------------------------------------------------------------------------
+#define CRYPTO_AUDIT_SAMPLE_N 64
+
+struct CryptoAuditSample {
+  uint32_t nonce;
+  double difficulty;
+  uint8_t hash[32];
+};
+
+struct CryptoAuditTelemetry {
+  uint8_t active_midstate[32];
+  uint8_t active_header_tail[16];
+  uint8_t pool_target[32];
+  double pool_difficulty;
+  uint32_t job_id;
+  uint32_t hw_nonce_cursor;
+  uint32_t sw_nonce_cursor;
+  uint32_t nonce_collisions;
+  uint8_t sample_count;
+  CryptoAuditSample samples[CRYPTO_AUDIT_SAMPLE_N];
+};
+extern CryptoAuditTelemetry g_cryptoAudit;
+void pushCryptoAuditSample(uint32_t nonce, double diff, const uint8_t hash[32]);
+
 #endif // UTILS_API_H

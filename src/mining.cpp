@@ -473,6 +473,93 @@ std::mutex g_hwShaMutex;  // see mining.h for why this exists
 #if defined(PIPELINED_S3_MINING)
 std::atomic<int> g_hwShaWanted{0}; // see mining.h
 #endif
+
+// ---------------------------------------------------------------------------
+// Telemetry & Profiler State
+// ---------------------------------------------------------------------------
+volatile MiningCycleProfile g_cycleProfile = {0};
+volatile uint32_t g_dmaTransferCount = 0;
+CryptoAuditTelemetry g_cryptoAudit = {0};
+static std::mutex s_cryptoAuditMutex;
+
+void pushCryptoAuditSample(uint32_t nonce, double diff, const uint8_t hash[32])
+{
+  std::lock_guard<std::mutex> lock(s_cryptoAuditMutex);
+  uint8_t idx = g_cryptoAudit.sample_count % CRYPTO_AUDIT_SAMPLE_N;
+  g_cryptoAudit.samples[idx].nonce = nonce;
+  g_cryptoAudit.samples[idx].difficulty = diff;
+  memcpy(g_cryptoAudit.samples[idx].hash, hash, 32);
+  if (g_cryptoAudit.sample_count < CRYPTO_AUDIT_SAMPLE_N)
+    g_cryptoAudit.sample_count++;
+}
+
+TaskStackMetrics getTaskStackMetrics(void)
+{
+  TaskStackMetrics m = {0};
+  TaskHandle_t hMonitor = xTaskGetHandle("Monitor");
+  TaskHandle_t hStratum = xTaskGetHandle("Stratum");
+  TaskHandle_t hHw = xTaskGetHandle("MinerHw-0");
+  TaskHandle_t hSw = xTaskGetHandle("MinerSw-1");
+  TaskHandle_t hTouch = xTaskGetHandle("cydTouch");
+
+  if (hMonitor) m.monitor_stack_hwm = uxTaskGetStackHighWaterMark(hMonitor);
+  if (hStratum) m.stratum_stack_hwm = uxTaskGetStackHighWaterMark(hStratum);
+  if (hHw) m.miner_hw_stack_hwm = uxTaskGetStackHighWaterMark(hHw);
+  if (hSw) m.miner_sw_stack_hwm = uxTaskGetStackHighWaterMark(hSw);
+  if (hTouch) m.touch_stack_hwm = uxTaskGetStackHighWaterMark(hTouch);
+
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  m.free_heap_internal = info.total_free_bytes;
+  m.min_free_heap = info.minimum_free_bytes;
+  m.max_alloc_heap = info.largest_free_block;
+  m.allocated_blocks = info.allocated_blocks;
+  m.free_blocks = info.free_blocks;
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// Zero-Allocation Static Object Pools for Hot Mining Loop
+// ---------------------------------------------------------------------------
+#define POOL_REQ_CAP 16
+#define POOL_RES_CAP 64
+
+static JobRequest s_pooled_reqs[POOL_REQ_CAP];
+static volatile uint8_t s_pooled_req_used[POOL_REQ_CAP] = {0};
+
+static std::shared_ptr<JobRequest> acquireJobRequest()
+{
+  for (int i = 0; i < POOL_REQ_CAP; ++i)
+  {
+    if (!s_pooled_req_used[i])
+    {
+      s_pooled_req_used[i] = 1;
+      return std::shared_ptr<JobRequest>(&s_pooled_reqs[i], [i](JobRequest *) {
+        s_pooled_req_used[i] = 0;
+      });
+    }
+  }
+  return std::make_shared<JobRequest>();
+}
+
+static JobResult s_pooled_results[POOL_RES_CAP];
+static volatile uint8_t s_pooled_res_used[POOL_RES_CAP] = {0};
+
+static std::shared_ptr<JobResult> acquireJobResult()
+{
+  for (int i = 0; i < POOL_RES_CAP; ++i)
+  {
+    if (!s_pooled_res_used[i])
+    {
+      s_pooled_res_used[i] = 1;
+      return std::shared_ptr<JobResult>(&s_pooled_results[i], [i](JobResult *) {
+        s_pooled_res_used[i] = 0;
+      });
+    }
+  }
+  return std::make_shared<JobResult>();
+}
+
 std::list<std::shared_ptr<JobRequest>> s_job_request_list_sw;
 #ifdef HARDWARE_SHA265
 std::list<std::shared_ptr<JobRequest>> s_job_request_list_hw;
@@ -498,7 +585,7 @@ static pl_ctx_t s_pl_ctx;
 static void JobPush(std::list<std::shared_ptr<JobRequest>> &job_list,  uint32_t id, uint32_t nonce_start, uint32_t nonce_count, double difficulty,
                     const uint8_t* sha_buffer, const uint32_t* midstate, const uint32_t* bake)
 {
-  std::shared_ptr<JobRequest> job = std::make_shared<JobRequest>();
+  std::shared_ptr<JobRequest> job = acquireJobRequest();
   job->id = id;
   job->nonce_start = nonce_start;
   job->nonce_count = nonce_count;
@@ -508,6 +595,7 @@ static void JobPush(std::list<std::shared_ptr<JobRequest>> &job_list,  uint32_t 
   memcpy(job->bake, bake, sizeof(job->bake));
   job_list.push_back(job);
 }
+
 
 struct Submition
 {
@@ -833,6 +921,14 @@ void runStratumWorker(void *name) {
                                             s_job_request_list_hw.clear();
                                             #endif
                                             job_pool++;
+                                            {
+                                              std::lock_guard<std::mutex> clock(s_cryptoAuditMutex);
+                                              g_cryptoAudit.job_id = job_pool;
+                                              g_cryptoAudit.pool_difficulty = currentPoolDifficulty;
+                                              memcpy(g_cryptoAudit.active_midstate, diget_mid, 32);
+                                              memcpy(g_cryptoAudit.active_header_tail, mMiner.bytearray_blockheader + 64, 16);
+                                              memcpy(g_cryptoAudit.pool_target, mMiner.bytearray_pooltarget, 32);
+                                            }
                                             s_working_current_job_id = job_pool & 0xFF; //Terminate current job in thread
                                             #if defined(PIPELINED_ASM_MINING) && defined(CONFIG_IDF_TARGET_ESP32)
                                             s_pl_ctx.run = 0;                           //...and stop the HW loop mid-chunk right now
@@ -1084,7 +1180,7 @@ void minerWorkerSw(void * task_id)
     }
     if (job)
     {
-      result = std::make_shared<JobResult>();
+      result = acquireJobResult();
       result->difficulty = job->difficulty;
       result->nonce = 0xFFFFFFFF;
       result->id = job->id;
@@ -1097,9 +1193,22 @@ void minerWorkerSw(void * task_id)
         #ifdef DEBUG_MINING
         (*myDebugCounter)++;
         #endif
-        if (nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash))
+        uint32_t sw0 = 0, sw1 = 0;
+        asm volatile("rsr.ccount %0" : "=a"(sw0));
+        bool sw_hit = nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash);
+        asm volatile("rsr.ccount %0" : "=a"(sw1));
+        uint32_t sw_cycles = sw1 - sw0;
+        if (g_cycleProfile.sw_cycles_per_hash == 0)
+          g_cycleProfile.sw_cycles_per_hash = sw_cycles;
+        else
+          g_cycleProfile.sw_cycles_per_hash = (g_cycleProfile.sw_cycles_per_hash * 15 + sw_cycles) / 16;
+        g_cycleProfile.total_sw_hashes++;
+        g_cryptoAudit.sw_nonce_cursor = nonce_n;
+
+        if (sw_hit)
         {
           double diff_hash = diff_from_target(hash);
+          pushCryptoAuditSample(nonce_n, diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             result->difficulty = diff_hash;
@@ -1108,7 +1217,7 @@ void minerWorkerSw(void * task_id)
           }
         }
 
-        if ( (uint16_t)(n & 0xFF) == 0 &&s_working_current_job_id != job_in_work)
+        if ( (uint16_t)(n & 0xFF) == 0 && s_working_current_job_id != job_in_work)
         {
           result->nonce_count = n+1;
           break;
@@ -1423,7 +1532,7 @@ void minerWorkerHw(void * task_id)
     }
     if (job)
     {
-      result = std::make_shared<JobResult>();
+      result = acquireJobResult();
       result->id = job->id;
       result->nonce = 0xFFFFFFFF;
       result->nonce_count = job->nonce_count;
@@ -1481,7 +1590,7 @@ void minerWorkerHw(void * task_id)
               #ifdef DEBUG_MINING
               debugPipelinedAccepted++;
               #endif
-              std::shared_ptr<JobResult> share = std::make_shared<JobResult>();
+              std::shared_ptr<JobResult> share = acquireJobResult();
               share->id = job->id;
               share->nonce = cand;
               share->nonce_count = 0;
@@ -1516,7 +1625,7 @@ void minerWorkerHw(void * task_id)
             // Count the work in small steps: a chunk takes most of a second
             // here, and counting it only at its end makes the displayed
             // hashrate jump between seconds with one chunk and with two.
-            std::shared_ptr<JobResult> progress = std::make_shared<JobResult>();
+            std::shared_ptr<JobResult> progress = acquireJobResult();
             progress->id = job->id;
             progress->nonce = 0xFFFFFFFF;
             progress->nonce_count = done - reported;
@@ -2001,8 +2110,8 @@ void minerWorkerHw(void * task_id)
           debugChunkCount++;
         }
       }
-      #endif
-      result = std::make_shared<JobResult>();
+      #endif // DEBUG_MINING
+      result = acquireJobResult();
       result->id = job->id;
       result->nonce = 0xFFFFFFFF;
       result->nonce_count = job->nonce_count;
@@ -2045,6 +2154,21 @@ void minerWorkerHw(void * task_id)
         // abandoned block) is finished; start from a clean peripheral.
         periph_module_reset(PERIPH_SHA_MODULE);
 
+        static uint32_t s_last_chunk_end_cycle = 0;
+        uint32_t chunk_start_cycle = 0;
+        asm volatile("rsr.ccount %0" : "=a"(chunk_start_cycle));
+        if (s_last_chunk_end_cycle != 0)
+        {
+          uint32_t gap = chunk_start_cycle - s_last_chunk_end_cycle;
+          if (gap < 240000000)
+          {
+            if (g_cycleProfile.chunk_gap_cycles == 0)
+              g_cycleProfile.chunk_gap_cycles = gap;
+            else
+              g_cycleProfile.chunk_gap_cycles = (g_cycleProfile.chunk_gap_cycles * 7 + gap) / 8;
+          }
+        }
+
         while (s_pl_ctx.run && s_pl_ctx.budget > 0)
         {
           if (!s_pl_loops[s_pl_loop].fn((volatile uint32_t *)SHA_TEXT_BASE, &s_pl_ctx))
@@ -2061,8 +2185,17 @@ void minerWorkerHw(void * task_id)
           uint32_t cand_native_pl = __builtin_bswap32(s_pl_ctx.nonce - 1);
           ((uint32_t *)(pipelined_native_header_cache + 64 + 12))[0] = cand_native_pl;
           uint8_t sw_hash[32];
+          uint32_t h0 = 0, h1 = 0;
+          asm volatile("rsr.ccount %0" : "=a"(h0));
           bool confirmed = nerd_sha256d_baked(pipelined_midstate_cache, pipelined_native_header_cache + 64,
                                               pipelined_bake_cache, sw_hash);
+          asm volatile("rsr.ccount %0" : "=a"(h1));
+          uint32_t h_overhead = h1 - h0;
+          if (g_cycleProfile.hit_overhead_cycles == 0)
+            g_cycleProfile.hit_overhead_cycles = h_overhead;
+          else
+            g_cycleProfile.hit_overhead_cycles = (g_cycleProfile.hit_overhead_cycles * 7 + h_overhead) / 8;
+
           pl_health(confirmed);
           #ifdef DEBUG_MINING
           if (confirmed)
@@ -2071,24 +2204,26 @@ void minerWorkerHw(void * task_id)
             debugPipelinedHwSwMismatch++;
           #endif
 
-          if (confirmed && diff_from_target(sw_hash) > job->difficulty && isSha256Valid(sw_hash))
+          if (confirmed)
           {
-            // A share. Hand it over now rather than with the chunk's
-            // result: at low pool difficulty a 256K-nonce chunk regularly
-            // holds two, and it should not wait ~0.3 s for the chunk to
-            // end (a job change in that time would void it).
-            #ifdef DEBUG_MINING
-            debugPipelinedAccepted++;
-            #endif
-            std::shared_ptr<JobResult> share = std::make_shared<JobResult>();
-            share->id = job->id;
-            share->nonce = cand_native_pl;
-            share->nonce_count = 0;
-            share->difficulty = diff_from_target(sw_hash);
-            memcpy(share->hash, sw_hash, sizeof(sw_hash));
-            std::lock_guard<std::mutex> lock(s_job_mutex);
-            if (s_job_result_list.size() < 64) // only guards against a stuck stratum task
-              s_job_result_list.push_back(share);
+            double cand_diff = diff_from_target(sw_hash);
+            pushCryptoAuditSample(cand_native_pl, cand_diff, sw_hash);
+
+            if (cand_diff > job->difficulty && isSha256Valid(sw_hash))
+            {
+              #ifdef DEBUG_MINING
+              debugPipelinedAccepted++;
+              #endif
+              std::shared_ptr<JobResult> share = acquireJobResult();
+              share->id = job->id;
+              share->nonce = cand_native_pl;
+              share->nonce_count = 0;
+              share->difficulty = cand_diff;
+              memcpy(share->hash, sw_hash, sizeof(sw_hash));
+              std::lock_guard<std::mutex> lock(s_job_mutex);
+              if (s_job_result_list.size() < 64) // only guards against a stuck stratum task
+                s_job_result_list.push_back(share);
+            }
           }
 
           #ifdef DEBUG_MINING
@@ -2096,16 +2231,38 @@ void minerWorkerHw(void * task_id)
           debugHitOverheadCount++;
           #endif
         }
+
+        uint32_t chunk_end_cycle = 0;
+        asm volatile("rsr.ccount %0" : "=a"(chunk_end_cycle));
+        s_last_chunk_end_cycle = chunk_end_cycle;
+
+        uint32_t nonces_done = job->nonce_count - s_pl_ctx.budget;
+        if (nonces_done > 0)
+        {
+          uint32_t total_cycles = chunk_end_cycle - chunk_start_cycle;
+          uint32_t cph = total_cycles / nonces_done;
+          if (g_cycleProfile.hw_cycles_per_hash == 0)
+            g_cycleProfile.hw_cycles_per_hash = cph;
+          else
+            g_cycleProfile.hw_cycles_per_hash = (g_cycleProfile.hw_cycles_per_hash * 7 + cph) / 8;
+          int jitter = (int)cph - (int)g_cycleProfile.hw_cycles_per_hash;
+          if (jitter < 0) jitter = -jitter;
+          g_cycleProfile.hw_cycle_jitter = (g_cycleProfile.hw_cycle_jitter * 7 + (uint32_t)jitter) / 8;
+          g_cycleProfile.total_hw_hashes += nonces_done;
+        }
+
         // Persist where the search got to so the NEXT chunk pop of this
         // same stratum job continues from here instead of re-deriving a
         // (possibly overlapping) start point from that chunk's own
         // native-space nonce_start.
         pipelined_swapped_cursor = s_pl_ctx.nonce;
+        g_cryptoAudit.hw_nonce_cursor = pipelined_swapped_cursor;
         result->nonce_count = job->nonce_count - s_pl_ctx.budget;
         #ifdef DEBUG_MINING
         debugHashesHw += result->nonce_count;
         #endif
       }
+
 #else
       for (uint32_t n = 0; n < job->nonce_count; ++n)
       {
