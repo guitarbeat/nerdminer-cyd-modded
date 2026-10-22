@@ -2452,6 +2452,19 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     targetScr = 0;
   g_shotTargetScr = targetScr;
 
+  // Freeze the mine values for the whole capture: slices are rendered one at
+  // a time with network writes between them, and the monitor task updates
+  // lastMine every second, so a widget spanning two slices could otherwise
+  // show the top of one hashrate and the bottom of the next.
+  MineV shotMine;
+  bool shotHaveMine;
+  {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    shotHaveMine = haveMine;
+    if (shotHaveMine)
+      shotMine = lastMine;
+  }
+
   auto renderSlice = [&](int yOff) {
     std::lock_guard<std::mutex> lock(g_displayMutex);
     g_shotYOffset = yOff;
@@ -2460,16 +2473,16 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     ensureChrome(targetScr);
     if (targetScr == SCR_MINE)
     {
-      if (haveMine)
+      if (shotHaveMine)
       {
-        lastMine.hdr = liveHeader(getTime());
-        lastMine.time12 = fmt12HourTime(getTime());
+        shotMine.hdr = liveHeader(getTime());
+        shotMine.time12 = fmt12HourTime(getTime());
         uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
         uint32_t blkSec = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? (nowSec - g_blockStartTimeSec) : 0;
-        lastMine.strip.v[0] = fmtBlockTime(blkSec);
-        lastMine.blockHashes = fmtHashCountU64(g_currentBlockHashes);
-        lastMine.blocks = String(valids);
-        paintMine(lastMine);
+        shotMine.strip.v[0] = fmtBlockTime(blkSec);
+        shotMine.blockHashes = fmtHashCountU64(g_currentBlockHashes);
+        shotMine.blocks = String(valids);
+        paintMine(shotMine);
       }
       else
       {
