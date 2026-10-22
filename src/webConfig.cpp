@@ -631,7 +631,7 @@ const txt=document.getElementById('st-txt');if(txt){
 if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
 else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
 else{txt.className='txt-gray';txt.textContent='Idle';}}
-cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&cydPreviewScr!==cydDevScr){cydSelectTab(cydDevScr,false);}}cydRender();}
+cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();cydSyncInitialTab();}cydRender();}
 let simIsHist=true,simN=856192320,simAutoTimer=null;
 function toHex32LE(n){
 const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n>>>0,true);
