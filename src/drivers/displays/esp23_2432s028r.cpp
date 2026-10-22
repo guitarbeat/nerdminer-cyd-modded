@@ -1800,16 +1800,20 @@ static void logShare(const String &shares, const String &khashes, const String &
 
 void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 {
-  std::lock_guard<std::mutex> lock(g_displayMutex);
   if (restorePage > 0 && restorePage < currentDisplayDriver->num_cyclic_screens)
   {
     // First tick after boot: go straight to the page that was showing before.
+    // Must NOT hold g_displayMutex here: the target cyclic screen locks it
+    // itself, and std::mutex is non-recursive, so double-locking on this same
+    // thread deadlocks and freezes the panel on the INITIALIZING splash while
+    // the mining core keeps running.
     int p = restorePage;
     restorePage = 0;
     currentDisplayDriver->current_cyclic_screen = p;
     currentDisplayDriver->cyclic_screens[p](mElapsed);
     return;
   }
+  std::lock_guard<std::mutex> lock(g_displayMutex);
   restorePage = 0;
   mining_data data = getMiningData(mElapsed);
   refreshPool();
