@@ -2067,7 +2067,7 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
   m.fee = data.halfHourFee.toInt();
   m.feeHour = data.feeHour;
   m.feeFast = data.feeFast;
-  m.diff = data.netwrokDifficulty.length() ? data.netwrokDifficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("--"));
+  m.diff = g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : (data.netwrokDifficulty.length() ? data.netwrokDifficulty : String("--"));
   m.net = data.globalHashRate.length() ? data.globalHashRate : String("--");
   m.pct = (int)data.progressPercent;
   m.remaining = data.remainingBlocks.toInt();
@@ -3296,7 +3296,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         m.fee = gData.halfHourFee;
         m.feeHour = gData.feeHour;
         m.feeFast = gData.feeFast;
-        m.diff = gData.difficulty.length() ? gData.difficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("--"));
+        m.diff = g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : (gData.difficulty.length() ? gData.difficulty : String("--"));
         m.net = gData.globalHash.length() ? gData.globalHash : String("--");
         unsigned long cb = current_block.toInt();
         unsigned long rem = cb ? (((cb / HALVING_BLOCKS) + 1) * HALVING_BLOCKS) - cb : 0;
@@ -3362,8 +3362,8 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       {
         ArchitectureV a;
         a.hdr = liveHeader(getTime());
-        a.netDiff = gData.difficulty.length() ? gData.difficulty : (g_networkDifficulty > 0.0 ? formatNetworkDifficulty(g_networkDifficulty, true) : String("133T"));
-        a.netDiffRaw = g_networkDifficulty;
+        a.netDiffRaw = g_networkDifficulty > 0.0 ? g_networkDifficulty : 1e14;
+        a.netDiff = formatNetworkDifficulty(a.netDiffRaw, true);
         char bestBuf[16];
         suffix_string(best_diff, bestBuf, 16, 0);
         a.bestDiff = String(bestBuf);

@@ -759,7 +759,7 @@ const targetHashes=netDiff*4294967296,dayOdds=hpd>0?(targetHashes/hpd):0,yrOdds=
 const eDayOdds=document.getElementById('dyn-dayodds');if(eDayOdds)eDayOdds.textContent=dayOdds>0?('1 in '+fmtNum(dayOdds)):'--';
 const eYrOdds=document.getElementById('dyn-yrodds');if(eYrOdds)eYrOdds.textContent=yrOdds>0?('1 in '+fmtNum(yrOdds)):'--';
 const eAvgWait=document.getElementById('dyn-avgwait');if(eAvgWait)eAvgWait.textContent=yrOdds>0?(fmtNum(yrOdds)+' years'):'--';
-const netHps=700e18,eNetpow=document.getElementById('dyn-netpow');if(eNetpow){const netSharePct=(hps/netHps)*100;eNetpow.textContent=netSharePct.toExponential(1)+'%';}
+const netHps=netDiff*4294967296/600,eNetpow=document.getElementById('dyn-netpow');const eNetHr=document.getElementById('dyn-nethr');if(eNetHr){const u=['H/s','KH/s','MH/s','GH/s','TH/s','PH/s','EH/s','ZH/s'];let v=netHps,i=0;while(v>=1000&&i<7){v/=1000;i++;}eNetHr.textContent=v.toFixed(v>=100?0:1)+' '+u[i];}if(eNetpow){const netSharePct=(hps/netHps)*100;eNetpow.textContent=netSharePct.toExponential(1)+'%';}
 if(d.temp){const e=document.getElementById('st-temp');if(e)e.textContent=d.temp;}
 if(d.uptime){const u=document.getElementById('st-uptime');if(u){const m=d.uptime.match(/^(\d+)\s+(\d{2}:\d{2}:\d{2})$/);u.textContent=m?(parseInt(m[1])>0?m[1]+'d '+m[2]:m[2]):d.uptime;}}
 const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;
@@ -1054,7 +1054,7 @@ static void handleRoot()
             "<div class='tele-row'><span>Daily odds</span><span class='hl-val'><span id='dyn-dayodds'>--</span></span></div>"
             "<div class='tele-row'><span>Yearly odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span></span></div>"
             "<div class='tele-row'><span>Expected wait</span><span class='hl-val' id='dyn-avgwait'>--</span></div>"
-            "<div class='tele-row'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of 700 EH/s</span></div>"
+            "<div class='tele-row'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of ~<span id='dyn-nethr'>--</span></span></div>"
             "<div class='tele-row'><span>Power</span><span class='hl-val'>~1.2 W, under 1 kWh/month</span></div>"
             "</div>"
             "</div>"
@@ -1126,6 +1126,9 @@ static void handleRoot()
             "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"pool.nerdminers.org is a solo pool for low-hashrate miners.\")'>pool.nerdminers.org:3333</button>"
             "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"pool.solomining.de is a European solo pool.\")'>pool.solomining.de:3333</button>"
             "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Legacy port. Use 3333 if connections drop.\")'>public-pool.io:21496 (legacy)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"stratum.shears.co.uk\",3690,\"x\",\"Shears ESP32-only port for Polaris (POL). Mines an altcoin, not BTC; needs a free shears.co.uk account. Payout is to that account, not this BTC address.\")'>Shears ESP32 POL :3690 (needs free account)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"stratum.shears.co.uk\",3700,\"x\",\"Shears ESP32-only port for Embargocoin (EMB). Mines an altcoin, not BTC; needs a free shears.co.uk account. Payout is to that account, not this BTC address.\")'>Shears ESP32 EMB :3700 (needs free account)</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"stratum.shears.co.uk\",3710,\"x\",\"Shears ESP32-only port for Fixed Trade Coin (FXTC). Mines an altcoin, not BTC; needs a free shears.co.uk account. Payout is to that account, not this BTC address.\")'>Shears ESP32 FXTC :3710 (needs free account)</button>"
             "</div>"
             "<div id='preset-note' class='preset-comment'>Presets fill in the pool above. Save to apply.</div>"
             "</div>");

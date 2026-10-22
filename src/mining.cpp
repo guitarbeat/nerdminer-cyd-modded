@@ -426,6 +426,8 @@ static bool takePoolChange(void)
   s_poolChangePending = false;
   if (!mainChanged && !(s_onBackup && backupChanged))
     return false;
+  if (mainChanged)
+    g_networkDifficulty = 0.0; // new pool may mine another chain: wait for its first job's nbits
   s_onBackup = s_onBackup && !mainChanged && backupPoolSet();
   g_usingFallback = s_onBackup;
   s_poolFailures = 0;
