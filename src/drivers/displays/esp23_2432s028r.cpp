@@ -157,10 +157,13 @@ static inline bool isPortrait()
 }
 
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
-static inline int gCX() { return isPortrait() ? 120 : 100; }
-static inline int gCY() { return isPortrait() ? 136 : 116; }
-static inline int gR()  { return isPortrait() ? 98 : 86; }  // portrait top edge y=38, clear of the status bar
-static inline int gRI() { return isPortrait() ? 84 : 74; }
+// Three layers: outer = speed, middle = best hash digits, inner = its zeros.
+static inline int gCX() { return isPortrait() ? 120 : 104; }
+static inline int gCY() { return isPortrait() ? 150 : 134; }
+static inline int gR()  { return isPortrait() ? 112 : 100; } // top edge y=38 / 34, clear of the status bar
+static inline int gRI() { return isPortrait() ? 100 : 88; }
+static inline int hexR() { return isPortrait() ? 91 : 79; }  // middle ring: centres of the hex cells
+#define HEX_N 20
 
 // Hashrate ring
 #define G_CX (gCX())
@@ -185,6 +188,8 @@ static uint8_t segLvl[G_SEGS];
 static float roundTarget = 0;
 static float roundShown = 0;
 static uint8_t rndLvl[G_SEGS];
+static char hexShown[HEX_N]; // middle ring: char drawn per cell (0 = redraw)
+static bool rndDrain = false;  // a new block: drain the inner ring to 0 first
 #define C_ROUND 0x2DBF // teal-blue, so it doesn't compete with the orange dial
 static unsigned long shareFlashUntil = 0;
 static uint32_t lastShares = 0;
@@ -860,36 +865,78 @@ static void gaugeDraw(TFT_eSPI &d, float v)
   }
 }
 
-// Inner ring (thin, inside the dial, same 270 degree span): v = tries this
-// round / tries in an average 10-min round. Past 1 a red lap wraps over it.
-static inline int rR()  { return isPortrait() ? 81 : 71; }
-static inline int rRI() { return isPortrait() ? 76 : 66; }
-static void roundRingDraw(TFT_eSPI &d, float v)
+// Leading hex zeros of the last winning block hash (what a block needs).
+static int winnerZeros()
+{
+  int z = 0;
+  while (z < 64 && g_lastWinnerHashHex[z] == '0') z++;
+  return z;
+}
+
+// Angle (drawArc convention: 0 = 6 o'clock, clockwise) of middle/inner cell i.
+static inline float hexAng(int i) { return 45.0f + (i + 0.5f) * (270.0f / HEX_N); }
+
+// Inner ring (thin, 20 segments under the 20 hex cells): v = leading hex
+// zeros of the best hash this round. Segments up to the last winner's zeros
+// (what a block needs) show a dim track; lit ones are teal.
+static inline int rR()  { return isPortrait() ? 82 : 70; }
+static inline int rRI() { return isPortrait() ? 78 : 66; }
+static void roundRingDraw(TFT_eSPI &d, float v, int need)
 {
   if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
   if (!(v > 0)) v = 0;
-  if (v > 2.0f) v = 2.0f;
-  const float pos = v * G_SEGS, over = v > 1.0f ? (v - 1.0f) * G_SEGS : 0.0f;
+  if (need < 1 || need > HEX_N) need = HEX_N;
   const uint16_t trk = mix565(C_BG, C_ROUND, 60);
   int cy = dY(G_CY);
-  for (int i = 0; i < G_SEGS; i++)
+  for (int i = 0; i < HEX_N; i++)
   {
-    float f = pos - i, fo = over - i;
+    float f = v - i;
     uint8_t lvl = f >= 1.0f ? 4 : (f <= 0.05f ? 0 : 1 + (int)(f * 3.0f));
-    uint8_t lo = fo >= 1.0f ? 4 : (fo <= 0.05f ? 0 : 1 + (int)(fo * 3.0f));
-    if (lo) lvl = 4 + lo; // 5..8: overrun lap
+    if (lvl == 0 && i >= need) lvl = 9; // past what a block needs: no track
     if (!shotOn && lvl == rndLvl[i])
       continue;
-    uint16_t col = lvl == 0 ? trk
-                 : lvl < 4  ? mix565(trk, C_ROUND, lvl * 64)
-                 : lvl == 4 ? C_ROUND
-                 : lvl < 8  ? mix565(C_ROUND, C_BAD, (lvl - 4) * 64)
-                            : C_BAD;
-    int a0 = 45 + i * 9;
-    d.drawArc(G_CX, cy, rR(), rRI(), a0, a0 + 7, col, C_BG, true);
+    uint16_t col = lvl == 9 ? C_BG : lvl == 0 ? trk : lvl < 4 ? mix565(trk, C_ROUND, lvl * 64) : C_ROUND;
+    const float step = 270.0f / HEX_N;
+    int a0 = (int)(45.0f + i * step + 1.0f);
+    d.drawArc(G_CX, cy, rR(), rRI(), a0, (int)(45.0f + (i + 1) * step - 1.0f), col, C_BG, true);
     if (!shotOn)
       rndLvl[i] = lvl;
   }
+}
+
+// Middle ring: the best hash this round, printed order, one hex digit per
+// cell around the dial. Leading zeros are orange cells; the rest stay dim.
+static void hexRingDraw(const String &hex)
+{
+  const bool P = isPortrait();
+  const int cs = 11, r = hexR();
+  bool lead = true;
+  for (int i = 0; i < HEX_N; i++)
+  {
+    const char c = i < (int)hex.length() ? hex[i] : '-';
+    const bool z = lead && c == '0';
+    if (c != '0') lead = false;
+    const char key = z ? 'Z' : c; // a lit zero and a plain one look different
+    if (!shotOn && hexShown[i] == key)
+      continue;
+    const float a = hexAng(i) * (float)M_PI / 180.0f;
+    const int x = G_CX - (int)lroundf(r * sinf(a)) - cs / 2;
+    const int y = G_CY + (int)lroundf(r * cosf(a)) - cs / 2;
+    if (!wBegin(cs, cs, C_BG))
+      continue;
+    const char t[2] = {c, 0};
+    if (z)
+    {
+      wgt.fillRoundRect(0, 0, cs, cs, 2, C_METER);
+      text(wgt, t, cs / 2, -2, 9, TFT_BLACK, C_METER, Align::TopCenter);
+    }
+    else
+      text(wgt, t, cs / 2, -2, 9, c == '-' ? mix565(C_BG, C_DIM, 110) : mix565(C_BG, C_DIM, 170), C_BG, Align::TopCenter);
+    wEnd(x, y);
+    if (!shotOn)
+      hexShown[i] = key;
+  }
+  (void)P;
 }
 
 // ------------------------------------------------------------------ header --
@@ -1212,84 +1259,18 @@ struct MineV
   bool flash = false;
 };
 
-// Tries this round vs an average 10-min round at this speed (0 = unknown).
-static float roundFrac(float kh)
-{
-  float sum = 0;
-  for (int i = 0; i < histCount; i++) sum += hist[i];
-  const float avg = histCount > 3 ? sum / histCount : kh;
-  const double expect = (double)avg * 1000.0 * 600.0;
-  if (!(expect > 0)) return 0;
-  float f = (float)((double)g_currentBlockHashes / expect);
-  return f > 2.0f ? 2.0f : f;
-}
-
-static Rect mineChartRect() { return isPortrait() ? Rect{6, 208, 228, 74} : Rect{196, 30, 116, 162}; }
+static Rect mineChartRect() { return isPortrait() ? Rect{6, 232, 228, 86} : Rect{208, 30, 108, 208}; }
 
 static void chromeMine(TFT_eSPI &d)
 {
   if (!shotOn)
-    memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl));
+    memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
   gaugeDraw(d, gaugeShown);
-  roundRingDraw(d, roundShown);
+  roundRingDraw(d, roundShown, winnerZeros());
   const Rect c = mineChartRect();
   panel(d, c.x, c.y, c.w, c.h, 6, C_PANEL, C_EDGE, C_BG);
-  const Rect r = stripRect(); // hash strip panel
-  panel(d, r.x, r.y, r.w, r.h, 6, C_PANEL, C_EDGE, C_BG);
 }
 
-// Best hash this round as it is printed: the first 20 hex digits, leading
-// zeros first. Zeros are orange cells; a red tick marks how many zeros the
-// last winning block hash had (the bar a block must clear).
-static void drawHashStrip(const String &hex, int winZ)
-{
-  const bool P = isPortrait();
-  const Rect r = stripRect();
-  const int sw = r.w - 4, sh = r.h - 2;
-  String k = "hs|" + hex + "|" + String(winZ) + (P ? "|P" : "|L");
-  if (!need(W_P0, k) || !wBegin(sw, sh, C_PANEL))
-    return;
-  const int cw = P ? 10 : 13, step = cw + 1, ch = P ? 12 : 14, y0 = 10;
-  const unsigned fs = P ? 9 : 11;
-  const int x0 = (sw - (20 * step - 1)) / 2;
-  text(wgt, "BEST THIS ROUND", x0, 0, 8, C_DIM, C_PANEL);
-  {
-    int z = 0;
-    while (z < (int)hex.length() && hex[z] == '0') z++;
-    char zt[16];
-    if (hex.length()) snprintf(zt, sizeof(zt), "%d zeros", z);
-    else snprintf(zt, sizeof(zt), "--");
-    text(wgt, zt, x0 + 20 * step - 1, 0, 8, hex.length() ? C_METER : C_DIM, C_PANEL, Align::TopRight);
-  }
-  const uint16_t edge = mix565(C_PANEL, C_DIM, 110), light = mix565(C_DIM, C_TEXT, 160);
-  for (int i = 0; i < 20; i++)
-  {
-    const char c = i < (int)hex.length() ? hex[i] : '-';
-    const char t[2] = {c, 0};
-    const int x = x0 + i * step;
-    if (c == '0')
-    {
-      wgt.fillRect(x, y0, cw, ch, C_METER);
-      text(wgt, t, x + cw / 2, y0 - 1, fs, TFT_BLACK, C_METER, Align::TopCenter);
-    }
-    else
-    {
-      wgt.drawRect(x, y0, cw, ch, edge);
-      text(wgt, t, x + cw / 2, y0 - 1, fs, c == '-' ? edge : light, C_PANEL, Align::TopCenter);
-    }
-  }
-  if (winZ > 0)
-  {
-    const int n = winZ > 20 ? 20 : winZ;
-    const int tx = x0 + n * step - 1; // the gap after cell n
-    wgt.fillRect(tx - (n == 20 ? 1 : 0), y0 - 2, 2, ch + 3, C_BAD);
-    char wn[6];
-    snprintf(wn, sizeof(wn), "%d", winZ);
-    text(wgt, wn, n > 10 ? tx + 1 : tx, y0 + ch - 2, 8, C_BAD, C_PANEL, n > 10 ? Align::TopRight : Align::TopLeft);
-  }
-  wEnd(r.x + 2, r.y + 1);
-  done(W_P0, k);
-}
 
 // Best leading hex zeros this round, sampled once a second (display side,
 // from the round best hash the miners already keep). A step up when a better
@@ -1359,10 +1340,11 @@ static void drawZerosChart(const Rect &r, int winZ)
     TFT_eSPI &d = out();
     d.fillRect(r.x + 2, dY(r.y + 2), r.w - 4, r.h - 4, C_PANEL);
     text(d, P ? "BEST ZEROS THIS ROUND" : "BEST ZEROS", px, dY(py), 9, C_DIM, C_PANEL);
+    if (!P) text(d, "THIS ROUND", px, dY(py + 11), 9, C_DIM, C_PANEL);
     char t[24];
     snprintf(t, sizeof(t), "%d", zhLast > 0 ? zhLast : 0);
-    text(d, t, px + W, dY(py), 9, C_METER, C_PANEL, Align::TopRight);
-    const int top = py + 15, bot = py + H - 14;
+    text(d, t, px + W, dY(P ? py - 3 : py + 22), 24, C_METER, C_PANEL, Align::TopRight);
+    const int top = py + (P ? 26 : 52), bot = py + H - 14;
     const int zMax = 20;
     auto Yz = [&](int z) { if (z > zMax) z = zMax; return bot - (z * (bot - top)) / zMax; };
     auto Xt = [&](uint32_t tm) -> int {
@@ -1377,7 +1359,7 @@ static void drawZerosChart(const Rect &r, int winZ)
       const int wy = Yz(winZ);
       for (int x = px; x < px + W; x += 6)
         d.drawFastHLine(x, dY(wy), 3, C_BAD);
-      snprintf(t, sizeof(t), "block needs ~%d", winZ);
+      snprintf(t, sizeof(t), "target ~%d", winZ);
       text(d, t, px, dY(wy + 2), 8, C_BAD, C_PANEL);
     }
     // staircase, oldest to newest
@@ -1443,9 +1425,8 @@ static void paintMine(const MineV &m)
   };
   line(W_RND_A, m.rA, P ? -50 : -46, P ? 112 : 92, 9, m.rACol);
   line(W_RND_B, m.rB, P ? 44 : 40, P ? 104 : 86, 9, m.rBCol);
-  line(W_RND_C, m.rC, P ? 57 : 53, P ? 108 : 98, 8, C_DIM);
+  hexRingDraw(m.bestHex);
   drawZerosChart(mineChartRect(), m.winZ);
-  drawHashStrip(m.bestHex, m.winZ);
 }
 
 static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
@@ -1500,17 +1481,17 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
   { // a block was just found: the small lines become the news
     m.rA = "BLOCK #" + commas(String((unsigned long)g_lastWinnerHeight)) + " WON";
     m.rACol = C_GOOD;
-    m.rB = "their score " + w;
+    m.rB = "zeros start over";
     m.rBCol = C_TEXT;
-    m.rC = "everyone starts over";
+    m.rC = "";
   }
   else
   {
     const String t = fmtCount((double)g_currentBlockHashes);
-    m.rA = (P ? "this round " : "round ") + t + " tries";
-    m.rACol = roundFrac(m.kh) > 1.0f ? C_BAD : C_ROUND;
-    m.rB = "";
-    m.rBCol = C_DIM;
+    m.rA = (P ? "this round " : "round ") + t + " guesses";
+    m.rACol = C_ROUND;
+    m.rB = "BEST: " + String(bestZerosNow()) + " ZEROS";
+    m.rBCol = C_METER;
     m.rC = "";
   }
   {
@@ -2298,7 +2279,7 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   float kh = data.currentHashRate.toFloat();
   noteHashrate(kh);
   gaugeTarget = constrain(kh / G_MAX_KH, 0.0f, 1.0f);
-  roundTarget = roundFrac(kh); // drops to 0 at a new block: the inner ring drains
+  roundTarget = (float)bestZerosNow(); // inner ring = zeros of the best hash this round
   uint32_t sh = data.completedShares.toInt();
   if (sh > lastShares && lastShares != 0)
     shareFlashUntil = millis() + 1500;
@@ -2548,7 +2529,7 @@ static void obFinish()
   std::lock_guard<std::mutex> lock(g_displayMutex);
   tft.fillScreen(C_BG);
   resetWidgets();
-  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl));
+  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
   if (uiLive)
   {
     uiScreen = -1; // next monitor tick repaints the whole page
@@ -2963,7 +2944,7 @@ void esp32_2432S028R_Init(void)
   pData.workersCount = 0;
 
   resetWidgets();
-  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl));
+  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
 
 
   // Touch first (the colour step needs taps to land), then colours.
@@ -3062,11 +3043,17 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
     gaugeShown += (gaugeTarget - gaugeShown) * 0.3f; // ease toward the measured rate
     gaugeDraw(tft, gaugeShown);
   }
-  if (uiScreen == SCR_MINE && fabsf(roundTarget - roundShown) > 0.002f)
+  {
+    static uint32_t seenBlk = 0;
+    if (g_newBlockMs != seenBlk) { seenBlk = g_newBlockMs; rndDrain = roundShown > 0.05f; }
+  }
+  const float rt = rndDrain ? 0.0f : roundTarget; // a new block: empty first, then refill
+  if (uiScreen == SCR_MINE && fabsf(rt - roundShown) > 0.002f)
   { // ~100 ms frames: a drain from full to empty takes about 1 s
-    roundShown += (roundTarget - roundShown) * 0.3f;
-    if (fabsf(roundTarget - roundShown) <= 0.002f) roundShown = roundTarget;
-    roundRingDraw(tft, roundShown);
+    roundShown += (rt - roundShown) * 0.3f;
+    if (fabsf(rt - roundShown) <= 0.02f) roundShown = rt;
+    if (rndDrain && roundShown <= 0.05f) rndDrain = false;
+    roundRingDraw(tft, roundShown, winnerZeros());
   }
   g_displayMutex.unlock();
 }
@@ -3454,7 +3441,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       m.hdr = liveHeader(getTime());
       paintMine(m);
       gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);
-      roundRingDraw(out(), roundShown > 0.001f ? roundShown : roundFrac(m.kh));
+      roundRingDraw(out(), roundShown > 0.001f ? roundShown : (float)bestZerosNow(), winnerZeros());
     }
     else if (targetScr == SCR_ODDS)
     {
