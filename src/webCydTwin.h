@@ -5,14 +5,14 @@
 
 static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 :root{
-  --cyd-accent:#f7931a;
+  --cyd-accent:var(--amber,#f7931a);
   --cyd-accent-soft:rgba(247,147,26,0.10);
-  --cyd-card-bg:#0d1117;
-  --cyd-bezel-bg:#0d1117;
-  --cyd-border:#1f2937;
-  --cyd-border-highlight:#2e3c4e;
-  --cyd-text:#f0f6fc;
-  --cyd-muted:#8b949e;
+  --cyd-card-bg:var(--card,#11151c);
+  --cyd-bezel-bg:var(--card,#11151c);
+  --cyd-border:var(--card-border,#1e2530);
+  --cyd-border-highlight:var(--dim,#58636f);
+  --cyd-text:var(--text,#e6ebf2);
+  --cyd-muted:var(--muted,#8a96a6);
   --cyd-green:#22c55e;
   --cyd-amber:#f59e0b;
   --cyd-red:#ef4444;
@@ -24,25 +24,24 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 .cyd-preview-card{
   background:var(--cyd-card-bg);
   border:1px solid var(--cyd-border);
-  border-radius:10px;
-  margin-bottom:20px;
+  border-radius:var(--r,6px);
   overflow:hidden;
+  min-width:0;
 }
 .cyd-preview-hdr{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:12px 16px;
-  background:#090d14;
-  border-bottom:1px solid var(--cyd-border);
+  padding:12px 14px 0;
   flex-wrap:wrap;
   gap:10px;
 }
 .cyd-title-wrap{
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:4px 10px;
   flex-wrap:wrap;
+  min-width:0;
 }
 .cyd-preview-title{
   font-family:var(--cyd-sans);
@@ -91,7 +90,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 }
 .cyd-bezel{
   background:var(--cyd-bezel-bg);
-  padding:18px 16px 16px;
+  padding:12px 14px 14px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -100,7 +99,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 .cyd-bezel-lbl{
   font-size:12px;
   color:var(--cyd-muted);
-  margin-bottom:12px;
+  margin-bottom:8px;
   text-align:center;
   display:flex;
   align-items:center;
@@ -108,13 +107,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   gap:8px;
   flex-wrap:wrap;
 }
-.cyd-lbl-tag{
-  background:#141b24;
-  border:1px solid var(--cyd-border);
-  color:var(--cyd-text);
-  padding:1px 6px;
-  border-radius:4px;
-}
+.cyd-lbl-tag{color:var(--cyd-muted);}
 .cyd-screen-frame{
   width:100%;
   max-width:252px;
@@ -144,22 +137,20 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 }
 .cyd-tabs{
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(4,minmax(0,1fr));
   gap:0;
-  margin-top:16px;
+  margin-top:10px;
   width:100%;
   max-width:440px;
-  border:1px solid var(--cyd-border);
-  border-radius:6px;
-  overflow:hidden;
-  background:#090d14;
+  border-bottom:1px solid var(--cyd-border);
 }
 .cyd-tab-btn{
   background:transparent;
   border:none;
-  border-left:1px solid var(--cyd-border);
+  border-bottom:2px solid transparent;
+  margin-bottom:-1px;
   color:var(--cyd-muted);
-  padding:9px 4px;
+  padding:8px 4px;
   font-family:var(--cyd-sans);
   font-size:12px;
   font-weight:500;
@@ -171,15 +162,10 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   gap:6px;
   white-space:nowrap;
 }
-.cyd-tab-btn:first-child{border-left:none;}
-.cyd-tab-btn:hover{
-  color:var(--cyd-text);
-  background:rgba(255,255,255,0.03);
-}
+.cyd-tab-btn:hover{color:var(--cyd-text);}
 .cyd-tab-btn.active{
-  background:var(--cyd-accent-soft);
-  color:var(--cyd-accent);
-  box-shadow:inset 0 -2px 0 var(--cyd-accent);
+  color:var(--cyd-text);
+  border-bottom-color:var(--cyd-accent);
 }
 .cyd-live-dot{
   width:6px;
@@ -201,26 +187,28 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 }
 .cyd-btn-switch{
   flex:2 1 180px;
-  background:var(--cyd-accent);
-  color:#000;
-  border:none;
-  border-radius:6px;
-  padding:9px 14px;
+  background:transparent;
+  color:var(--cyd-text);
+  border:1px solid var(--cyd-border);
+  border-radius:var(--r,6px);
+  padding:8px 12px;
+  min-height:38px;
   font-family:var(--cyd-sans);
   font-size:12px;
   font-weight:600;
   cursor:pointer;
-  transition:opacity .15s ease;
+  transition:border-color .15s ease;
 }
-.cyd-btn-switch:hover{opacity:.92;}
-.cyd-btn-switch:disabled{opacity:.5;cursor:not-allowed;}
+.cyd-btn-switch:hover{border-color:var(--cyd-border-highlight);}
+.cyd-btn-switch:disabled{opacity:.6;cursor:wait;}
 .cyd-btn-nav{
   flex:1 1 65px;
-  background:#10151f;
+  background:transparent;
   border:1px solid var(--cyd-border);
   color:var(--cyd-text);
-  border-radius:6px;
-  padding:9px 12px;
+  border-radius:var(--r,6px);
+  padding:8px 12px;
+  min-height:38px;
   font-family:var(--cyd-sans);
   font-size:12px;
   font-weight:600;
@@ -231,17 +219,14 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   justify-content:center;
   gap:4px;
 }
-.cyd-btn-nav:hover{
-  border-color:var(--cyd-accent);
-  background:#161d2b;
-}
+.cyd-btn-nav:hover{border-color:var(--cyd-border-highlight);}
 .cyd-btn-snap{flex:0 0 auto;}
 .cyd-shot-cap{margin-top:8px;min-height:16px;font-size:12px;color:var(--cyd-muted);text-align:center;}
 .cyd-shot-cap.err{color:var(--cyd-red);}
 .cyd-btn-snap:disabled{opacity:.6;cursor:wait;}
 @media(max-width:480px){
-  .cyd-preview-hdr{padding:10px 12px;}
-  .cyd-bezel{padding:14px 10px 12px;}
+  .cyd-preview-hdr{padding:10px 12px 0;}
+  .cyd-bezel{padding:10px 10px 12px;}
   .cyd-tab-btn{font-size:11px;padding:8px 2px;}
   .cyd-ctrls{gap:6px;}
   .cyd-btn-switch{flex:1 1 100%;order:1;}
@@ -255,7 +240,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
     <div class='cyd-title-wrap'>
       <div class='cyd-preview-title'>Live screen mirror</div>
       <span id='cyd-device-badge' class='cyd-badge'>
-        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>Now showing: Mining screen (0)
+        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>On device: Mining
       </span>
     </div>
     <div class='cyd-hdr-right'>
@@ -264,7 +249,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
   </div>
   <div class='cyd-bezel'>
     <div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>
-      2.8&quot; display &bull; 240&times;320 <span class='cyd-lbl-tag'>Portrait</span>
+      240&times;320 <span class='cyd-lbl-tag'>&middot; portrait</span>
     </div>
     <div class='cyd-screen-frame' id='cyd-screen-frame'>
       <img id='cyd-screen-img'
@@ -285,9 +270,9 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
     </div>
     <div class='cyd-ctrls'>
       <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous screen'>&larr; Prev</button>
-      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Show screen 0 on device</button>
+      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Show Mining on device</button>
       <button type='button' class='cyd-btn-nav' onclick='cydNextScreen()' title='Next screen'>Next &rarr;</button>
-      <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview orientation'>Portrait (240&times;320)</button>
+      <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview is portrait; click to rotate'>Rotate preview</button>
     </div>
   </div>
 </div>
@@ -313,6 +298,10 @@ function cydGetScreenUrl(screenIdx) {
 const CYD_SNAP_LABEL = 'Take screenshot';
 let cydErrTimer = null;
 
+function cydToast(msg, isErr) {
+  if (typeof showToast === 'function') showToast(msg, isErr);
+}
+
 function cydSetSnapBtn(busy) {
   const btn = document.getElementById('cyd-snap-btn');
   if (!btn) return;
@@ -331,6 +320,7 @@ function cydSetShotCaption(ok) {
   } else {
     const prev = ts.textContent;
     ts.textContent = 'Capture failed';
+    cydToast('Screenshot failed. Try again.', true);
     if (cap) cap.classList.add('err');
     cydErrTimer = setTimeout(function() {
       ts.textContent = (prev && prev !== 'Capture failed') ? prev : '';
@@ -401,7 +391,7 @@ function cydHighlightTab() {
     }
   }
   const btn = document.getElementById('cyd-switch-btn');
-  if (btn) btn.textContent = 'Show screen ' + cydPreviewScr + ' on device';
+  if (btn && !btn.disabled) btn.textContent = 'Show ' + (CYD_SCREEN_NAMES[cydPreviewScr] || ('screen ' + cydPreviewScr)) + ' on device';
 }
 
 function cydSelectTab(idx, fetchNow) {
@@ -430,18 +420,20 @@ function cydNextScreen() {
 
 function cydSwitchPhysical() {
   const btn = document.getElementById('cyd-switch-btn');
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Switching\u2026'; }
   fetch('/api/screen?id=' + cydPreviewScr, { method: 'POST' })
-    .then(r => r.json())
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
       if (data && data.screen !== undefined) {
         cydDevScr = data.screen;
         cydUpdateDevBadge();
+        cydToast('Device now showing ' + (CYD_SCREEN_NAMES[cydDevScr] || ('screen ' + cydDevScr)));
       }
     })
-    .catch(() => {})
+    .catch(() => { cydToast('Could not switch the device screen', true); })
     .finally(() => {
       if (btn) btn.disabled = false;
+      cydHighlightTab();
       setTimeout(() => cydFetchScreenshot(true), 300);
     });
 }
@@ -449,11 +441,11 @@ function cydSwitchPhysical() {
 function cydUpdateDevBadge() {
   const b = document.getElementById('cyd-device-badge');
   const scrName = CYD_SCREEN_NAMES[cydDevScr];
-  const label = scrName ? scrName + ' screen (' + cydDevScr + ')' : 'Screen ' + cydDevScr;
+  const label = scrName ? scrName : 'Screen ' + cydDevScr;
   if (b) {
     const pulse = document.getElementById('cyd-live-pulse');
     const cls = pulse ? pulse.className : 'cyd-pulse-dot';
-    b.innerHTML = "<span id='cyd-live-pulse' class='" + cls + "'></span>Now showing: " + label;
+    b.innerHTML = "<span id='cyd-live-pulse' class='" + cls + "'></span>On device: " + label;
   }
   for (let i = 0; i < 4; i++) {
     const el = document.getElementById('ctab-' + i);
@@ -497,14 +489,14 @@ function cydRender() {
     frame.classList.remove('landscape');
     img.width = 240;
     img.height = 320;
-    if (lbl) lbl.innerHTML = '2.8&quot; display &bull; 240&times;320 <span class="cyd-lbl-tag">Portrait</span>';
-    if (btnOrient) btnOrient.textContent = 'Portrait (240×320)';
+    if (lbl) lbl.innerHTML = '240&times;320 <span class="cyd-lbl-tag">&middot; portrait</span>';
+    if (btnOrient) btnOrient.title = 'Preview is portrait; click to rotate';
   } else {
     frame.classList.add('landscape');
     img.width = 320;
     img.height = 240;
-    if (lbl) lbl.innerHTML = '2.8&quot; display &bull; 320&times;240 <span class="cyd-lbl-tag">Landscape</span>';
-    if (btnOrient) btnOrient.textContent = 'Landscape (320×240)';
+    if (lbl) lbl.innerHTML = '320&times;240 <span class="cyd-lbl-tag">&middot; landscape</span>';
+    if (btnOrient) btnOrient.title = 'Preview is landscape; click to rotate';
   }
 }
 

@@ -13,32 +13,34 @@ static const char MONITOR_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#0b0d12">
 <title>NerdMiner</title>
 <style>
-:root{--bg:#0d1117;--card:#161b22;--line:#30363d;--txt:#e6edf3;--mut:#8b949e;--acc:#f7931a;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--grid:#21262d}
-@media (prefers-color-scheme:light){:root{--bg:#f6f8fa;--card:#fff;--line:#d0d7de;--txt:#1f2328;--mut:#59636e;--grid:#eaeef2}}
+:root{--bg:#0b0d12;--card:#11151c;--line:#1e2530;--txt:#e6ebf2;--mut:#8a96a6;--acc:#f7931a;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--grid:#1a202a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:light){:root{--bg:#f6f7f9;--card:#fff;--line:#d9dee5;--txt:#1b1f24;--mut:#5b6573;--grid:#eceff3;--acc:#c66a00}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
-.wrap{max-width:1100px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-h1{font-size:18px;margin:0;font-weight:700}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;font-size:13px;border:1px solid var(--line)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--mut)}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 32px max(14px,env(safe-area-inset-left))}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 0 12px;margin-bottom:12px}
+h1{font-size:15px;margin:0;font-weight:700}
+.logo{width:28px;height:28px;border-radius:6px;background:var(--acc);color:#000;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:6px;font-size:13px;font-weight:600;border:1px solid var(--line)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mut)}
 .ok .dot{background:var(--ok)}.warn .dot{background:var(--warn)}.bad .dot{background:var(--bad)}
 .sp{flex:1}
-a.btn{color:var(--txt);text-decoration:none;padding:5px 11px;border-radius:6px;border:1px solid var(--line);font-size:14px}
+a.btn{color:var(--txt);text-decoration:none;padding:6px 12px;border-radius:6px;border:1px solid var(--line);font-size:13px;font-weight:600}
 a.btn:hover{border-color:var(--mut)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
-.lbl{color:var(--mut);font-size:13px}
-.val{font-size:21px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.lbl{color:var(--mut);font-size:13px;font-weight:600}
+.val{font-size:20px;font-weight:600;margin-top:2px;font-family:var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .sub{color:var(--mut);font-size:13px;margin-top:2px;overflow-wrap:anywhere}
-.val.s{font-size:17px}
+.val.s{font-size:15px}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
+.val.ok{color:var(--txt)}
 .pill.ok,.pill.bad{color:var(--txt)}
 .hero{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:12px;margin-bottom:12px}
-.big{font-size:clamp(36px,7vw,56px);font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;margin-top:6px}
-.big small{font-size:.4em;font-weight:500;color:var(--mut);margin-left:6px}
+.big{font-size:clamp(36px,7vw,56px);font-weight:700;line-height:1.05;font-family:var(--mono);font-variant-numeric:tabular-nums;margin-top:6px;color:var(--acc)}
+.big small{font-size:.32em;font-weight:500;color:var(--mut);margin-left:6px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .chart{position:relative;height:190px}
 canvas{width:100%;height:100%;display:block}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}
@@ -49,19 +51,20 @@ canvas{width:100%;height:100%;display:block}
 .sig i.on{background:var(--ok)}
 footer{color:var(--mut);font-size:12px;text-align:center;margin-top:18px}
 body.stale .card{opacity:.5;transition:opacity .3s}
-#off{display:none;border:1px solid var(--bad);color:var(--bad);padding:8px 12px;border-radius:6px;margin-bottom:12px}
+#off{display:none;border:1px solid var(--line);border-left:3px solid var(--bad);background:var(--card);padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:13px}
 @media (max-width:700px){.hero{grid-template-columns:1fr}.val{font-size:19px}.chart{height:150px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-  <h1>NerdMiner</h1>
+  <span class="logo">&#8383;</span>
+  <h1>NerdMiner CYD</h1>
   <span id="st" class="pill"><span class="dot"></span><span id="stt">Connecting&hellip;</span></span>
   <span class="sp"></span>
-  <a class="btn" href="/">Settings</a>
+  <a class="btn" href="/">Dashboard</a>
 </header>
-<div id="off">Miner unreachable &mdash; retrying&hellip;</div>
+<div id="off">Can&rsquo;t reach the miner. Retrying&hellip;</div>
 
 <section class="hero">
   <div class="card">
@@ -77,10 +80,10 @@ body.stale .card{opacity:.5;transition:opacity .3s}
 </section>
 
 <div class="grid">
-  <div class="card"><div class="lbl">Shares (32-bit)</div><div class="val ok" id="s32">&ndash;</div><div class="sub"><span class="ok">accepted</span> &middot; <span class="bad" id="s32r">&ndash;</span></div></div>
+  <div class="card"><div class="lbl">Shares</div><div class="val ok" id="s32">&ndash;</div><div class="sub">accepted &middot; <span id="s32r">&ndash;</span></div></div>
   <div class="card"><div class="lbl">Best difficulty</div><div class="val" id="bd">&ndash;</div><div class="sub">all time</div></div>
   <div class="card"><div class="lbl">Blocks found</div><div class="val" id="blk">&ndash;</div><div class="sub">all time</div></div>
-  <div class="card"><div class="lbl">Pool shares</div><div class="val" id="acc">&ndash;</div><div class="sub">accepted &middot; <span id="rej">&ndash;</span></div></div>
+  <div class="card"><div class="lbl">Pool-difficulty shares</div><div class="val" id="acc">&ndash;</div><div class="sub">accepted &middot; <span id="rej">&ndash;</span></div></div>
   <div class="card"><div class="lbl">Mining time</div><div class="val" id="mt">&ndash;</div><div class="sub">templates: <span id="tpl">&ndash;</span></div></div>
 </div>
 
@@ -105,8 +108,8 @@ function diff(d){if(!(d>0))return '0';if(d<1)return String(+d.toPrecision(2));va
 function dur(s){s=Math.floor(s||0);var d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;function p(n){return (n<10?'0':'')+n}return (d?d+'d ':'')+p(h)+':'+p(m)+':'+p(x)}
 function state(j){
   var st=$('st'),c='warn',t='Starting';
-  if(j.state==='mining'&&j.pool&&j.pool.subscribed){c='ok';t='Mining'}
-  else if(j.state==='connecting'||(j.pool&&!j.pool.subscribed)){c='warn';t='Connecting to pool'}
+  if(j.state==='mining'&&j.pool&&j.pool.subscribed){c='ok';t='Hashing'}
+  else if(j.state==='connecting'||(j.pool&&!j.pool.subscribed)){c='warn';t='Connecting'}
   st.className='pill '+c;set('stt',t)}
 function update(j){
   $('off').style.display='none';state(j);
