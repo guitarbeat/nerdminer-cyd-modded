@@ -197,7 +197,6 @@ long currentDstOffset(void);         // summer-time offset in force now, seconds
 // currencySetting() is the currency in use or the one waiting.
 void requestCurrencyChange(const char *code);
 String currencySetting(void);
-pool_data getPoolData(void);
 void poolSettingsChanged(void);
 void applyPendingSettings(void);
 
