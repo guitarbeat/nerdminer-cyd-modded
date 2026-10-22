@@ -367,154 +367,153 @@ static void handleUpdateUpload()
 
 static const char DASH_STYLE[] PROGMEM = R"rawcss(
 :root{
---bg:#07090e;--card:#0f141d;--card-2:#0a0d13;--card-border:#1c2432;--input-bg:#080b10;
---text:#eef2f8;--muted:#7d8c9e;--dim:#4e5a6b;--amber:#f7931a;--green:#22c55e;--warn:#f59e0b;--red:#ef4444;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r:8px;
+--bg:#0b0d12;--card:#11151c;--card-2:#0d1016;--card-border:#1e2530;--input-bg:#0b0e13;
+--text:#e6ebf2;--muted:#8a96a6;--dim:#58636f;--amber:#f7931a;--green:#3fb950;--warn:#d29922;--red:#f85149;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--r:6px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 48px max(16px,env(safe-area-inset-left));line-height:1.5;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--text)}
 code{font-family:var(--mono);font-size:.88em;background:var(--input-bg);border:1px solid var(--card-border);padding:0 4px;border-radius:3px;word-break:break-all}
 .container{max-width:1160px;margin:0 auto}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0 14px;border-bottom:1px solid var(--card-border);margin-bottom:16px}
-.brand{display:flex;align-items:center;gap:12px;min-width:0}
-.logo-box{width:36px;height:36px;border-radius:var(--r);background:var(--amber);display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:20px;flex-shrink:0;box-shadow:0 0 16px rgba(247,147,26,0.3);transition:background .3s}
-.brand-title{font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase}
-.brand-subtitle{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status-badge{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:5px 12px;font-size:11px;font-weight:800;letter-spacing:1px;flex-shrink:0}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 12px;border-bottom:1px solid var(--card-border);margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo-box{width:28px;height:28px;border-radius:var(--r);background:var(--amber);display:flex;align-items:center;justify-content:center;color:#000;font-weight:800;font-size:16px;flex-shrink:0}
+.brand-title{font-size:15px;font-weight:700}
+.brand-subtitle{font-size:12px;color:var(--muted);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--card-border);border-radius:var(--r);padding:3px 10px;font-size:12px;font-weight:600;flex-shrink:0}
 .status-badge::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;color:var(--muted)}
-.status-badge:has(.txt-green)::before{color:var(--green);box-shadow:0 0 8px var(--green)}
+.status-badge:has(.txt-green)::before{color:var(--green)}
 .status-badge:has(.txt-amber)::before{color:var(--warn)}
 .txt-green{color:var(--green)}
 .txt-amber{color:var(--warn)}
 .txt-gray{color:var(--muted)}
 
-.diag-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--card-border);border:1px solid var(--card-border);border-radius:var(--r);overflow:hidden;margin-bottom:18px;box-shadow:0 4px 16px rgba(0,0,0,0.2)}
+.diag-strip{display:grid;grid-template-columns:repeat(2,1fr);background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:16px}
 @media(min-width:480px){.diag-strip{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:960px){.diag-strip{grid-template-columns:repeat(6,1fr)}}
-.diag-item{background:var(--card);padding:10px 14px;display:flex;flex-direction:column;justify-content:center;min-width:0}
-.diag-label{display:block;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:2px}
-.diag-val{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.diag-item{padding:9px 14px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.diag-label{display:block;font-size:12px;color:var(--muted)}
+.diag-val{font-size:15px;font-weight:600;color:var(--text);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #st-uptime{font-size:13px}
-.diag-sub{font-size:11px;font-weight:400;color:var(--muted)}
-.btn-reset-stats{align-self:flex-start;background:transparent;border:1px solid var(--card-border);border-radius:4px;color:var(--muted);padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
-.btn-reset-stats:hover{color:var(--amber);border-color:var(--amber)}
+.diag-sub{font-size:12px;font-weight:400;color:var(--muted)}
+.btn-reset-stats{align-self:flex-start;background:transparent;border:1px solid var(--card-border);border-radius:4px;color:var(--muted);padding:2px 9px;font-size:12px;cursor:pointer}
+.btn-reset-stats:hover{color:var(--text);border-color:var(--dim)}
 
 .console-layout{display:grid;grid-template-columns:310px 1fr;gap:20px;align-items:start}
 @media(max-width:960px){.console-layout{grid-template-columns:1fr}}
-@media(min-width:961px){.console-sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:14px}}
+@media(min-width:961px){.console-sidebar{position:sticky;top:14px;display:flex;flex-direction:column;gap:12px}}
 .console-main{display:flex;flex-direction:column;min-width:0}
 
-.console-tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:6px;margin-bottom:16px;overflow-x:auto;scrollbar-width:none}
+.console-tabs{display:flex;gap:2px;border-bottom:1px solid var(--card-border);margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
 .console-tabs::-webkit-scrollbar{display:none}
-.tab-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s ease}
-.tab-btn:hover{color:var(--text);background:rgba(255,255,255,0.04)}
-.tab-btn.active{color:var(--amber);background:rgba(247,147,26,0.1);border-color:rgba(247,147,26,0.3)}
-.tab-icon{font-size:14px}
+.tab-btn{padding:8px 12px;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--amber)}
 .tab-pane{display:none}
-.tab-pane.active{display:flex;flex-direction:column;gap:14px}
+.tab-pane.active{display:flex;flex-direction:column;gap:12px}
 
-.telemetry-bento{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
-.tele-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;box-shadow:0 4px 16px rgba(0,0,0,0.25);display:flex;flex-direction:column;gap:10px}
-.tele-card-hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px}
-.tele-card-title{font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:6px}
-.tele-hero-val{font-size:24px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums;line-height:1.2}
+.telemetry-bento{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.tele-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:6px}
+.tele-card-hdr{display:flex;align-items:center;justify-content:space-between}
+.tele-card-title{font-size:13px;font-weight:600;color:var(--muted)}
+.tele-hero-val{font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono);font-variant-numeric:tabular-nums;line-height:1.25}
 .tele-hero-val.amber{color:var(--amber)}
-.tele-hero-sub{font-size:11px;color:var(--muted);font-weight:500}
-.tele-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12.5px}
-.tele-row:last-child{border-bottom:none}
-.hl-key{color:var(--amber);font-weight:700}
-.hl-val{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+.tele-hero-sub{font-size:12px;color:var(--muted);margin-bottom:4px}
+.unit{font-size:13px;color:var(--muted);font-weight:500;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.tele-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--card-border);font-size:13px;color:var(--muted)}
+.hl-key{color:var(--text);font-weight:600}
+.hl-val{color:var(--text);font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right}
 
-.pool-banner{background:var(--card);border:1px solid var(--card-border);border-left:3px solid var(--amber);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pool-banner{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .pool-info{font-size:13px;min-width:0}
-.pool-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--amber);color:#000;text-decoration:none;font-weight:700;font-size:12px;padding:8px 12px;border-radius:var(--r);transition:opacity .15s}
-.pool-btn:hover{opacity:.85}
+.pool-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--card-border);color:var(--text);text-decoration:none;font-weight:600;font-size:13px;padding:7px 12px;border-radius:var(--r)}
+.pool-btn:hover{border-color:var(--dim)}
 
-details.edu-acc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:8px;overflow:hidden}
-details.edu-acc[open]{border-color:var(--amber)}
-summary.edu-sum{padding:11px 14px;font-size:13px;font-weight:700;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none;transition:background .15s}
+.section-hdr{font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 2px}
+details.edu-acc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);overflow:hidden}
+summary.edu-sum{padding:10px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none}
 summary.edu-sum::-webkit-details-marker{display:none}
-summary.edu-sum:hover{background:rgba(247,147,26,0.06)}
-summary.edu-sum::after{content:'+';font-size:16px;color:var(--amber);font-weight:700}
+summary.edu-sum:hover{background:rgba(255,255,255,0.02)}
+summary.edu-sum::after{content:'+';font-size:15px;color:var(--muted)}
 details.edu-acc[open] summary.edu-sum::after{content:'\2212'}
-.edu-body{padding:12px 14px 16px;border-top:1px solid var(--card-border);font-size:13px;line-height:1.6;color:#c9d1d9}
+.edu-body{padding:10px 14px 14px;border-top:1px solid var(--card-border);font-size:13px;line-height:1.6;color:#c3cbd5}
+.edu-body a{color:var(--text)}
 
-input[type=text],input[type=number],input[type=password],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:14px;font-family:var(--mono);outline:none;transition:border-color .15s,box-shadow .15s,background .15s;min-height:42px;box-sizing:border-box}
-input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.18);background:#0d1117}
+input[type=text],input[type=number],input[type=password],select{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:8px 11px;font-size:14px;font-family:var(--mono);outline:none;transition:border-color .15s;min-height:38px;box-sizing:border-box}
+input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus{border-color:var(--amber)}
 input::placeholder{color:var(--dim)}
 select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238592a3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
-.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
-.cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#111620;border-bottom:1px solid var(--card-border);gap:10px;flex-wrap:wrap}
-.cfg-card-title{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);display:flex;align-items:center;gap:8px}
-.cfg-badge{font-size:10px;font-weight:700;color:var(--amber);background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.25);border-radius:999px;padding:2px 8px;letter-spacing:.5px}
-.cfg-card-body{padding:16px;display:flex;flex-direction:column;gap:14px}
+.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r)}
+.cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;gap:10px;flex-wrap:wrap}
+.cfg-card-title{font-size:14px;font-weight:600;color:var(--text)}
+.cfg-badge{font-size:11px;color:var(--muted);border:1px solid var(--card-border);border-radius:4px;padding:1px 6px}
+.cfg-card-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px}
 .form-grid-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
 .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:540px){.form-grid-3,.form-grid-2{grid-template-columns:1fr}}
 .form-group{display:flex;flex-direction:column;gap:4px}
-.form-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.8px;text-transform:uppercase}
-.form-label-sub{font-size:10px;font-weight:500;color:var(--dim);text-transform:none;letter-spacing:0}
-.form-sublabel{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
-.form-control{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 12px;font-size:14px;font-family:var(--mono);box-sizing:border-box;min-height:42px;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
-.form-control:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(247,147,26,0.18);background:#0d1117}
+.form-label{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;color:var(--text)}
+.form-label-sub{font-size:12px;font-weight:400;color:var(--muted)}
+.form-sublabel{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+.form-control{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:8px 11px;font-size:14px;font-family:var(--mono);box-sizing:border-box;min-height:38px;outline:none;transition:border-color .15s}
+.form-control:focus{border-color:var(--amber)}
 .form-hint{font-size:12px;color:var(--muted);line-height:1.5}
-.form-hint code{color:var(--amber);font-size:11px}
-.form-check{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;padding:4px 0;line-height:1.45}
-.form-check input[type=checkbox]{accent-color:var(--amber);width:17px;height:17px;margin-top:1px;flex-shrink:0;cursor:pointer}
+.form-check{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;padding:2px 0;line-height:1.45}
+.form-check input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px;margin-top:2px;flex-shrink:0;cursor:pointer}
 .slider-track-wrap{display:flex;align-items:center;gap:14px}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;background:var(--card-border);border-radius:3px;outline:none;accent-color:var(--amber)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--amber);cursor:pointer;box-shadow:0 0 6px rgba(247,147,26,0.4);transition:transform .1s ease}
-input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
-input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--amber);cursor:pointer;border:none}
-.preset-bar{display:flex;flex-direction:column;gap:8px;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:10px 12px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;background:var(--card-border);border-radius:2px;outline:none;accent-color:var(--amber)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;border:none}
+.preset-bar{display:flex;flex-direction:column;gap:8px}
 .preset-pills{display:flex;flex-wrap:wrap;gap:6px}
-.preset-pill{background:var(--card);border:1px solid var(--card-border);color:var(--text);font-size:11px;font-weight:700;padding:5px 11px;border-radius:999px;cursor:pointer;transition:all .15s}
-.preset-pill:hover,.preset-pill.active{background:rgba(247,147,26,0.12);border-color:var(--amber);color:var(--amber)}
-.preset-comment{font-size:12px;line-height:1.45;color:var(--muted);border-left:2px solid var(--amber);padding-left:8px}
-.active-pool-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--green);background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:3px 8px}
-.active-pool-pill.fallback{color:var(--warn);background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3)}
-.active-pool-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+.preset-pill{background:transparent;border:1px solid var(--card-border);color:var(--text);font-size:12px;font-family:inherit;padding:5px 10px;border-radius:4px;cursor:pointer}
+.preset-pill:hover{border-color:var(--dim)}
+.preset-pill.active{border-color:var(--amber)}
+.preset-comment{font-size:12px;line-height:1.45;color:var(--muted)}
+.active-pool-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.active-pool-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green)}
+.active-pool-pill.fallback::before{background:var(--warn)}
 .theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 @media(min-width:520px){.theme-grid{grid-template-columns:repeat(3,1fr)}}
-.theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s;user-select:none;position:relative}
+.theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:9px 11px;cursor:pointer;user-select:none;position:relative}
 .theme-card:hover{border-color:var(--dim)}
-.theme-card.active{border-color:var(--amber);background:rgba(247,147,26,0.08)}
-.theme-card.active::after{content:'\2713';position:absolute;top:8px;right:10px;font-size:12px;font-weight:800;color:var(--amber)}
-.theme-swatch{display:flex;align-items:center;gap:5px;margin-bottom:6px}
-.swatch-dot{width:13px;height:13px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
-.theme-card h4{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
-.theme-card p{font-size:10.5px;color:var(--muted);line-height:1.35}
-.theme-toast{margin-top:10px;padding:7px 12px;border-radius:var(--r);background:rgba(34,197,94,0.1);color:var(--green);font-size:12px;font-weight:600;text-align:center;line-height:1.4}
-.actions{margin:18px 0 24px;display:flex;flex-direction:column;gap:8px}
-.btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:14px 18px;font-size:14px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;width:100%;transition:opacity .15s,transform .1s;box-shadow:0 4px 12px rgba(247,147,26,0.25)}
+.theme-card.active{border-color:var(--amber)}
+.theme-card.active::after{content:'\2713';position:absolute;top:8px;right:10px;font-size:12px;color:var(--text)}
+.theme-swatch{display:flex;align-items:center;gap:4px;margin-bottom:5px}
+.swatch-dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
+.theme-card h4{font-size:13px;font-weight:600;color:var(--text)}
+.theme-card p{font-size:12px;color:var(--muted);line-height:1.35}
+.theme-toast{margin-top:8px;font-size:12px;color:var(--green)}
+.actions{margin:16px 0 24px;display:flex;flex-direction:column;gap:8px}
+.btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:11px 16px;font-size:14px;font-weight:600;cursor:pointer;width:100%}
 .btn-save:hover{opacity:.92}
-.btn-save:active{transform:translateY(1px)}
-.btn-restart{background:transparent;border:1px solid rgba(239,68,68,.4);border-radius:var(--r);color:#f87171;padding:10px;font-size:12px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;cursor:pointer;width:100%;transition:background .15s}
-.btn-restart:hover{background:rgba(239,68,68,0.08)}
-.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:16px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
-.ota-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
-.ota-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;max-width:56ch}
+.btn-restart{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--muted);padding:9px;font-size:13px;cursor:pointer;width:100%}
+.btn-restart:hover{color:var(--red);border-color:rgba(248,81,73,.45)}
+.ota-box{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px}
+.ota-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.ota-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:10px;max-width:60ch}
 .ota-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #ota-file{border-radius:var(--r)}
-.btn-ota{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
-.btn-ota:hover{border-color:var(--amber);color:var(--amber)}
+.btn-ota{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.btn-ota:hover{border-color:var(--dim)}
 .ota-progress-box{display:none;margin-top:12px}
-.ota-progress-bar{height:6px;border-radius:3px;background:var(--input-bg);overflow:hidden}
+.ota-progress-bar{height:4px;border-radius:2px;background:var(--input-bg);overflow:hidden}
 .ota-progress-fill{height:100%;width:0%;background:var(--amber);transition:width .1s linear}
 .ota-status{font-size:12px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
-.guide-grid{display:grid;grid-template-columns:1fr;gap:8px;margin:0 0 14px}
+.guide-grid{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:480px){.guide-grid{grid-template-columns:repeat(2,1fr)}}
-.guide-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;font-size:13px;color:var(--muted);line-height:1.65;box-shadow:0 4px 16px rgba(0,0,0,0.25)}
-.guide-title{font-size:11px;font-weight:800;color:var(--text);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-.guide-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:12px}
-.guide-row:last-child{border-bottom:none}
-.guide-key{color:var(--text);font-weight:600}
-.guide-val{color:var(--muted);font-family:var(--mono);font-size:11px}
-#overlay{display:none;position:fixed;inset:0;background:rgba(7,9,13,0.95);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
-.spinner{width:40px;height:40px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:16px}
+.guide-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:12px 14px;font-size:13px;color:var(--muted);line-height:1.6}
+.guide-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.guide-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--card-border);font-size:13px}
+.guide-key{color:var(--text)}
+.guide-val{color:var(--muted);text-align:right}
+#overlay{display:none;position:fixed;inset:0;background:rgba(11,13,18,0.96);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+#overlay p{color:var(--muted);font-size:13px}
+.spinner{width:32px;height:32px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px}
 @keyframes spin{to{transform:rotate(360deg)}}
-button:focus-visible,a:focus-visible,.theme-card:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button:focus-visible,a:focus-visible,.theme-card:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 )rawcss";
 
@@ -536,12 +535,12 @@ if(el)el.classList.add('active');
 if(col){document.documentElement.style.setProperty('--amber',col);}
 fetch('/api/theme?id='+id,{method:'POST'}).then(r=>r.json()).then(d=>{
 const t=document.getElementById('thm-toast');
-if(t){t.textContent='\u2713 Live theme applied instantly to CYD screen!';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
+if(t){t.textContent='Theme applied';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
 }).catch(e=>{});}
 function toggleInvert(inv){
 fetch('/api/invert?val='+(inv?'1':'0'),{method:'POST'}).then(r=>r.json()).then(d=>{
 const t=document.getElementById('thm-toast');
-if(t){t.textContent='\u2713 Live color inversion applied to CYD screen!';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
+if(t){t.textContent='Inversion updated';t.style.display='block';setTimeout(()=>{t.style.display='none';},2500);}
 }).catch(e=>{});}
 function pickCity(v){
 if(!v)return;
@@ -552,7 +551,7 @@ document.getElementById('f-lon').value=p[1];
 }
 }
 function pollReboot(){let s=8;document.getElementById('overlay').style.display='flex';
-const t=setInterval(()=>{s--;if(s>=0)document.getElementById('cd').textContent=s;
+const t=setInterval(()=>{s--;const cd=document.getElementById('cd');if(cd&&s>=0)cd.textContent=s;
 if(s<=0){clearInterval(t);checkBack();}},1000);}
 function checkBack(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(checkBack,1000));}
 document.getElementById('cfg-form').addEventListener('submit',function(e){
@@ -629,9 +628,9 @@ const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePin
 if(d.free_heap)document.getElementById('st-heap').textContent=Math.round(d.free_heap/1024)+' KB';
 if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}
 const txt=document.getElementById('st-txt');if(txt){
-if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'HASHING (FALLBACK)':'HASHING';}
-else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='CONNECTING';}
-else{txt.className='txt-gray';txt.textContent='IDLE';}}
+if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
+else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
+else{txt.className='txt-gray';txt.textContent='Idle';}}
 cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();const af=document.getElementById('cyd-auto-follow');if(af&&af.checked&&cydPreviewScr!==cydDevScr){cydSelectTab(cydDevScr,false);}}cydRender();}
 let simIsHist=true,simN=856192320,simAutoTimer=null;
 function toHex32LE(n){
@@ -680,13 +679,13 @@ const eRes=document.getElementById('sim-result');
 if(isWin){
 if(eHash)eHash.innerHTML='<span style="color:var(--green);font-weight:800;">'+hash.substring(0,18)+'</span>'+hash.substring(18);
 if(eRes){
-if(simIsHist)eRes.innerHTML='<span style="color:var(--green);font-size:12px;">&#10003; BLOCK #286,819 SOLVED: Nonce '+curN.toLocaleString()+' &rarr; Hash &lt; Target (25 BTC Subsidy)</span>';
-else eRes.innerHTML='<span style="color:var(--green);">&#10003; VALID HASH: Hash &lt; Target</span>';
+if(simIsHist)eRes.innerHTML='<span style="color:var(--green);">&#10003; Block #286,819 solved at nonce '+curN.toLocaleString()+' (hash &lt; target, 25 BTC subsidy)</span>';
+else eRes.innerHTML='<span style="color:var(--green);">&#10003; Hash below target</span>';
 }
 if(simAutoTimer)simToggleAuto();
 }else{
 if(eHash)eHash.innerHTML='<span style="color:var(--red);">'+hash.substring(0,6)+'</span>'+hash.substring(6);
-if(eRes)eRes.innerHTML='<span style="color:var(--red);">&#10005; CANDIDATE UNSOLVED: Hash &ge; Target</span>';
+if(eRes)eRes.innerHTML='<span style="color:var(--red);">&#10005; Hash above target</span>';
 }
 simN++;
 }
@@ -694,10 +693,10 @@ function simToggleAuto(){
 const btn=document.getElementById('sim-auto-btn');
 if(simAutoTimer){
 clearInterval(simAutoTimer);simAutoTimer=null;
-if(btn)btn.textContent='&#9654; Auto Mine (10 H/s)';
+if(btn)btn.textContent='Auto (10 H/s)';
 }else{
 simAutoTimer=setInterval(simStep,100);
-if(btn)btn.textContent='&#9208; Pause Mining';
+if(btn)btn.textContent='Pause';
 }
 }
 function simSetMode(hist){
@@ -719,7 +718,7 @@ if(bHist)bHist.className='preset-pill active';
 if(bRand)bRand.className='preset-pill';
 if(zBox)zBox.style.display='none';
 if(sBox)sBox.style.display='flex';
-if(hTitle)hTitle.textContent='80-Byte Candidate Block Header (Block #286,819):';
+if(hTitle)hTitle.textContent='Block header #286,819 (80 bytes)';
 if(fVer)fVer.textContent='[Ver 4B: 02000000]'; 
 if(fPrev)fPrev.textContent='[Prev 32B: 00000000...9717]'; 
 if(fMrkl)fMrkl.textContent='[Merkle 32B: 871714...978a]'; 
@@ -732,7 +731,7 @@ if(bHist)bHist.className='preset-pill';
 if(bRand)bRand.className='preset-pill active';
 if(zBox)zBox.style.display='flex';
 if(sBox)sBox.style.display='none';
-if(hTitle)hTitle.textContent='80-Byte Candidate Block Header (Sandbox):';
+if(hTitle)hTitle.textContent='Block header, sandbox (80 bytes)';
 if(fVer)fVer.textContent='[Ver 4B: 02000000]'; 
 if(fPrev)fPrev.textContent='[Prev 32B: 00000000...a1b2]'; 
 if(fMrkl)fMrkl.textContent='[Merkle 32B: 4a5e1e...c3d4]'; 
@@ -767,11 +766,12 @@ simN=simIsHist?856192320:0;
 const hex=(simN>>>0).toString(16).padStart(8,'0');
 const eN=document.getElementById('sim-nonce');if(eN)eN.textContent=simN.toLocaleString()+' (0x'+hex+')';
 const eNHex=document.getElementById('sim-nonce-hex');if(eNHex)eNHex.textContent=toHex32LE(simN);
-const eH=document.getElementById('sim-hash');if(eH)eH.textContent='Click "Test Next Nonce" to hash';
-const eR=document.getElementById('sim-result');if(eR)eR.textContent=simIsHist?'Status: Ready (Solves at Nonce 856,192,328)':'Status: Ready to test';
+const eH=document.getElementById('sim-hash');if(eH)eH.textContent='Press "Next nonce" to hash';
+const eR=document.getElementById('sim-result');if(eR)eR.textContent=simIsHist?'Ready. Solves at nonce 856,192,328.':'Ready.';
 }
 function calcFromBtc(v){const n=parseFloat(v);if(isNaN(n))return;document.getElementById('calc-sats').value=Math.round(n*1e8).toLocaleString();document.getElementById('calc-bits').value=(n*1e6).toLocaleString();document.getElementById('calc-mbtc').value=(n*1e3).toLocaleString();}
 function calcFromSats(v){const s=parseFloat(String(v).replace(/,/g,''));if(isNaN(s))return;document.getElementById('calc-btc').value=(s/1e8).toFixed(8);document.getElementById('calc-bits').value=(s/100).toLocaleString();document.getElementById('calc-mbtc').value=(s/1e5).toLocaleString();}
+function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1e3).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1e3).toLocaleString();}
 function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}
 function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}
 try{const lastT=localStorage.getItem('cyd_tab');if(lastT&&document.getElementById('tbtn-'+lastT)){switchTab(lastT);}}catch(e){}
@@ -806,8 +806,8 @@ static void handleRoot()
 
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
-            "<meta name='theme-color' content='#07090d'>"
-            "<title>NerdMiner Dashboard &amp; Settings</title>"
+            "<meta name='theme-color' content='#0b0d12'>"
+            "<title>NerdMiner</title>"
             "<link rel='stylesheet' href='/dash.css'>"
             "<link rel='stylesheet' href='/cyd-twin.css'></head><body>"
             "<div class='container'>"
@@ -822,28 +822,28 @@ static void handleRoot()
 
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
   if (isHashing)
-    page += F("txt-green'>HASHING</span>");
+    page += F("txt-green'>Hashing</span>");
   else if (mMonitor.NerdStatus == NM_Connecting)
-    page += F("txt-amber'>CONNECTING</span>");
+    page += F("txt-amber'>Connecting</span>");
   else
-    page += F("txt-gray'>IDLE</span>");
+    page += F("txt-gray'>Idle</span>");
 
   page += F("</div></header>"
             "<div class='diag-strip'>"
-            "<div class='diag-item'><span class='diag-label'>Live Hashrate</span><span class='diag-val' style='color:var(--amber);'><span id='st-top-hr'>");
+            "<div class='diag-item'><span class='diag-label'>Hashrate</span><span class='diag-val' style='color:var(--amber);'><span id='st-top-hr'>");
   page += d.currentHashRate.length() ? d.currentHashRate : String("--");
   page += F("</span> <span class='diag-sub'>KH/s</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Core Temp</span><span class='diag-val'><span id='st-temp'>");
+            "<div class='diag-item'><span class='diag-label'>Temp</span><span class='diag-val'><span id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
   page += F("</span>&deg;C</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Stratum Ping</span><span class='diag-val'><span id='st-ping'>");
+            "<div class='diag-item'><span class='diag-label'>Ping</span><span class='diag-val'><span id='st-ping'>");
   page += String(g_stratumPing) + F("</span> ms</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Wi-Fi Signal</span><span class='diag-val'><span id='st-wifi'>");
+            "<div class='diag-item'><span class='diag-label'>Wi-Fi</span><span class='diag-val'><span id='st-wifi'>");
   page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
   page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Free Heap</span><span class='diag-val' id='st-heap'>");
+            "<div class='diag-item'><span class='diag-label'>Free heap</span><span class='diag-val' id='st-heap'>");
   page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Session Stats</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>&#8634; Reset Stats</button></div>"
+            "<div class='diag-item'><span class='diag-label'>Session</span><button type='button' class='btn-reset-stats' onclick='resetSession()'>Reset</button></div>"
             "</div>"
             "<div class='console-layout'>"
             "<aside class='console-sidebar'>");
@@ -857,16 +857,16 @@ static void handleRoot()
     page += (worker.length() ? htmlEscape(worker) : F("(default)")) + F("</span></div>"
               "<a href='https://web.public-pool.io/#/app/");
     page += htmlEscape(cleanWallet) + F("' target='_blank' rel='noopener' class='pool-btn'>"
-              "View Worker on Public-Pool.io &#8599;</a></div>");
+              "View worker on public-pool.io &#8599;</a></div>");
   }
   page += F("</aside>"
             "<main class='console-main'>"
             "<nav class='console-tabs' role='tablist'>"
-            "<button type='button' class='tab-btn active' id='tbtn-telemetry' onclick=\"switchTab('telemetry')\"><span class='tab-icon'>&#128202;</span> Telemetry</button>"
-            "<button type='button' class='tab-btn' id='tbtn-stratum' onclick=\"switchTab('stratum')\"><span class='tab-icon'>&#9935;&#65039;</span> Pool &amp; Wallet</button>"
-            "<button type='button' class='tab-btn' id='tbtn-display' onclick=\"switchTab('display')\"><span class='tab-icon'>&#127912;</span> Display</button>"
-            "<button type='button' class='tab-btn' id='tbtn-pow' onclick=\"switchTab('pow')\"><span class='tab-icon'>&#128300;</span> PoW Workshop</button>"
-            "<button type='button' class='tab-btn' id='tbtn-system' onclick=\"switchTab('system')\"><span class='tab-icon'>&#128736;&#65039;</span> System &amp; OTA</button>"
+            "<button type='button' class='tab-btn active' id='tbtn-telemetry' onclick=\"switchTab('telemetry')\">Overview</button>"
+            "<button type='button' class='tab-btn' id='tbtn-stratum' onclick=\"switchTab('stratum')\">Pool &amp; wallet</button>"
+            "<button type='button' class='tab-btn' id='tbtn-display' onclick=\"switchTab('display')\">Display</button>"
+            "<button type='button' class='tab-btn' id='tbtn-pow' onclick=\"switchTab('pow')\">Proof of work</button>"
+            "<button type='button' class='tab-btn' id='tbtn-system' onclick=\"switchTab('system')\">System</button>"
             "</nav>");
 
   page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
@@ -876,58 +876,54 @@ static void handleRoot()
             "<div class='telemetry-bento'>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>&#9889; Nonce Engine &amp; Speed</div>"
-            "<span class='cfg-badge'>DUAL-CORE</span>"
+            "<div class='tele-card-title'>Hashrate</div>"
             "</div>"
             "<div class='tele-hero-val amber'><span id='dyn-hps'>");
   float hr = d.currentHashRate.toFloat();
   unsigned long hps = (unsigned long)(hr * 1000.0f);
   page += (hps > 0 ? String(hps) : F("0"));
-  page += F("</span> <span style='font-size:13px;color:var(--muted);font-weight:600;'>H/s</span></div>"
-            "<div class='tele-hero-sub'><span id='dyn-hpd'>--</span> hashes / 24h</div>"
-            "<div class='tele-row'><span>Total Work Done</span><span class='hl-val'><span id='dyn-totwork'>");
+  page += F("</span> <span class='unit'>H/s</span></div>"
+            "<div class='tele-hero-sub'><span id='dyn-hpd'>--</span> hashes per day</div>"
+            "<div class='tele-row'><span>Total hashes</span><span class='hl-val'><span id='dyn-totwork'>");
   uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
   if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
   else page += String((unsigned long)mhashes) + F(" million");
   page += F("</span></span></div>"
-            "<div class='tele-row'><span>Mining Uptime</span><span class='hl-val' id='dyn-uptime'>");
+            "<div class='tele-row'><span>Uptime</span><span class='hl-val' id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
   page += F("</span></div>"
             "</div>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>&#127919; Valid Pool Shares</div>"
-            "<span class='cfg-badge'>STRATUM V1</span>"
+            "<div class='tele-card-title'>Shares</div>"
             "</div>"
             "<div class='tele-hero-val'><span id='dyn-shares'>");
   page += (d.completedShares.length() ? d.completedShares : F("0"));
-  page += F("</span> <span style='font-size:13px;color:var(--muted);font-weight:600;'>shares</span></div>"
-            "<div class='tele-hero-sub'>Avg 1 share per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
-            "<div class='tele-row'><span>Session Best Diff</span><span class='hl-key'>Diff <span id='dyn-diff'>");
+  page += F("</span> <span class='unit'>shares</span></div>"
+            "<div class='tele-hero-sub'>About 1 per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
+            "<div class='tele-row'><span>Best difficulty (session)</span><span class='hl-val'><span id='dyn-diff'>");
   page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
   page += F("</span></span></div>"
-            "<div class='tele-row'><span>Historical Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
+            "<div class='tele-row'><span>Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
             "</div>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>&#127942; Solo Block Bounty</div>"
-            "<span class='cfg-badge'>100% TO YOU</span>"
+            "<div class='tele-card-title'>Block reward</div>"
             "</div>"
-            "<div class='tele-hero-val amber'>3.125 BTC <span style='font-size:13px;color:var(--muted);font-weight:600;'>+ fees</span></div>"
-            "<div class='tele-hero-sub'>Estimated bounty value: $200k+ USD</div>"
-            "<div class='tele-row'><span>Target Proximity</span><span class='hl-val'><span id='dyn-netpct'>--</span> of <span id='dyn-netdiff'>100T</span></span></div>"
-            "<div class='tele-row'><span>Daily Probability</span><span class='hl-val'><span id='dyn-dayodds'>--</span> / day</span></div>"
-            "<div class='tele-row'><span>Annual Odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span> / yr (avg <span id='dyn-avgwait'>--</span>)</span></div>"
+            "<div class='tele-hero-val'>3.125 BTC <span class='unit'>+ fees</span></div>"
+            "<div class='tele-hero-sub'>Paid to your address if this miner finds a block</div>"
+            "<div class='tele-row'><span>Best vs. network</span><span class='hl-val'><span id='dyn-netpct'>--</span> of <span id='dyn-netdiff'>100T</span></span></div>"
+            "<div class='tele-row'><span>Daily odds</span><span class='hl-val'><span id='dyn-dayodds'>--</span> / day</span></div>"
+            "<div class='tele-row'><span>Yearly odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span> / yr (avg <span id='dyn-avgwait'>--</span>)</span></div>"
             "</div>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>&#128267; Silicon Efficiency</div>"
-            "<span class='cfg-badge'>~1.2 WATT</span>"
+            "<div class='tele-card-title'>Efficiency</div>"
             "</div>"
-            "<div class='tele-hero-val'>~1.0 MH/s <span style='font-size:13px;color:var(--muted);font-weight:600;'>@ 1.2W</span></div>"
-            "<div class='tele-hero-sub'>Energy cost: &lt;1 kWh/month (~$0.15/mo)</div>"
-            "<div class='tele-row'><span>Global Network Share</span><span class='hl-val'><span id='dyn-netpow'>--</span> of 700 EH/s</span></div>"
-            "<div class='tele-row'><span>Hardware Architecture</span><span class='hl-val'>Xtensa LX6 240MHz HW SHA</span></div>"
+            "<div class='tele-hero-val'>~1.0 MH/s <span class='unit'>at ~1.2 W</span></div>"
+            "<div class='tele-hero-sub'>Under 1 kWh per month</div>"
+            "<div class='tele-row'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of 700 EH/s</span></div>"
+            "<div class='tele-row'><span>Chip</span><span class='hl-val'>ESP32 LX6, 240 MHz, HW SHA</span></div>"
             "</div>"
             "</div>"
             "</section>");
@@ -938,30 +934,26 @@ static void handleRoot()
   // Card 1: Solo Pool & Stratum Connection
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M2 12h20'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/></svg>"
-            "<span>Stratum Solo Pool &amp; Failover</span>"
-            "</div>"
-            "<span class='cfg-badge'>FAILOVER READY</span>"
+            "<div class='cfg-card-title'>Pools</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;'>"
-            "<span class='form-hint'>Stratum V1 mining endpoints. The device switches to fallback after 3 connection timeouts.</span>"
+            "<span class='form-hint'>Stratum V1. Switches to the fallback after 3 failed connections.</span>"
             "<span class='active-pool-pill");
-  page += (onBackupPool() ? F(" fallback'>Active: Fallback Pool") : F("'>Active: Primary Pool"));
+  page += (onBackupPool() ? F(" fallback'>Using fallback") : F("'>Using primary"));
   page += F("</span>"
             "</div>"
             "<div class='form-group'>"
-            "<span class='form-label'>Primary Solo Pool</span>"
+            "<span class='form-label'>Primary</span>"
             "<div class='form-grid-3'>"
             "<div>"
-            "<label class='form-sublabel' for='f-pool'>Host / IP</label>"
+            "<label class='form-sublabel' for='f-pool'>Host</label>"
             "<input type='text' id='f-pool' class='form-control' name='pool' value='");
   page += htmlEscape(Settings.PoolAddress);
   page += F("' placeholder='public-pool.io' required>"
             "</div>"
             "<div>"
-            "<label class='form-sublabel' for='f-port'>Stratum Port</label>"
+            "<label class='form-sublabel' for='f-port'>Port</label>"
             "<input type='number' id='f-port' class='form-control' name='port' value='");
   page += String(Settings.PoolPort);
   page += F("' placeholder='3333' required>"
@@ -975,16 +967,16 @@ static void handleRoot()
             "</div>"
             "</div>"
             "<div class='form-group'>"
-            "<span class='form-label'>Fallback Solo Pool <span class='form-label-sub'>Auto-Failover</span></span>"
+            "<span class='form-label'>Fallback <span class='form-label-sub'>optional</span></span>"
             "<div class='form-grid-3'>"
             "<div>"
-            "<label class='form-sublabel' for='f-fbpool'>Host / IP</label>"
+            "<label class='form-sublabel' for='f-fbpool'>Host</label>"
             "<input type='text' id='f-fbpool' class='form-control' name='fbpool' value='");
   page += htmlEscape(Settings.FallbackPoolAddress);
   page += F("' placeholder='pool.nerdminers.org'>"
             "</div>"
             "<div>"
-            "<label class='form-sublabel' for='f-fbport'>Stratum Port</label>"
+            "<label class='form-sublabel' for='f-fbport'>Port</label>"
             "<input type='number' id='f-fbport' class='form-control' name='fbport' value='");
   page += String(Settings.FallbackPoolPort);
   page += F("' placeholder='3333'>"
@@ -998,35 +990,31 @@ static void handleRoot()
             "</div>"
             "</div>"
             "<div class='preset-bar'>"
-            "<span class='form-label' style='margin:0;'>Quick Pool Presets</span>"
+            "<span class='form-label'>Presets</span>"
             "<div class='preset-pills'>"
-            "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"Public-Pool.io (port 3333) is the official recommended Stratum V1 port for ESP32 miners.\")'>Public-Pool.io &bull; 3333 (Recommended)</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"NerdMiners.org (port 3333) is an ESP32-dedicated solo pool optimized for low-hashrate hardware.\")'>NerdMiners.org &bull; 3333</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"SoloMining.de (port 3333) is a low-latency European solo mining pool.\")'>SoloMining.de &bull; 3333</button>"
-            "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Port 21496 is legacy unencrypted Stratum; use 3333 if experiencing dropped connections.\")'>Public-Pool.io &bull; 21496 (Legacy)</button>"
+            "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"public-pool.io:3333 is the recommended port.\")'>public-pool.io:3333</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"pool.nerdminers.org is a solo pool for low-hashrate miners.\")'>pool.nerdminers.org:3333</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"pool.solomining.de is a European solo pool.\")'>pool.solomining.de:3333</button>"
+            "<button type='button' class='preset-pill' onclick='choosePreset(\"public-pool.io\",21496,\"x\",\"Legacy port. Use 3333 if connections drop.\")'>public-pool.io:21496 (legacy)</button>"
             "</div>"
-            "<div id='preset-note' class='preset-comment'>Public-Pool.io on port 3333 provides standard Stratum V1 with low extranonce overhead, ideal for ESP32.</div>"
+            "<div id='preset-note' class='preset-comment'>Presets fill in the primary pool. Save to apply.</div>"
             "</div>"
             "</div></div>");
 
   // Card 2: Payout Address & Worker Identity
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='20' height='14' x='2' y='5' rx='2'/><line x1='2' x2='22' y1='10' y2='10'/></svg>"
-            "<span>Payout Address &amp; Worker Identity</span>"
-            "</div>"
-            "<span class='cfg-badge'>ON-CHAIN DIRECT</span>"
+            "<div class='cfg-card-title'>Payout address</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-wallet'>");
-  page += String(coin.name) + " (" + String(coin.ticker) + F(") On-Chain Payout Address</label>"
+  page += String(coin.name) + " (" + String(coin.ticker) + F(") address</label>"
             "<input type='text' id='f-wallet' class='form-control' name='wallet' value='");
   page += htmlEscape(String(Settings.BtcWallet));
   page += F("' placeholder='Your on-chain address (e.g. bc1q...)' required>"
-            "<span class='form-hint'>Solo mining deposits block rewards (3.125 ");
-  page += String(coin.ticker) + F(" + fees) directly on-chain to this address. Append <code>.worker_name</code> to set your pool identifier (e.g., <code>");
+            "<span class='form-hint'>A found block pays 3.125 ");
+  page += String(coin.ticker) + F(" + fees straight to this address. Add <code>.name</code> to set a worker name, e.g. <code>");
   page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</span>"
             "</div>"
             "</div></div>"
@@ -1036,29 +1024,25 @@ static void handleRoot()
   // Card 3: Display, Orientation & Illumination
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='20' height='14' x='2' y='3' rx='2'/><line x1='8' x2='16' y1='21' y2='21'/><line x1='12' x2='12' y1='17' y2='21'/></svg>"
-            "<span>Display, Orientation &amp; Illumination</span>"
-            "</div>"
-            "<span class='cfg-badge'>LIVE PREVIEW</span>"
+            "<div class='cfg-card-title'>Display</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-grid-2'>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-rot'>Screen Orientation</label>"
+            "<label class='form-label' for='f-rot'>Orientation</label>"
             "<select name='rot' id='f-rot' class='form-control'>");
   int curRot = Settings.screenRotation;
-  page += "<option value='0'" + String(curRot == 0 ? " selected" : "") + ">Portrait &bull; USB at bottom (Default)</option>";
-  page += "<option value='1'" + String(curRot == 1 ? " selected" : "") + ">Landscape &bull; USB on right</option>";
-  page += "<option value='2'" + String(curRot == 2 ? " selected" : "") + ">Portrait Inverted &bull; USB at top</option>";
-  page += "<option value='3'" + String(curRot == 3 ? " selected" : "") + ">Landscape Inverted &bull; USB on left</option>";
+  page += "<option value='0'" + String(curRot == 0 ? " selected" : "") + ">Portrait, USB at bottom (default)</option>";
+  page += "<option value='1'" + String(curRot == 1 ? " selected" : "") + ">Landscape, USB on right</option>";
+  page += "<option value='2'" + String(curRot == 2 ? " selected" : "") + ">Portrait flipped, USB at top</option>";
+  page += "<option value='3'" + String(curRot == 3 ? " selected" : "") + ">Landscape flipped, USB on left</option>";
   page += F("</select>"
-            "<span class='form-hint'>Orientation change restarts display controller on save.</span>"
+            "<span class='form-hint'>Changing orientation restarts the miner when you save.</span>"
             "</div>"
             "<div class='form-group'>"
             "<div class='form-label'>"
-            "<span>Backlight Brightness</span>"
-            "<span id='b-val' style='color:var(--amber);font-weight:700'>");
+            "<span>Brightness</span>"
+            "<span id='b-val' class='form-label-sub'>");
   page += String(Settings.Brightness) + " (" + String((Settings.Brightness * 100) / 255) + F("%)</span>"
             "</div>"
             "<div class='slider-track-wrap' style='min-height:42px;'>"
@@ -1068,66 +1052,66 @@ static void handleRoot()
             "<label class='form-check'>"
             "<input type='checkbox' name='invert' id='cb-invert' onchange='toggleInvert(this.checked)'");
   if (Settings.invertColors) page += F(" checked");
-  page += F("> <span>Invert display colors (live hardware preview)</span></label>"
+  page += F("> <span>Invert colors</span></label>"
             "</div></div>"
             "<div class='form-group'>"
-            "<span class='form-label'>Color Theme Palette <span class='form-label-sub'>Tap to Apply Instantly</span></span>"
+            "<span class='form-label'>Theme <span class='form-label-sub'>applies immediately</span></span>"
             "<div class='theme-grid'>");
   int curTheme = Settings.displayTheme;
   page += F("<div class='theme-card");
   if (curTheme == 0) page += F(" active");
   page += F("' id='thm-0' onclick='selectTheme(0,\"#f7931a\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f7931a'></span><span class='swatch-dot' style='background:#10141c'></span></div>"
-            "<h4>Instrument Amber</h4><p>Matte black &amp; Bitcoin amber instrument (Default)</p></div>"
+            "<h4>Instrument Amber</h4><p>Default</p></div>"
             "<div class='theme-card");
   if (curTheme == 1) page += F(" active");
   page += F("' id='thm-1' onclick='selectTheme(1,\"#22c55e\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#22c55e'></span><span class='swatch-dot' style='background:#08140a'></span></div>"
-            "<h4>Matrix Green</h4><p>Phosphor terminal CRT green</p></div>"
+            "<h4>Matrix Green</h4><p>Green on black</p></div>"
             "<div class='theme-card");
   if (curTheme == 2) page += F(" active");
   page += F("' id='thm-2' onclick='selectTheme(2,\"#f59e0b\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f59e0b'></span><span class='swatch-dot' style='background:#181208'></span></div>"
-            "<h4>Cyber Amber</h4><p>Vintage 1980s monochrome CRT</p></div>"
+            "<h4>Cyber Amber</h4><p>Amber CRT</p></div>"
             "<div class='theme-card");
   if (curTheme == 3) page += F(" active");
   page += F("' id='thm-3' onclick='selectTheme(3,\"#06b6d4\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#06b6d4'></span><span class='swatch-dot' style='background:#ec4899'></span></div>"
-            "<h4>Arcade Neon</h4><p>Cyan &amp; magenta dual-tone</p></div>"
+            "<h4>Arcade Neon</h4><p>Cyan and magenta</p></div>"
             "<div class='theme-card");
   if (curTheme == 4) page += F(" active");
   page += F("' id='thm-4' onclick='selectTheme(4,\"#38bdf8\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#38bdf8'></span><span class='swatch-dot' style='background:#111827'></span></div>"
-            "<h4>Ice Blue</h4><p>Midnight slate &amp; ice blue</p></div>"
+            "<h4>Ice Blue</h4><p>Slate and blue</p></div>"
             "<div class='theme-card");
   if (curTheme == 5) page += F(" active");
   page += F("' id='thm-5' onclick='selectTheme(5,\"#ffffff\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#ffffff'></span><span class='swatch-dot' style='background:#181818'></span></div>"
-            "<h4>Monochrome</h4><p>Pure white on void black (E-Ink)</p></div>"
+            "<h4>Monochrome</h4><p>White on black</p></div>"
             "</div>"
             "<input type='hidden' id='f-theme' name='theme' value='");
   page += String(curTheme) + F("'>"
-            "<div id='thm-toast' class='theme-toast' style='display:none'>&#10003; Theme updated on device</div>"
+            "<div id='thm-toast' class='theme-toast' style='display:none'>Theme applied</div>"
             "</div>");
 #ifdef HAS_BACKLIGHT_CONTROL
   page += F("<div style='border-top:1px solid var(--card-border);padding-top:14px;display:flex;flex-direction:column;gap:12px;'>"
-            "<div class='form-label'>🌙 Solar Dimming &amp; Screen Timeout</div>"
+            "<div class='form-label'>Sleep and night dimming</div>"
             "<div class='form-grid-3'>"
             "<div>"
-            "<label class='form-sublabel' for='f-screenoff'>Screen Sleep Timeout</label>"
+            "<label class='form-sublabel' for='f-screenoff'>Sleep after (min)</label>"
             "<input type='number' id='f-screenoff' class='form-control' name='screenoff' min='0' max='1440' value='");
   page += String(Settings.ScreenTimeout);
   page += F("' placeholder='0'>"
-            "<span class='form-hint'>Minutes (0 = always on; wake on touch/BOOT).</span>"
+            "<span class='form-hint'>0 = never. Touch or BOOT wakes it.</span>"
             "</div>"
             "<div>"
-            "<label class='form-sublabel' for='f-nbright'>Night Brightness (1–255)</label>"
+            "<label class='form-sublabel' for='f-nbright'>Night brightness (1–255)</label>"
             "<input type='number' id='f-nbright' class='form-control' name='nightbright' min='1' max='255' value='");
   page += String(Settings.NightBrightness);
   page += F("'>"
             "</div>"
             "<div>"
-            "<label class='form-sublabel' for='f-nfade'>Fade Window (min)</label>"
+            "<label class='form-sublabel' for='f-nfade'>Fade (min)</label>"
             "<input type='number' id='f-nfade' class='form-control' name='nightfade' min='0' max='240' value='");
   page += String(Settings.NightFade);
   page += F("'>"
@@ -1136,12 +1120,12 @@ static void handleRoot()
             "<label class='form-check'>"
             "<input type='checkbox' name='nightdim'");
   if (Settings.nightDim) page += F(" checked");
-  page += F("> <span><strong>Automatic Solar Dimming:</strong> Fade screen brightness at sunset based on geographic coordinates.</span></label>"
+  page += F("> <span>Dim at night, based on sunset at the location below</span></label>"
             "<div class='form-grid-3'>"
             "<div>"
-            "<label class='form-sublabel'>Quick City Preset</label>"
+            "<label class='form-sublabel'>City</label>"
             "<select onchange='pickCity(this.value)' class='form-control'>"
-            "<option value=''>Pick Nearest City...</option>");
+            "<option value=''>Pick nearest city…</option>");
   for (unsigned i = 0; i < sizeof(kCities) / sizeof(kCities[0]); i++)
   {
     page += "<option value='" + String(kCities[i].latitude, 2) + "," + String(kCities[i].longitude, 2) + "'>" + String(kCities[i].name) + "</option>";
@@ -1158,7 +1142,7 @@ static void handleRoot()
   page += String(Settings.Longitude, 2);
   page += F("'></div>"
             "</div>"
-            "<span class='form-hint'>📍 Solar status: ");
+            "<span class='form-hint'>Status: ");
   page += nightDimStatus();
   page += F("</span></div>");
 #endif
@@ -1168,21 +1152,17 @@ static void handleRoot()
   // Card 5: Hardware RGB Status LED
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='4'/><path d='M12 2v2'/><path d='M12 20v2'/><path d='m4.93 4.93 1.41 1.41'/><path d='m17.66 17.66 1.41 1.41'/><path d='M2 12h2'/><path d='M20 12h2'/><path d='m6.34 17.66-1.41 1.41'/><path d='m19.07 4.93-1.41 1.41'/></svg>"
-            "<span>CYD Rear RGB LED</span>"
-            "</div>"
-            "<span class='cfg-badge'>ONBOARD LED</span>"
+            "<div class='cfg-card-title'>Rear RGB LED</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-grid-3'>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-ledmode'>Operating Mode</label>"
+            "<label class='form-label' for='f-ledmode'>Mode</label>"
             "<select name='ledmode' id='f-ledmode' class='form-control'>");
   static const char *const kLedModes[] = {
     "Off",
-    "Status (Blinks while mining, Green on share, Blue connect)",
-    "Always On (Steady custom color)"
+    "Status (blink while mining, green on share, blue while connecting)",
+    "Steady color"
   };
   for (int i = LED_MODE_OFF; i <= LED_MODE_STEADY; i++)
   {
@@ -1192,19 +1172,19 @@ static void handleRoot()
   }
   page += F("</select></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-ledcolor'>LED Color</label>"
+            "<label class='form-label' for='f-ledcolor'>Color</label>"
             "<input type='color' id='f-ledcolor' name='ledcolor' class='form-control' style='height:42px;padding:4px;cursor:pointer;' value='");
   char colorHex[8];
   snprintf(colorHex, sizeof(colorHex), "#%06lx", (unsigned long)(Settings.ledColor & 0xFFFFFF));
   page += String(colorHex) + F("'></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-ledbright'>LED Brightness (1–255)</label>"
+            "<label class='form-label' for='f-ledbright'>Brightness (1–255)</label>"
             "<input type='number' id='f-ledbright' name='ledbright' class='form-control' min='1' max='255' value='");
   page += String(Settings.ledBrightness) + F("'></div></div>"
             "<label class='form-check'>"
             "<input type='checkbox' name='ledscreen'");
   if (Settings.ledScreenOff) page += F(" checked");
-  page += F("> <span>Turn rear LED off when screen backlight sleeps</span></label>"
+  page += F("> <span>Turn the LED off when the screen sleeps</span></label>"
             "</div></div>");
 #endif
 
@@ -1214,22 +1194,18 @@ static void handleRoot()
   page += F("<section class='tab-pane' id='pane-pow'>"
             "<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/></svg>"
-            "<span>Interactive Workshop &amp; PoW Simulator</span>"
-            "</div>"
-            "<span class='cfg-badge'>80-BYTE CANDIDATE</span>"
+            "<div class='cfg-card-title'>Proof-of-work simulator</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<p style='font-size:13px;color:var(--muted);margin-bottom:8px;'>"
-            "Inspect the exact 80-byte block header format your CYD iterates at ~1 MHz. Step through historical nonces or test the avalanche effect in real time:"
+            "The 80-byte header your miner hashes about a million times a second. Step through a real block, or try a sandbox target."
             "</p>"
             "<div style='display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;'>"
-            "<button type='button' class='preset-pill active' id='sim-mode-hist' onclick='simSetMode(true)'>Historical Block #286,819 (Target: Nonce 856,192,328)</button>"
-            "<button type='button' class='preset-pill' id='sim-mode-rand' onclick='simSetMode(false)'>Sandbox (Variable Difficulty)</button>"
+            "<button type='button' class='preset-pill active' id='sim-mode-hist' onclick='simSetMode(true)'>Block #286,819</button>"
+            "<button type='button' class='preset-pill' id='sim-mode-rand' onclick='simSetMode(false)'>Sandbox</button>"
             "</div>"
             "<div id='sim-shirriff-box' style='display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;'>"
-            "<span style='font-size:11px;color:var(--muted);'>Reference Nonce Milestones:</span>"
+            "<span style='font-size:11px;color:var(--muted);'>Jump to nonce:</span>"
             "<button type='button' class='preset-pill' onclick='simJump(0)' style='font-size:11px;padding:3px 8px;'>0 (0 zeros)</button>"
             "<button type='button' class='preset-pill' onclick='simJump(39)' style='font-size:11px;padding:3px 8px;'>39 (1 zero)</button>"
             "<button type='button' class='preset-pill' onclick='simJump(990)' style='font-size:11px;padding:3px 8px;'>990 (3 zeros)</button>"
@@ -1238,7 +1214,7 @@ static void handleRoot()
             "<button type='button' class='preset-pill' onclick='simJump(856192328)' style='font-size:11px;padding:3px 8px;'>856,192,328 (Solved Block)</button>"
             "</div>"
             "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:12px;'>"
-            "<div style='color:var(--muted);margin-bottom:6px;'><strong id='sim-hdr-title'>80-Byte Candidate Block Header (Block #286,819):</strong></div>"
+            "<div style='color:var(--muted);margin-bottom:6px;'><strong id='sim-hdr-title'>Block header #286,819 (80 bytes)</strong></div>"
             "<div style='background:rgba(0,0,0,0.3);border:1px solid var(--card-border);border-radius:4px;padding:8px;font-size:11px;color:var(--muted);margin-bottom:8px;word-break:break-all;'>"
             "<span style='color:#79c0ff' id='sim-f-ver'>[Ver 4B: 02000000]</span> "
             "<span style='color:#7ee787' id='sim-f-prev'>[Prev 32B: 00000000...9717]</span> "
@@ -1248,34 +1224,34 @@ static void handleRoot()
             "<span style='color:var(--amber);font-weight:700;'>[Nonce 4B: <span id='sim-nonce-hex'>40750833</span>]</span>"
             "</div>"
             "<div style='display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0;'>"
-            "<div><strong>Nonce Dial:</strong> <span id='sim-nonce' style='color:var(--amber);font-size:14px;font-weight:700;'>856,192,320 (0x33087540)</span></div>"
+            "<div>Nonce <span id='sim-nonce' style='font-size:14px;font-weight:700;'>856,192,320 (0x33087540)</span></div>"
             "<div id='sim-zeros-box' style='display:none;align-items:center;gap:6px;'>"
-            "<label style='font-size:11px;color:var(--muted);margin:0;'>Target Zeros:</label>"
+            "<label style='font-size:11px;color:var(--muted);margin:0;'>Leading zeros</label>"
             "<select id='sim-diff' style='padding:2px 6px;font-size:11px;width:auto;' onchange='simUpdateTarget()'>"
-            "<option value='3'>3 Zeros (Very Easy)</option>"
-            "<option value='4' selected>4 Zeros (Easy)</option>"
-            "<option value='5'>5 Zeros (Medium)</option>"
-            "<option value='6'>6 Zeros (Hard)</option>"
+            "<option value='3'>3</option>"
+            "<option value='4' selected>4</option>"
+            "<option value='5'>5</option>"
+            "<option value='6'>6</option>"
             "</select>"
             "</div></div>"
             "<div style='margin-top:6px;word-break:break-all;'>"
-            "<div style='color:var(--muted);font-size:11px;'>256-Bit Mining Target &amp; Difficulty:</div>"
-            "<div id='sim-target' style='font-size:11px;font-weight:600;color:var(--amber);margin-top:2px;'>00000000000000015f5300000000000000000000000000000000000000000000</div>"
+            "<div style='color:var(--muted);font-size:11px;'>Target</div>"
+            "<div id='sim-target' style='font-size:11px;font-weight:600;margin-top:2px;'>00000000000000015f5300000000000000000000000000000000000000000000</div>"
             "<div id='sim-diff-formula' style='font-size:11px;color:var(--muted);margin-top:2px;'>Difficulty = Target<sub>1</sub> / Target = <strong>3,129,573,174.52</strong> (Expected: ~1.34 &times; 10<sup>19</sup> hashes)</div>"
             "</div>"
             "<div style='margin-top:6px;word-break:break-all;'>"
-            "<div style='color:var(--muted);font-size:11px;'>Resulting 256-Bit Hash (Double-SHA256, byte-reversed):</div>"
-            "<div id='sim-hash' style='font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;'>Click 'Test Next Nonce' to hash</div>"
+            "<div style='color:var(--muted);font-size:11px;'>Hash (SHA256d, byte-reversed)</div>"
+            "<div id='sim-hash' style='font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;'>Press \"Next nonce\" to hash</div>"
             "</div>"
-            "<div id='sim-result' style='margin-top:8px;font-size:12px;font-weight:700;color:var(--muted);'>Status: Ready to test (Nonce 856,192,320 &rarr; Solves at 856,192,328)</div>"
+            "<div id='sim-result' style='margin-top:8px;font-size:12px;font-weight:700;color:var(--muted);'>Ready. Solves at nonce 856,192,328.</div>"
             "</div>"
             "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;'>"
-            "<button type='button' class='preset-pill active' onclick='simStep()' style='padding:6px 14px;font-size:12px;'>Test Next Nonce (+1)</button>"
-            "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()' style='padding:6px 14px;font-size:12px;'>&#9654; Auto Mine (10 H/s)</button>"
+            "<button type='button' class='preset-pill active' onclick='simStep()' style='padding:6px 14px;font-size:12px;'>Next nonce</button>"
+            "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()' style='padding:6px 14px;font-size:12px;'>Auto (10 H/s)</button>"
             "<button type='button' class='preset-pill' onclick='simReset()' style='padding:6px 10px;font-size:12px;'>Reset</button>"
             "</div>"
             "<div style='border-top:1px solid var(--card-border);padding-top:12px;'>"
-            "<p style='font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;'>🪙 Bitcoin Supply &amp; Satoshis Converter</p>"
+            "<p style='font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;'>Unit converter</p>"
             "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px;'>"
             "<div style='background:var(--input-bg);border:1px solid var(--card-border);border-radius:6px;padding:6px 8px;'>"
             "<label style='font-size:10px;color:var(--muted);'>Bitcoin (BTC)</label>"
@@ -1298,7 +1274,7 @@ static void handleRoot()
             "1 BTC = 100M Satoshis (<code>1 sat = 10<sup>-8</sup> BTC</code>). Bitcoin Core stores all balances as 64-bit integer sats. Integer truncation of 33 subsidy halvings yields exactly <strong>20,999,999.9769 BTC</strong>."
             "</div></div>"
             "</div></div>"
-            "<div style='font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:8px 0 6px 4px;'>📚 First-Principles Architecture &amp; Silicon Limits</div>"
+            "<div class='section-hdr'>Background</div>"
             "<details class='edu-acc' name='cyd-faq' open>"
             "<summary class='edu-sum'><span>1. Cryptographic Foundations &amp; The 80-Byte Candidate</span></summary>"
             "<div class='edu-body'>"
@@ -1311,19 +1287,19 @@ static void handleRoot()
             "<div class='edu-body'>"
             "&bull; <strong>The No-Midstate Hardware Constraint:</strong> An 80-byte block header spans two 64-byte SHA-256 blocks, plus a third block for the second hash pass. Unlike modern ASICs or ESP32-S3, the classic ESP32 (D0WD) cannot preload midstates: every nonce must grind all three 64-byte blocks from the standard IV constants ($H_0 \\dots H_7$).<br>"
             "&bull; <strong>228-Cycle Gate Delay:</strong> Three blocks at 64 rounds each plus engine handshakes require <strong>&sim;228 CPU cycles</strong> of hardware gate execution. At 240 MHz, the theoretical silicon speed ceiling is <code>240M / 228 &approx; 1.05 MH/s</code>.<br>"
-            "&bull; <strong>247-Cycle Pipelined Assembly:</strong> The tuned assembly mining loop (<code>pipelined_hw_mine_classic_v2.S</code>) executes in 247 cycles per nonce&mdash;achieving <strong>92.3% hardware engine saturation</strong> (yielding <strong>~971.6 KH/s</strong> HW from Core 1). Core 0 contributes <strong>~25 KH/s</strong> in parallel software math for a verified <strong>~996–1,002 KH/s</strong> sustained throughput (Pham et al., 2026, <a href='https://arxiv.org/abs/2602.04415' target='_blank' style='color:var(--amber);'>arXiv:2602.04415</a>; Pandya, 2024, <a href='https://arxiv.org/abs/2407.08284' target='_blank' style='color:var(--amber);'>arXiv:2407.08284</a>)."
+            "&bull; <strong>247-Cycle Pipelined Assembly:</strong> The tuned assembly mining loop (<code>pipelined_hw_mine_classic_v2.S</code>) executes in 247 cycles per nonce&mdash;achieving <strong>92.3% hardware engine saturation</strong> (yielding <strong>~971.6 KH/s</strong> HW from Core 1). Core 0 contributes <strong>~25 KH/s</strong> in parallel software math for a verified <strong>~996–1,002 KH/s</strong> sustained throughput (Pham et al., 2026, <a href='https://arxiv.org/abs/2602.04415' target='_blank' style='color:var(--text);'>arXiv:2602.04415</a>; Pandya, 2024, <a href='https://arxiv.org/abs/2407.08284' target='_blank' style='color:var(--text);'>arXiv:2407.08284</a>)."
             "</div></details>"
             "<details class='edu-acc' name='cyd-faq'>"
             "<summary class='edu-sum'><span>3. Multi-Core Bus Contention &amp; Hardware Isolation</span></summary>"
             "<div class='edu-body'>"
             "&bull; <strong>The 3-Cycle DPORT Bus Glitch:</strong> On dual-core ESP32, both cores share internal DPORT bus access to cryptographic peripherals. If Core 1 writes to the SHA registers with &lt;3 cycles between writes while Core 0 accesses peripheral memory, the internal bus arbiter silently drops the register write.<br>"
             "&bull; <strong>The Vanity Counter Trap:</strong> When writes are dropped, hardware hashes stale or corrupted data. A naive miner increments its loop counter and claims high speed, but produces zero valid shares.<br>"
-            "&bull; <strong>Strict Core Decoupling:</strong> This firmware completely isolates peripherals: Core 1 monopolizes the hardware SHA engine with calibrated cycle-spacing instructions, while Core 0 runs purely in software math (<code>nerd_sha256d_baked</code>) for UI and worker tasks, preventing bus collisions entirely (Banicescu et al., 2024, <a href='https://arxiv.org/abs/2403.03876' target='_blank' style='color:var(--amber);'>arXiv:2403.03876</a>; Ayyagari, 2019, <a href='https://arxiv.org/abs/1906.00834' target='_blank' style='color:var(--amber);'>arXiv:1906.00834</a>)."
+            "&bull; <strong>Strict Core Decoupling:</strong> This firmware completely isolates peripherals: Core 1 monopolizes the hardware SHA engine with calibrated cycle-spacing instructions, while Core 0 runs purely in software math (<code>nerd_sha256d_baked</code>) for UI and worker tasks, preventing bus collisions entirely (Banicescu et al., 2024, <a href='https://arxiv.org/abs/2403.03876' target='_blank' style='color:var(--text);'>arXiv:2403.03876</a>; Ayyagari, 2019, <a href='https://arxiv.org/abs/1906.00834' target='_blank' style='color:var(--text);'>arXiv:1906.00834</a>)."
             "</div></details>"
             "<details class='edu-acc' name='cyd-faq'>"
             "<summary class='edu-sum'><span>4. Verifiable PoW, 21M Economics &amp; Satoshi's Whitepaper</span></summary>"
             "<div class='edu-body'>"
-            "&bull; <strong>Zero Phantom Counters:</strong> Every candidate block found by hardware is re-verified bit-for-bit in software before pool submission. The firmware self-tests via Known-Answer Test (KAT) at boot and automatically demotes the engine via <code>pl_health</code> if any bit flips, guaranteeing that every reported hash represents genuine thermodynamic Proof-of-Work (Angulo de Lafuente et al., 2026, <a href='https://arxiv.org/abs/2601.12032' target='_blank' style='color:var(--amber);'>arXiv:2601.12032</a>).<br>"
+            "&bull; <strong>Zero Phantom Counters:</strong> Every candidate block found by hardware is re-verified bit-for-bit in software before pool submission. The firmware self-tests via Known-Answer Test (KAT) at boot and automatically demotes the engine via <code>pl_health</code> if any bit flips, guaranteeing that every reported hash represents genuine thermodynamic Proof-of-Work (Angulo de Lafuente et al., 2026, <a href='https://arxiv.org/abs/2601.12032' target='_blank' style='color:var(--text);'>arXiv:2601.12032</a>).<br>"
             "&bull; <strong>Fixed 21M Supply:</strong> Fixed issuance cap of <strong>20,999,999.9769 BTC</strong>. Subsidy halves every 210,000 blocks via bitwise shift (<code>&gt;&gt; 1</code>), reaching zero at block 6,929,999 around <strong>Year 2140</strong>.<br>"
             "&bull; <strong>Satoshi's Gambler's Ruin Finality:</strong> In Section 11 of the 2008 Whitepaper, Satoshi modeled double-spend races against a 10% hash attacker. After <strong>6 confirmations (~1 hour)</strong>, catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>, establishing 6 confirmations as the worldwide benchmark for irreversible settlement."
             "</div></details>"
@@ -1335,18 +1311,14 @@ static void handleRoot()
   // Card 4: System, Clock & Data Feeds
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>"
-            "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/></svg>"
-            "<span>System, Clock &amp; Data Feeds</span>"
-            "</div>"
-            "<span class='cfg-badge'>NODE TELEMETRY</span>"
+            "<div class='cfg-card-title'>Clock and data</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-grid-3'>"
             "<div class='form-group'>"
-            "<label class='form-label' for='tz-select'>Timezone Preset</label>"
+            "<label class='form-label' for='tz-select'>Timezone</label>"
             "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
-            "<option value=''>Preset Timezones...</option>"
+            "<option value=''>Pick a timezone…</option>"
             "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
             "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
             "<option value='-6'>UTC-6 (US Central / CST)</option>"
@@ -1360,11 +1332,11 @@ static void handleRoot()
             "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
             "</select></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-tz'>UTC Offset (Hours)</label>"
+            "<label class='form-label' for='f-tz'>UTC offset (hours)</label>"
             "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
   page += String(Settings.Timezone) + F("'></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-currency'>Fiat Currency</label>"
+            "<label class='form-label' for='f-currency'>Currency</label>"
             "<select name='currency' id='f-currency' class='form-control'>");
   for (int i = 0; i < kCurrencyCount; i++)
   {
@@ -1375,23 +1347,23 @@ static void handleRoot()
   }
   page += F("</select></div></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-mempool'>Mempool API Endpoint</label>"
+            "<label class='form-label' for='f-mempool'>Mempool API</label>"
             "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
   page += htmlEscape(Settings.MempoolHost) + F("'>"
-            "<span class='form-hint'>Mempool REST endpoint for block height, fee estimates, and difficulty (e.g. <code>https://mempool.space</code> or local node <code>http://umbrel.local:3006</code>).</span>"
+            "<span class='form-hint'>Used for block height, fees and difficulty, e.g. <code>https://mempool.space</code> or a local node like <code>http://umbrel.local:3006</code>.</span>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-check'>"
             "<input type='checkbox' name='savestats'");
   if (Settings.saveStats) page += F(" checked");
-  page += F("> <span><strong>Persist Lifetime Work in Flash:</strong> Retain total hashes and submitted share count across power cycles and restarts.</span></label>"
+  page += F("> <span>Keep lifetime hashes and shares across reboots (stored in flash)</span></label>"
             "</div></div></div>"
             "<div class='ota-box'>"
-            "<div class='ota-title'>Over-The-Air (OTA) Firmware Flasher</div>"
-            "<div class='ota-desc'>Upload compiled <code>firmware.bin</code> directly over Wi-Fi. The device verifies binary integrity, flashes partition, and reboots automatically.</div>"
+            "<div class='ota-title'>Firmware update</div>"
+            "<div class='ota-desc'>Upload a <code>firmware.bin</code> over Wi-Fi. The miner flashes it and reboots.</div>"
             "<div class='ota-row'>"
             "<input type='file' id='ota-file' accept='.bin' style='flex:1;min-width:200px;font-size:13px;color:var(--text);background:var(--input-bg);padding:9px;border:1px solid var(--card-border);border-radius:var(--r);'>"
-            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload &amp; Flash</button>"
+            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload and flash</button>"
             "</div>"
             "<div class='ota-progress-box' id='ota-progress-box'>"
             "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
@@ -1400,23 +1372,23 @@ static void handleRoot()
             "</div>"
             "<div class='guide-grid'>"
             "<div class='guide-card'>"
-            "<div class='guide-title'>👆 CYD Touch Regions</div>"
-            "<div class='guide-row'><span class='guide-key'>Top-Left Wordmark</span><span class='guide-val'>Cycle Accent Color</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Top-Right Corner</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Screen Center</span><span class='guide-val'>Cycle Screens (0 &rarr; 1 &rarr; 2 &rarr; 3)</span></div>"
+            "<div class='guide-title'>Touch</div>"
+            "<div class='guide-row'><span class='guide-key'>Top-left logo</span><span class='guide-val'>Next accent color</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Top-right corner</span><span class='guide-val'>Backlight on/off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Center</span><span class='guide-val'>Next screen</span></div>"
             "</div>"
             "<div class='guide-card'>"
-            "<div class='guide-title'>🔨 Physical BOOT Button</div>"
-            "<div class='guide-row'><span class='guide-key'>1 Tap</span><span class='guide-val'>Next Screen View</span></div>"
-            "<div class='guide-row'><span class='guide-key'>2 Taps</span><span class='guide-val'>Rotate Display 90&deg;</span></div>"
-            "<div class='guide-row'><span class='guide-key'>3 Taps</span><span class='guide-val'>Toggle Backlight On / Off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Hold 5 Seconds</span><span class='guide-val'>Factory Reset Config &amp; Reboot</span></div>"
+            "<div class='guide-title'>BOOT button</div>"
+            "<div class='guide-row'><span class='guide-key'>1 tap</span><span class='guide-val'>Next screen</span></div>"
+            "<div class='guide-row'><span class='guide-key'>2 taps</span><span class='guide-val'>Rotate 90&deg;</span></div>"
+            "<div class='guide-row'><span class='guide-key'>3 taps</span><span class='guide-val'>Backlight on/off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Hold 5 s</span><span class='guide-val'>Factory reset and reboot</span></div>"
             "</div></div>"
             "</section>"); // closes pane-system
 
   page += F("<div class='actions'>"
-            "<button type='submit' class='btn-save'>Save &amp; Apply All Settings</button>"
-            "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot Miner (without saving)</button>"
+            "<button type='submit' class='btn-save'>Save settings</button>"
+            "<button type='button' class='btn-restart' onclick='rebootDevice()'>Reboot without saving</button>"
             "</div>"
             "</form>"
             "</main>"
@@ -1424,7 +1396,8 @@ static void handleRoot()
             "</div>"  // closes container
             "<div id='overlay'>"
             "<div class='spinner'></div>"
-            "<h3 style='margin-bottom:8px'>Restarting NerdMiner</h3>"
+            "<h3 style='margin-bottom:6px'>Restarting</h3>"
+            "<p>Reconnecting in <span id='cd'>8</span> s</p>"
             "</div>"
             "<script src='/cyd-twin.js'></script>"
             "<script src='/dash.js'></script>");
@@ -1453,7 +1426,7 @@ static void handleSave()
                         String("<!DOCTYPE html><html><head><meta charset='utf-8'>"
                                "<meta name='viewport' content='width=device-width, initial-scale=1'></head>"
                                "<body style='font-family:sans-serif'><p>") + problem +
-                            " Nothing was saved.</p><p><a href='/settings'>Back to settings</a></p></body></html>");
+                            " Nothing was saved.</p><p><a href='/'>Back to settings</a></p></body></html>");
       return;
     }
     next.WebPassword = webPass;
@@ -1595,16 +1568,16 @@ static void handleSave()
       wakeScreen();
 #endif
 
-    String msg = poolChanged ? F("Settings saved! Reconnecting to pool with new settings...")
-                             : F("Settings saved and applied live without restart.");
+    String msg = poolChanged ? F("Saved. Reconnecting to the pool…")
+                             : F("Saved and applied.");
     webCfgServer.send(200, "text/html",
                       "<!DOCTYPE html><html><head><meta charset='utf-8'>"
                       "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                       "<meta http-equiv='refresh' content='2;url=/'>"
                       "<style>body{background:#0b0e14;color:#f0f6fc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
-                      ".card{background:#161b22;padding:24px;border-radius:12px;border:1px solid #30363d;max-width:360px}</style></head>"
-                      "<body><div class='card'><h3 style='color:#22c55e;margin-top:0'>&#10003; Applied Live</h3><p>" + msg + "</p>"
-                      "<p><a href='/' style='color:#f7931a'>Return to Dashboard</a></p></div></body></html>");
+                      ".card{background:#161b22;padding:24px;border-radius:8px;border:1px solid #30363d;max-width:360px}</style></head>"
+                      "<body><div class='card'><h3 style='color:#3fb950;margin-top:0'>Saved</h3><p>" + msg + "</p>"
+                      "<p><a href='/' style='color:#e6ebf2'>Back to dashboard</a></p></div></body></html>");
     return;
   }
 
@@ -1615,7 +1588,7 @@ static void handleSave()
                      "<style>body{background:#0b0e14;color:#f0f6fc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
                      ".sp{width:40px;height:40px;border:3px solid #30363d;border-top-color:#f7931a;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}"
                      "@keyframes s{to{transform:rotate(360deg)}}</style></head>"
-                     "<body><div><div class='sp'></div><h2>Saved Settings</h2><p style='color:#8b949e'>Screen orientation/inversion changed. Restarting miner...</p></div>"
+                     "<body><div><div class='sp'></div><h2>Saved</h2><p style='color:#8b949e'>Orientation changed. Restarting…</p></div>"
                      "<script>function p(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(p,1200))};setTimeout(p,5000);</script>"
                      "</body></html>");
 

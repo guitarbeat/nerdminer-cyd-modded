@@ -1,7 +1,7 @@
 #ifndef WEB_MONITOR_PAGE_H
 #define WEB_MONITOR_PAGE_H
 
-// Live miner monitor served at "/" by webConfig.cpp: one self-contained page
+// Live miner monitor served at "/monitor" by webConfig.cpp: one self-contained page
 // (no external files, works without internet), responsive for phones and
 // computers, light/dark theme from the device. Reads /api/status every 3 s
 // and /api/history (last hour of hashrate) every 30 s. UTF-8.
@@ -22,24 +22,23 @@ static const char MONITOR_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
 .wrap{max-width:1100px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
 header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}
-h1 b{color:var(--acc)}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--card);border:1px solid var(--line)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--mut)}
+h1{font-size:18px;margin:0;font-weight:700}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:6px;font-size:13px;border:1px solid var(--line)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mut)}
 .ok .dot{background:var(--ok)}.warn .dot{background:var(--warn)}.bad .dot{background:var(--bad)}
 .sp{flex:1}
-a.btn{color:var(--txt);text-decoration:none;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:14px}
-a.btn:hover{border-color:var(--acc)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
-.lbl{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
-.val{font-size:22px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+a.btn{color:var(--txt);text-decoration:none;padding:5px 11px;border-radius:6px;border:1px solid var(--line);font-size:14px}
+a.btn:hover{border-color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.lbl{color:var(--mut);font-size:13px}
+.val{font-size:21px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .sub{color:var(--mut);font-size:13px;margin-top:2px;overflow-wrap:anywhere}
 .val.s{font-size:17px}
 .ok{color:var(--ok)}.bad{color:var(--bad)}
 .pill.ok,.pill.bad{color:var(--txt)}
-.hero{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:16px;margin-bottom:16px}
-.big{font-size:clamp(40px,8vw,64px);font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;margin-top:6px}
-.big small{font-size:.4em;font-weight:600;color:var(--mut);margin-left:6px}
+.hero{display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:12px;margin-bottom:12px}
+.big{font-size:clamp(36px,7vw,56px);font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;margin-top:6px}
+.big small{font-size:.4em;font-weight:500;color:var(--mut);margin-left:6px}
 .chart{position:relative;height:190px}
 canvas{width:100%;height:100%;display:block}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}
@@ -50,18 +49,17 @@ canvas{width:100%;height:100%;display:block}
 .sig i.on{background:var(--ok)}
 footer{color:var(--mut);font-size:12px;text-align:center;margin-top:18px}
 body.stale .card{opacity:.5;transition:opacity .3s}
-#off{display:none;background:var(--bad);color:#fff;padding:8px 12px;border-radius:8px;margin-bottom:12px;font-weight:600}
-@media (max-width:420px){.t{display:none}}
+#off{display:none;border:1px solid var(--bad);color:var(--bad);padding:8px 12px;border-radius:6px;margin-bottom:12px}
 @media (max-width:700px){.hero{grid-template-columns:1fr}.val{font-size:19px}.chart{height:150px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
-  <h1>&#9935; Nerd<b>Miner</b></h1>
+  <h1>NerdMiner</h1>
   <span id="st" class="pill"><span class="dot"></span><span id="stt">Connecting&hellip;</span></span>
   <span class="sp"></span>
-  <a class="btn" href="/settings" title="Settings">&#9881;<span class="t"> Settings</span></a>
+  <a class="btn" href="/">Settings</a>
 </header>
 <div id="off">Miner unreachable &mdash; retrying&hellip;</div>
 
@@ -79,10 +77,10 @@ body.stale .card{opacity:.5;transition:opacity .3s}
 </section>
 
 <div class="grid">
-  <div class="card"><div class="lbl">32-bit shares</div><div class="val ok" id="s32">&ndash;</div><div class="sub"><span class="ok">accepted</span> &middot; <span class="bad" id="s32r">&ndash;</span></div></div>
+  <div class="card"><div class="lbl">Shares (32-bit)</div><div class="val ok" id="s32">&ndash;</div><div class="sub"><span class="ok">accepted</span> &middot; <span class="bad" id="s32r">&ndash;</span></div></div>
   <div class="card"><div class="lbl">Best difficulty</div><div class="val" id="bd">&ndash;</div><div class="sub">all time</div></div>
-  <div class="card"><div class="lbl">Blocks found</div><div class="val" id="blk">&ndash;</div><div class="sub">&#127920; maybe one day</div></div>
-  <div class="card"><div class="lbl">Pool shares (low diff)</div><div class="val" id="acc">&ndash;</div><div class="sub">accepted &middot; <span id="rej">&ndash;</span></div></div>
+  <div class="card"><div class="lbl">Blocks found</div><div class="val" id="blk">&ndash;</div><div class="sub">all time</div></div>
+  <div class="card"><div class="lbl">Pool shares</div><div class="val" id="acc">&ndash;</div><div class="sub">accepted &middot; <span id="rej">&ndash;</span></div></div>
   <div class="card"><div class="lbl">Mining time</div><div class="val" id="mt">&ndash;</div><div class="sub">templates: <span id="tpl">&ndash;</span></div></div>
 </div>
 
@@ -146,8 +144,7 @@ function draw(){
   for(var k=0;k<=3;k++){var v=mn+(mx-mn)*k/3,yy=y(v);g.beginPath();g.moveTo(L,yy);g.lineTo(W,yy);g.stroke();g.fillText(mx>=1000?(v/1000).toFixed(2)+'M':v.toFixed(0)+'k',L-6,yy)}
   var n=data.length,dx=(W-L)/(n-1);
   g.beginPath();for(var i=0;i<n;i++){var xx=L+i*dx,yv=y(data[i]);i?g.lineTo(xx,yv):g.moveTo(xx,yv)}
-  g.strokeStyle=col;g.lineWidth=2;g.lineJoin='round';g.stroke();
-  g.lineTo(W,H-B);g.lineTo(L,H-B);g.closePath();var gr=g.createLinearGradient(0,T,0,H-B);gr.addColorStop(0,col+'55');gr.addColorStop(1,col+'00');g.fillStyle=gr;g.fill();
+  g.strokeStyle=col;g.lineWidth=1.5;g.lineJoin='round';g.stroke();
   g.fillStyle=mut;g.textAlign='left';g.textBaseline='alphabetic';
   var span=data===hist?Math.round((n-1)*step/60):Math.round((n-1)*3/60);
   g.fillText(data===hist?'−'+span+' min':'live',L,H-4);g.textAlign='right';g.fillText('now',W,H-4);
