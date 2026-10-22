@@ -1388,11 +1388,12 @@ static void fmtAge(uint32_t s, char *b, size_t n)
 static void drawSpeedPanel(const Rect &r, float khNow)
 {
   const bool P = isPortrait();
+  (void)khNow; // the dial shows the live number; the panel shows the 60 s average
   char k[48];
-  snprintf(k, sizeof(k), "s|%lu|%d|%d", (unsigned long)hrEpoch, (int)(khNow + 0.5f), P ? 1 : 0);
+  snprintf(k, sizeof(k), "s|%lu|%d", (unsigned long)hrEpoch, P ? 1 : 0);
   if (!need(W_CHART, k))
     return;
-  // average over what we have
+  // average over what we have (also the dashed line)
   uint32_t sum = 0;
   for (int i = 0; i < hrCount; i++) sum += hrS[i];
   const float avg = hrCount ? (float)sum / hrCount : 0.0f; // 0.1 KH/s
@@ -1403,9 +1404,11 @@ static void drawSpeedPanel(const Rect &r, float khNow)
     TFT_eSPI &d = out();
     d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
     char t[24];
-    text(d, "HASH RATE", x0, dY(r.y + (P ? 1 : 0)), P ? 9 : 8, C_DIM, C_BG);
-    snprintf(t, sizeof(t), "%d KH/s", (int)(khNow + 0.5f));
-    if (P) text(d, t, x0 + textW("HASH RATE", 9) + 8, dY(r.y - 3), 15, C_METER, C_BG);
+    const char *lbl = "60s AVG";
+    text(d, lbl, x0, dY(r.y + (P ? 1 : 0)), P ? 9 : 8, C_DIM, C_BG);
+    if (hrCount >= 2) snprintf(t, sizeof(t), "%d KH/s", (int)(avg / 10.0f + 0.5f));
+    else snprintf(t, sizeof(t), "-- KH/s");
+    if (P) text(d, t, x0 + textW(lbl, 9) + 8, dY(r.y - 3), 15, C_METER, C_BG);
     else text(d, t, x0, dY(r.y + 9), 14, C_METER, C_BG);
     text(d, "+11%", x1, dY(P ? r.y + 1 : pTop - 10), 8, C_METER, C_BG, Align::TopRight);
     text(d, "-11%", x1, dY(pBot + 2), 8, C_METER, C_BG, Align::TopRight);
@@ -1422,8 +1425,6 @@ static void drawSpeedPanel(const Rect &r, float khNow)
     }
     for (int x = x0; x <= x1; x += 6) // dashed average (0%)
       d.drawFastHLine(x, dY(mid), 3, mix565(C_BG, C_METER, 150));
-    snprintf(t, sizeof(t), "AVG %d KH/s", (int)(avg / 10.0f + 0.5f));
-    text(d, t, x0, dY(pBot + 2), 8, C_METER, C_BG);
     // oldest .. newest across the full width; +/-11% of the average fills the band
     const int n = hrCount, half = (pBot - pTop) / 2;
     auto Y = [&](uint16_t v) {
