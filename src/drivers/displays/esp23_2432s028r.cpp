@@ -698,6 +698,19 @@ struct HdrV
   int screen; // current screen index (0-3) for nav dots
 };
 
+// "EMB - Shears" (ASCII only: the TFT font has no middle dot); just the
+// ticker if the full label is wider than maxW at this font size.
+static void coinLabel(char *lab, size_t n, int maxW, unsigned size)
+{
+  char key[64], shortName[24];
+  const char *coin = "BTC";
+  getActivePool(key, sizeof(key), &coin);
+  poolShortName(key, shortName, sizeof(shortName));
+  snprintf(lab, n, "%s - %s", coin, shortName);
+  if (textW(lab, size) > maxW)
+    snprintf(lab, n, "%s", coin);
+}
+
 static void drawHeader(const HdrV &h)
 {
   const bool P = isPortrait();
@@ -724,15 +737,13 @@ static void drawHeader(const HdrV &h)
 
   // Active coin + pool between the badge and the clock: "EMB - Shears" (ASCII only: the TFT font has no middle dot),
   // or just the ticker when that doesn't fit.
+  // Not on the Mining screen: its ring reaches into the top bar there, so
+  // the label sits inside the ring instead (paintMine).
+  if (h.screen != SCR_MINE)
   {
-    char key[64], shortName[24], lab[40];
-    const char *coin = "BTC";
-    getActivePool(key, sizeof(key), &coin);
-    poolShortName(key, shortName, sizeof(shortName));
+    char lab[40];
     const int cx0 = bx + wBadge + 4, cw = tx - cx0 - 4, ch = 20;
-    snprintf(lab, sizeof(lab), "%s - %s", coin, shortName);
-    if (textW(lab, 12) > cw - 4)
-      snprintf(lab, sizeof(lab), "%s", coin);
+    coinLabel(lab, sizeof(lab), cw - 4, 12);
     String kCoin = String("hcoin|") + lab + "|" + (P ? "P" : "L");
     if (need(W_HDR_COIN, kCoin) && wBegin(cw, ch, C_BG))
     {
@@ -951,22 +962,28 @@ static void drawMineStrip(const StripV &s)
 
 static void paintMine(const MineV &m)
 {
-  drawHeader(m.hdr);
+  {
+    HdrV h = m.hdr;
+    h.screen = SCR_MINE;
+    drawHeader(h);
+  }
 
   const bool P = isPortrait();
   int cx = G_CX;
   int cy = G_CY;
 
   // hero readout inside the ring: HASHRATE / value / KH/s
-  String k = m.hash + "|" + (P ? "P" : "L");
+  // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
+  const int hw = P ? 124 : 110, hh = P ? 86 : 76;
+  char coinLab[40];
+  coinLabel(coinLab, sizeof(coinLab), hw - 8, P ? 11 : 10);
+  String k = m.hash + "|" + coinLab + "|" + (P ? "P" : "L");
   if (need(W_HERO, k))
   {
-    // sprite corners stay inside RI (top) or the 6-o'clock gap (bottom)
-    const int hw = P ? 124 : 110, hh = P ? 86 : 76;
     if (wBegin(hw, hh, C_BG))
     {
       int c = hw / 2;
-      text(wgt, "HASHRATE", c, 4, P ? 11 : 10, C_DIM, C_BG, Align::TopCenter);
+      text(wgt, coinLab, c, 4, P ? 11 : 10, C_GOLD, C_BG, Align::TopCenter); // active coin, replaces "HASHRATE"
       unsigned sz = P ? (m.hash.length() <= 5 ? 42 : 36) : (m.hash.length() <= 5 ? 36 : 30);
       text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
       text(wgt, "KH/s", c, P ? 64 : 52, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
@@ -1534,7 +1551,10 @@ static void paintArchBody(const ArchitectureV &av)
 {
   const ArchGeo g = archGeo();
   const bool P = g.P;
-  const double net = av.netDiffRaw > 0 ? av.netDiffRaw : 1e14;
+  // Network difficulty of the chain being mined (job nbits); unknown until
+  // the pool sends a job. Plot against an assumed top then, labelled "--".
+  const bool netKnown = av.netDiffRaw > 0;
+  const double net = netKnown ? av.netDiffRaw : 1e6;
   // Closest = best hash this miner has ever found (every hash >= the pool
   // difficulty is sent as a share, so this is the best share).
   double best = av.bestDiffRaw;
@@ -1542,8 +1562,11 @@ static void paintArchBody(const ArchitectureV &av)
     if (av.shares[i].diff > best) best = av.shares[i].diff;
   char bestS[16], netS[16], needS[16], ordS[24];
   fmtDiff(best, bestS, sizeof(bestS));
-  fmtDiff(net, netS, sizeof(netS));
-  const bool haveBest = best > 0;
+  if (netKnown)
+    fmtDiff(net, netS, sizeof(netS));
+  else
+    snprintf(netS, sizeof(netS), "--");
+  const bool haveBest = best > 0 && netKnown;
   const double ratio = haveBest ? net / best : 0;
   fmtDiff(ratio, needS, sizeof(needS));
   snprintf(ordS, sizeof(ordS), "%.1f", haveBest ? log10(ratio) : 0.0);
@@ -1560,7 +1583,7 @@ static void paintArchBody(const ArchitectureV &av)
     snprintf(ttl, sizeof(ttl), "CLOSEST %s SHARE", av.coin);
     text(wgt, ttl, 8, 4, 10, C_DIM, C_PANEL);
     text(wgt, blk, g.topW - 8, 4, 10, C_WARN, C_PANEL, Align::TopRight);
-    text(wgt, haveBest ? bestS : "--", 8, P ? 17 : 15, P ? 26 : 24, C_METER, C_PANEL);
+    text(wgt, best > 0 ? bestS : "--", 8, P ? 17 : 15, P ? 26 : 24, C_METER, C_PANEL);
     char l1[32], l2[32];
     if (haveBest)
     {
@@ -1569,7 +1592,7 @@ static void paintArchBody(const ArchitectureV &av)
     }
     else
     {
-      snprintf(l1, sizeof(l1), "no shares yet");
+      snprintf(l1, sizeof(l1), netKnown ? "no shares yet" : "no job from pool");
       l2[0] = 0;
     }
     text(wgt, l1, g.topW - 8, P ? 18 : 16, 12, C_TEXT, C_PANEL, Align::TopRight);
@@ -1701,7 +1724,10 @@ static void paintArchBody(const ArchitectureV &av)
       fmtDiff(r.diff, dv, sizeof(dv));
       if (!r.accepted) { strncat(dv, " rej", sizeof(dv) - strlen(dv) - 1); dc = C_BAD; }
       else if (r.diff >= best * 0.9999) dc = C_GOLD;
-      snprintf(og, sizeof(og), "%.1f", r.diff > 0 ? log10(net / r.diff) : 0.0);
+      if (netKnown && r.diff > 0)
+        snprintf(og, sizeof(og), "%.1f", log10(net / r.diff));
+      else
+        snprintf(og, sizeof(og), "--");
       fmtAge(av.nowUtc, r.utc, ag, sizeof(ag));
       if (!P && strlen(ag) > 4 && strcmp(ag + strlen(ag) - 4, " ago") == 0)
         ag[strlen(ag) - 4] = 0; // narrow column: "12m"
@@ -2200,8 +2226,8 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 
   ArchitectureV av;
   av.hdr = liveHeader(data.currentTime);
-  av.netDiffRaw = g_networkDifficulty > 0.0 ? g_networkDifficulty : 1e14;
-  av.netDiff = formatNetworkDifficulty(av.netDiffRaw, true);
+  av.netDiffRaw = g_networkDifficulty; // from the job's nbits; 0 = no job yet
+  av.netDiff = av.netDiffRaw > 0 ? formatNetworkDifficulty(av.netDiffRaw, true) : String("--");
 
   av.hashRate = data.currentHashRate;
   av.bestDiff = data.bestDiff;
@@ -3392,8 +3418,8 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       {
         ArchitectureV a;
         a.hdr = liveHeader(getTime());
-        a.netDiffRaw = g_networkDifficulty > 0.0 ? g_networkDifficulty : 1e14;
-        a.netDiff = formatNetworkDifficulty(a.netDiffRaw, true);
+        a.netDiffRaw = g_networkDifficulty;
+        a.netDiff = a.netDiffRaw > 0 ? formatNetworkDifficulty(a.netDiffRaw, true) : String("--");
         char bestBuf[16];
         suffix_string(best_diff, bestBuf, 16, 0);
         a.bestDiff = String(bestBuf);

@@ -115,7 +115,7 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
   json += ",\"theme\":" + String(Settings.displayTheme);
   json += ",\"ping\":" + String(g_stratumPing);
-  json += ",\"net_diff\":" + (g_networkDifficulty > 0.0 ? String(g_networkDifficulty, 2) : String("100000000000000.00"));
+  json += ",\"net_diff\":" + String(g_networkDifficulty > 0.0 ? g_networkDifficulty : 0.0, 6); // job nbits; 0 = no job yet
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += ",\"screen\":" + String(getDisplayScreen());
   bool isPort = (Settings.screenRotation == 0 || Settings.screenRotation == 2);
@@ -747,14 +747,15 @@ function renderShareLog(d,net){
 const log=Array.isArray(d.share_log)?d.share_log:[],pool=Number(d.pool_diff)||1,now=Number(d.now_utc)||0;
 let best=Number(d.best_diff_raw)||0;log.forEach(s=>{if(s.d>best)best=s.d;});
 const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};if(d.pool){set('dyn-poolcoin','\u00b7 '+(d.coin||'')+' on '+d.pool);set('sl-coin','\u00b7 '+(d.coin||''));}
-set('sl-pool',fmtDiffC(pool));set('sl-net',fmtDiffC(net));
-if(best>0){set('sl-best',fmtDiffC(best));set('sl-best-gap','needs '+fmtDiffC(net/best)+'\u00d7 more \u00b7 '+Math.log10(net/best).toFixed(1)+' orders to go');}
+set('sl-pool',fmtDiffC(pool));set('sl-net',net>0?fmtDiffC(net):'unknown until the pool sends a job');
+if(best>0)set('sl-best',fmtDiffC(best));
+if(best>0&&net>0){set('sl-best',fmtDiffC(best));set('sl-best-gap','needs '+fmtDiffC(net/best)+'\u00d7 more \u00b7 '+Math.log10(net/best).toFixed(1)+' orders to go');}
 const box=document.getElementById('share-log');if(!box)return;
 if(!log.length){box.innerHTML="<div class='muted' style='font-size:13px;padding:6px 0'>No shares recorded yet. One lands about every "+(d.hashrate>0?Math.round(pool*4294967296/(parseFloat(d.hashrate)*1000)/60)+' min':'while')+'.</div>';return;}
-const lo=Math.log10(Math.min(pool,...log.map(s=>s.d>0?s.d:pool))),hi=Math.log10(net),span=Math.max(hi-lo,0.1);
+const lo=Math.log10(Math.min(pool,...log.map(s=>s.d>0?s.d:pool))),hi=net>0?Math.log10(net):lo+6,span=Math.max(hi-lo,0.1);
 let h="<div class='sl-row hdr'><span>Difficulty</span><span>Pool floor \u2192 block</span><span class='sl-r'>Orders to go</span><span class='sl-r'>When</span></div>";
 log.slice().reverse().forEach(s=>{const pct=Math.max(1,Math.min(100,(Math.log10(s.d)-lo)/span*100));const cls='sl-row'+(s.ok?'':' rej')+(s.d>=best*0.9999?' best':'');
-h+="<div class='"+cls+"'><span class='sl-d'>"+fmtDiffC(s.d)+(s.ok?'':' (rejected)')+"</span><span class='sl-bar' title='"+pct.toFixed(1)+"% of the way on a log scale'><i style='width:"+pct.toFixed(1)+"%'></i></span><span class='sl-r'>"+Math.log10(net/s.d).toFixed(1)+"</span><span class='sl-r'>"+fmtAgo(now,s.t)+"</span></div>";});
+h+="<div class='"+cls+"'><span class='sl-d'>"+fmtDiffC(s.d)+(s.ok?'':' (rejected)')+"</span><span class='sl-bar' title='"+pct.toFixed(1)+"% of the way on a log scale'><i style='width:"+pct.toFixed(1)+"%'></i></span><span class='sl-r'>"+(net>0?Math.log10(net/s.d).toFixed(1):'--')+"</span><span class='sl-r'>"+fmtAgo(now,s.t)+"</span></div>";});
 box.innerHTML=h;}
 function updateStats(d){
 const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;
@@ -772,7 +773,7 @@ const eTpshare=document.getElementById('dyn-tpshare');if(eTpshare){if(tPerShareS
 const eDiff=document.getElementById('dyn-diff');if(eDiff)eDiff.textContent=diff>0?diff.toFixed(3):'0.000';
 const rarity=diff*4294967296;
 const eRar=document.getElementById('dyn-rarity');if(eRar)eRar.textContent=diff>0?fmtNum(rarity):'N/A';
-const netDiff=(d.net_diff&&d.net_diff>0)?Number(d.net_diff):100e12;
+const netKnown=Number(d.net_diff)>0,netDiff=netKnown?Number(d.net_diff):1;
 const eNetdiff=document.getElementById('dyn-netdiff');if(eNetdiff)eNetdiff.textContent=fmtNum(netDiff);
 const eNetpct=document.getElementById('dyn-netpct');if(eNetpct){if(diff>0){const pct=(diff/netDiff)*100;eNetpct.textContent=pct.toExponential(2)+'%';}else eNetpct.textContent='0%';}
 const targetHashes=netDiff*4294967296,dayOdds=hpd>0?(targetHashes/hpd):0,yrOdds=dayOdds/365.25;
@@ -789,7 +790,8 @@ const txt=document.getElementById('st-txt');if(txt){
 if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
 else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
 else{txt.className='txt-gray';txt.textContent='Idle';}}
-renderShareLog(d,netDiff);
+if(!netKnown)['dyn-netdiff','dyn-netpct','dyn-dayodds','dyn-yrodds','dyn-avgwait','dyn-netpow','dyn-nethr'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='--';});
+renderShareLog(d,netKnown?netDiff:0);
 cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();cydSyncInitialTab();}cydRender();}
 let simIsHist=true,simN=856192320,simAutoTimer=null;
 function toHex32LE(n){
