@@ -442,15 +442,15 @@ static String commas(const String &s)
 
 static String fmtPrice(const String &s)
 {
-  // btcPrice is "<ascii prefix><digits>"; swap the prefix for the real symbol
-  // (the embedded Pulse font carries the glyphs for all of them)
+  // btcPrice is "<ascii prefix><digits>". ASCII prefix only: this font has
+  // no glyphs for the pound/euro/yen signs (or a middle dot) and draws boxes.
   int i = 0;
   while (i < (int)s.length() && !isdigit((unsigned char)s[i]))
     i++;
   String digits = s.substring(i);
   if (digits.toInt() <= 0)
     return "--";
-  return String(currencyFor(Settings.Currency).symbol) + commas(digits);
+  return String(currencyFor(Settings.Currency).prefix) + commas(digits);
 }
 
 static String btcPairLabel()
@@ -722,7 +722,7 @@ static void drawHeader(const HdrV &h)
     }
   }
 
-  // Active coin + pool between the badge and the clock: "EMB · Shears",
+  // Active coin + pool between the badge and the clock: "EMB - Shears" (ASCII only: the TFT font has no middle dot),
   // or just the ticker when that doesn't fit.
   {
     char key[64], shortName[24], lab[40];
@@ -730,7 +730,7 @@ static void drawHeader(const HdrV &h)
     getActivePool(key, sizeof(key), &coin);
     poolShortName(key, shortName, sizeof(shortName));
     const int cx0 = bx + wBadge + 4, cw = tx - cx0 - 4, ch = 20;
-    snprintf(lab, sizeof(lab), "%s \xC2\xB7 %s", coin, shortName);
+    snprintf(lab, sizeof(lab), "%s - %s", coin, shortName);
     if (textW(lab, 12) > cw - 4)
       snprintf(lab, sizeof(lab), "%s", coin);
     String kCoin = String("hcoin|") + lab + "|" + (P ? "P" : "L");
