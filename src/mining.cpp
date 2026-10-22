@@ -2631,6 +2631,68 @@ void resetSessionStats() {
     g_blockBestDiff = 0.0;
 }
 
+// Plain portable SHA-256 (no hardware engine, no early exit) for the
+// once-a-second display sample in runMonitor(). Not on any mining path.
+static const uint32_t kSwShaK[64] = {
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2};
+
+static inline uint32_t swRotr(uint32_t x, int n) { return (x >> n) | (x << (32 - n)); }
+
+static void swSha256Block(uint32_t st[8], const uint8_t blk[64])
+{
+  uint32_t w[64];
+  for (int i = 0; i < 16; i++)
+    w[i] = ((uint32_t)blk[i * 4] << 24) | ((uint32_t)blk[i * 4 + 1] << 16) | ((uint32_t)blk[i * 4 + 2] << 8) | blk[i * 4 + 3];
+  for (int i = 16; i < 64; i++)
+  {
+    uint32_t s0 = swRotr(w[i - 15], 7) ^ swRotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
+    uint32_t s1 = swRotr(w[i - 2], 17) ^ swRotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
+    w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+  }
+  uint32_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  for (int i = 0; i < 64; i++)
+  {
+    uint32_t t1 = h + (swRotr(e, 6) ^ swRotr(e, 11) ^ swRotr(e, 25)) + ((e & f) ^ (~e & g)) + kSwShaK[i] + w[i];
+    uint32_t t2 = (swRotr(a, 2) ^ swRotr(a, 13) ^ swRotr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+
+// SHA-256 of a message of len < 120 bytes (fits in two blocks).
+static void swSha256(const uint8_t *msg, size_t len, uint8_t out[32])
+{
+  uint32_t st[8] = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
+  uint8_t buf[128] = {0};
+  memcpy(buf, msg, len);
+  buf[len] = 0x80;
+  size_t total = (len + 9 <= 64) ? 64 : 128;
+  uint64_t bits = (uint64_t)len * 8;
+  for (int i = 0; i < 8; i++)
+    buf[total - 1 - i] = (uint8_t)(bits >> (8 * i));
+  for (size_t off = 0; off < total; off += 64)
+    swSha256Block(st, buf + off);
+  for (int i = 0; i < 8; i++)
+  {
+    out[i * 4] = (uint8_t)(st[i] >> 24); out[i * 4 + 1] = (uint8_t)(st[i] >> 16);
+    out[i * 4 + 2] = (uint8_t)(st[i] >> 8); out[i * 4 + 3] = (uint8_t)st[i];
+  }
+}
+
+static void swSha256d80(const uint8_t hdr[80], uint8_t out[32])
+{
+  uint8_t first[32];
+  swSha256(hdr, 80, first);
+  swSha256(first, 32, out);
+}
+
 void runMonitor(void *name)
 {
 
@@ -2723,12 +2785,12 @@ void runMonitor(void *name)
         memcpy(sw_hdr, mMiner.bytearray_blockheader, 80);
         uint32_t r_nonce = (uint32_t)rand();
         ((uint32_t *)(sw_hdr + 76))[0] = r_nonce;
-        uint32_t sw_mids[8];
-        uint32_t sw_bake[16];
-        nerd_mids(sw_mids, sw_hdr);
-        nerd_sha256_bake(sw_mids, sw_hdr + 64, sw_bake);
+        // nerd_sha256d_baked() bails out early unless the top 16 bits are
+        // zero (1 in 65536), leaving the digest unwritten -- so this sample
+        // was garbage and hash_samples stayed empty. Use a full software
+        // double SHA-256 for this one display hash.
         uint8_t s_hash[32];
-        nerd_sha256d_baked(sw_mids, sw_hdr + 64, sw_bake, s_hash);
+        swSha256d80(sw_hdr, s_hash);
         hashSamplePushDigest(s_hash);
       }
 
