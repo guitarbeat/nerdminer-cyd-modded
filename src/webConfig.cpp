@@ -295,6 +295,10 @@ static void handleRecalibrateTouch()
 #if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
 String cydOnboardingJson();
 void cydOnboardingSkip();
+#ifdef CYD_TOUCH_SHARED_SPI
+String cydTouchDiagJson();
+static void handleTouchDiag() { webCfgServer.send(200, "application/json", cydTouchDiagJson()); }
+#endif
 static void handleOnboarding() { webCfgServer.send(200, "application/json", cydOnboardingJson()); }
 static void handleOnboardingSkip()
 {
@@ -1838,6 +1842,9 @@ void setup_webConfig(void)
 #if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
   webCfgServer.on("/api/onboarding", HTTP_GET, handleOnboarding);
   webCfgServer.on("/api/onboarding/skip", HTTP_POST, handleOnboardingSkip);
+#ifdef CYD_TOUCH_SHARED_SPI
+  webCfgServer.on("/api/touchdiag", HTTP_GET, handleTouchDiag);
+#endif
 #endif
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);

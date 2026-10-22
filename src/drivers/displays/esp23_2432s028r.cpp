@@ -2792,6 +2792,84 @@ static volatile int pendingTouch = TA_NONE;
 
 // Ambient light sensor (LDR on GPIO 34, ADC1) auto-dimming
 #define PIN_LDR 34
+#ifdef CYD_TOUCH_SHARED_SPI
+// ------------------------------------------------- shared-bus touch health --
+// The 2.4" board's XPT2046 hangs off TFT_eSPI's SPI peripheral, so anything
+// else that begin()s that peripheral steals its MISO input: SDCard used the
+// global SPI object (same VSPI unit, MISO 19) and every touch read then came
+// back as zeros. SD now has its own unit (SD_ID=HSPI); the touch task also
+// re-routes MISO back to GPIO12 once setup() is done, as a guard.
+// GET /api/touchdiag reports what the controller actually returns.
+struct TouchDiag
+{
+  uint16_t xpt[4] = {};   // last z1, z2, x, y (12 bit)
+  uint16_t temp = 0;      // TEMP0: answers whether or not the panel is pressed
+  uint32_t reads = 0, nonZero = 0, irq36Low = 0, samples = 0;
+};
+static TouchDiag tdiag;
+
+static uint16_t xptCmd(SPIClass &spi, uint8_t cmd)
+{
+  spi.transfer(cmd);
+  return (spi.transfer16(0x00) >> 3) & 0x0fff;
+}
+
+static void touchDiagRead()
+{
+  static const uint8_t cmds[4] = {0xB1, 0xC1, 0xD1, 0x91}; // z1 z2 x y
+  SPIClass &spi = TFT_eSPI::getSPIinstance();
+  uint16_t v[4];
+  spi.beginTransaction(SPISettings(SPI_TOUCH_FREQUENCY, MSBFIRST, SPI_MODE0));
+  digitalWrite(TFT_CS, HIGH);
+  digitalWrite(ETOUCH_CS, LOW);
+  for (int i = 0; i < 4; i++)
+    v[i] = xptCmd(spi, cmds[i]);
+  xptCmd(spi, 0x87); // TEMP0, reference on (first conversion settles it)
+  tdiag.temp = xptCmd(spi, 0x87);
+  xptCmd(spi, 0x90); // back to power-down with PENIRQ enabled
+  digitalWrite(ETOUCH_CS, HIGH);
+  spi.endTransaction();
+  memcpy(tdiag.xpt, v, sizeof(v));
+  tdiag.reads++;
+  if (v[0] | v[1] | v[2] | v[3])
+    tdiag.nonZero++;
+}
+
+static void touchDiagTick()
+{
+  static unsigned long last = 0;
+  static bool rerouted = false;
+  tdiag.samples++;
+  if (digitalRead(TOUCH_IRQ) == LOW)
+    tdiag.irq36Low++;
+  if (!rerouted && millis() > 8000)
+  {
+    // setup() has finished with the SD card by now
+    rerouted = true;
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    spiAttachMISO(TFT_eSPI::getSPIinstance().bus(), TFT_MISO);
+  }
+  if (millis() - last > 2000)
+  {
+    last = millis();
+    touchDiagRead();
+  }
+}
+
+String cydTouchDiagJson()
+{
+  char b[260];
+  snprintf(b, sizeof(b),
+           "{\"bus\":\"shared 14/13/12 cs%d\",\"temp\":%u,\"xpt\":[%u,%u,%u,%u],\"reads\":%lu,\"nonZero\":%lu,"
+           "\"irqLowSamples\":%lu,\"samples\":%lu,\"irq\":%d}",
+           ETOUCH_CS, tdiag.temp, tdiag.xpt[0], tdiag.xpt[1], tdiag.xpt[2], tdiag.xpt[3],
+           (unsigned long)tdiag.reads, (unsigned long)tdiag.nonZero, (unsigned long)tdiag.irq36Low,
+           (unsigned long)tdiag.samples, digitalRead(TOUCH_IRQ));
+  return String(b);
+}
+
+#endif
+
 #define LDR_MIN_DUTY 15      // backlight floor in a dark room
 #define LDR_RAW_DARK 3800    // ADC reading treated as "dark"
 #define LDR_RAW_BRIGHT 500   // ADC reading treated as "bright"
@@ -2803,8 +2881,14 @@ static void touchTask(void *)
   bool wasDown = false;
   int downCount = 0;
   pinMode(PIN_LDR, INPUT); // CYD LDR photoresistor
+#ifdef CYD_TOUCH_SHARED_SPI
+  pinMode(TOUCH_IRQ, INPUT);
+#endif
   for (;;)
   {
+#ifdef CYD_TOUCH_SHARED_SPI
+    touchDiagTick();
+#endif
     if (g_onb != OB_OFF)
     {
       onboardingTick();
