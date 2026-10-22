@@ -310,6 +310,54 @@ volatile uint32_t g_shareFoundEvents = 0; // see mining.h
 volatile uint32_t g_blockFoundEvents = 0;
 static volatile uint32_t s_sharesRejected = 0;
 static volatile double s_poolDifficulty = DEFAULT_DIFFICULTY;
+
+// ---- Share history (see mining.h) -----------------------------------------
+static ShareRec s_shareHist[SHARE_HIST_N];
+static uint8_t s_shareHead = 0, s_shareCount = 0; // next write slot, entries used
+static volatile uint32_t s_shareSeq = 0;
+static portMUX_TYPE s_shareMux = portMUX_INITIALIZER_UNLOCKED;
+static void saveShareHistory(void); // NVS, below
+static void loadShareHistory(void);
+
+static void recordShare(double diff, bool accepted)
+{
+  ShareRec r;
+  memset(&r, 0, sizeof(r));
+  r.diff = diff;
+  time_t utc = 0;
+  r.utc = getUtcTime(utc, false) && utc > 1600000000 ? (uint32_t)utc : 0;
+  r.accepted = accepted ? 1 : 0;
+  portENTER_CRITICAL(&s_shareMux);
+  s_shareHist[s_shareHead] = r;
+  s_shareHead = (uint8_t)((s_shareHead + 1) % SHARE_HIST_N);
+  if (s_shareCount < SHARE_HIST_N)
+    s_shareCount++;
+  s_shareSeq++;
+  portEXIT_CRITICAL(&s_shareMux);
+  saveShareHistory();
+}
+
+int getShareHistory(ShareRec *out, int max)
+{
+  portENTER_CRITICAL(&s_shareMux);
+  int n = s_shareCount < max ? s_shareCount : max;
+  for (int i = 0; i < n; i++)
+    out[i] = s_shareHist[(s_shareHead + SHARE_HIST_N - n + i) % SHARE_HIST_N];
+  portEXIT_CRITICAL(&s_shareMux);
+  return n;
+}
+
+uint32_t getShareHistorySeq(void) { return s_shareSeq; }
+double getPoolDifficulty(void) { return s_poolDifficulty; }
+
+void clearShareHistory(void)
+{
+  portENTER_CRITICAL(&s_shareMux);
+  s_shareHead = s_shareCount = 0;
+  s_shareSeq++;
+  portEXIT_CRITICAL(&s_shareMux);
+  saveShareHistory();
+}
 // ...and the kH counter, sampled once a second by the monitor loop.
 #define STATUS_RATE_SAMPLES 11 // 10 s window
 static uint32_t s_rateKh[STATUS_RATE_SAMPLES];
@@ -1036,6 +1084,7 @@ void runStratumWorker(void *name) {
                                             g_stratumPing = (g_stratumPing == 0) ? rtt : ((g_stratumPing * 3 + rtt) / 4);
                                           }
                                           updateBestDiff(itt->second->diff);
+                                          recordShare(itt->second->diff, accepted);
                                           // 32-bit shares: counted as accepted only when the pool
                                           // took them (stock counted refused ones as well).
                                           if (itt->second->is32bit && !accepted)
@@ -1071,6 +1120,7 @@ void runStratumWorker(void *name) {
                                           }
                                           if (itt->second->is32bit)
                                             shares32Rejected++;
+                                          recordShare(itt->second->diff, false);
                                           Serial.printf("Refuse submition %d\n", id);
                                           s_submition_map.erase(itt);
                                         }
@@ -2582,6 +2632,65 @@ void restoreStat() {
     Serial.printf("[MONITOR] No saved stats, starting from zero\n");
   }
   s_statsLoaded = true;
+  loadShareHistory();
+}
+
+// Share history blob ("shist" in the stats namespace). Written when a share
+// lands, at most once a minute (a pool with a tiny difficulty can send
+// several shares a second), and with every periodic stats save.
+#define SHIST_MAGIC 0x31485348UL // "HSH1"
+struct ShareHistBlob {
+  uint32_t magic;
+  uint32_t count;
+  ShareRec recs[SHARE_HIST_N]; // oldest..newest
+};
+static volatile bool s_shareDirty = false;
+static uint32_t s_shareSavedMs = 0;
+static bool s_shareSaveEver = false;
+
+static void writeShareHistory(void)
+{
+  if (!Settings.saveStats || !s_statsLoaded)
+    return;
+  ShareHistBlob *b = new ShareHistBlob();
+  if (!b)
+    return;
+  b->magic = SHIST_MAGIC;
+  b->count = (uint32_t)getShareHistory(b->recs, SHARE_HIST_N);
+  s_shareDirty = false;
+  s_shareSavedMs = millis();
+  s_shareSaveEver = true;
+  if (nvs_set_blob(stat_handle, "shist", b, sizeof(*b)) != ESP_OK || nvs_commit(stat_handle) != ESP_OK)
+    Serial.printf("[MONITOR] Share history save failed\n");
+  delete b;
+}
+
+static void saveShareHistory(void)
+{
+  s_shareDirty = true;
+  if (!s_shareSaveEver || millis() - s_shareSavedMs >= 60000UL)
+    writeShareHistory();
+}
+
+static void loadShareHistory(void)
+{
+  ShareHistBlob *b = new ShareHistBlob();
+  if (!b)
+    return;
+  size_t size = sizeof(*b);
+  if (nvs_get_blob(stat_handle, "shist", b, &size) == ESP_OK && size == sizeof(*b) &&
+      b->magic == SHIST_MAGIC && b->count <= SHARE_HIST_N)
+  {
+    portENTER_CRITICAL(&s_shareMux);
+    for (uint32_t i = 0; i < b->count; i++)
+      s_shareHist[i] = b->recs[i];
+    s_shareCount = (uint8_t)b->count;
+    s_shareHead = (uint8_t)(b->count % SHARE_HIST_N);
+    s_shareSeq++;
+    portEXIT_CRITICAL(&s_shareMux);
+    Serial.printf("[MONITOR] Share history restored (%u shares)\n", (unsigned)b->count);
+  }
+  delete b;
 }
 
 void saveStat() {
@@ -2606,6 +2715,8 @@ void saveStat() {
   if (nvs_set_blob(stat_handle, slot, &r, sizeof(r)) == ESP_OK && nvs_commit(stat_handle) == ESP_OK) {
     s_statsSeq = r.seq; // the next save goes to the other slot
     Serial.printf("[MONITOR] Stats saved (slot %s, #%u)\n", slot + 4, (unsigned)r.seq);
+    if (s_shareDirty)
+      writeShareHistory();
   } else {
     Serial.printf("[MONITOR] Stats save failed (slot %s)\n", slot + 4);
   }
@@ -2616,6 +2727,7 @@ void resetStat() {
     templates = hashes = Mhashes = totalKHashes = elapsedKHs = upTime = shares = valids = 0;
     shares32Rejected = 0;
     best_diff = 0.0;
+    clearShareHistory();
     g_currentBlockHashes = g_lastBlockHashes = g_lastBlockDurationSec = 0;
     g_blockBestDiff = 0.0;
     if (stat_handle) s_statsLoaded = true; // zeros are what we want saved here
@@ -2629,6 +2741,7 @@ void resetSessionStats() {
     best_diff = 0.0;
     g_currentBlockHashes = 0;
     g_blockBestDiff = 0.0;
+    clearShareHistory();
 }
 
 // Plain portable SHA-256 (no hardware engine, no early exit) for the

@@ -219,6 +219,13 @@ enum WidgetId
   W_CHART,
   W_PROTO_PLOT,
   W_PROTO_FOOT,
+  W_ARCH_TOP,
+  W_ARCH_ROW0, // up to 6 list rows
+  W_ARCH_ROW1,
+  W_ARCH_ROW2,
+  W_ARCH_ROW3,
+  W_ARCH_ROW4,
+  W_ARCH_ROW5,
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -1395,240 +1402,337 @@ static void paintClock(const ClockV &c)
   }
 }
 
-// =================================== PROTOCOL · live difficulty scatter ==
-// Y = log2(achieved difficulty) — higher = rarer/better. X = recent samples
-// (right = newest). Display-only: miner pushes g_hashSamples at ~1/16384;
-// UI redraw is 5–10 Hz and never touches g_hwShaMutex / the SHA engine.
+// ============================== ARCHITECTURE · how close each share got ==
+// Every share this miner sent is plotted at the difficulty its hash reached,
+// on a log scale from the pool difficulty (the floor a share must clear) up
+// to the network difficulty (a block). Shares prove work; on a solo pool
+// only a share that reaches the top line (a block) pays anything.
 
 struct ArchitectureV
 {
   HdrV hdr;
-  String netDiff;   // e.g. "133T"
+  String netDiff;   // e.g. "140.6T"
   String hashRate;  // KH/s text
-  String bestDiff;  // session best (suffix string)
-  double netDiffRaw;
-  double bestDiffRaw;
+  String bestDiff;  // best hash ever (suffix string)
+  double netDiffRaw = 0;
+  double bestDiffRaw = 0;
+  double poolDiff = 1;
+  uint32_t nowUtc = 0;
+  uint32_t seq = 0;
+  int nShares = 0;
+  ShareRec shares[SHARE_HIST_N]; // oldest..newest
   StripV strip;     // unused (kept so call sites compile)
 };
 
-static uint16_t protoLog2Q8FromDiff(double d)
+static void archFillShares(ArchitectureV &av)
 {
-  return hashLog2Q8FromDifficulty(d);
+  av.nShares = getShareHistory(av.shares, SHARE_HIST_N);
+  av.seq = getShareHistorySeq();
+  av.poolDiff = getPoolDifficulty();
+  time_t u = 0;
+  av.nowUtc = (getUtcTime(u, false) && u > 1600000000) ? (uint32_t)u : 0;
 }
 
-static void drawProtoX(TFT_eSPI &d, int cx, int cy, uint16_t col)
+// Compact difficulty: 0.00015, 0.84, 3.21, 31.1, 412, 1.8K, 140.6T
+static void fmtDiff(double v, char *b, size_t n)
 {
-  d.drawLine(cx - 2, cy - 2, cx + 2, cy + 2, col);
-  d.drawLine(cx - 2, cy + 2, cx + 2, cy - 2, col);
+  static const char *suf[] = {"", "K", "M", "G", "T", "P", "E"};
+  if (!(v > 0)) { snprintf(b, n, "0"); return; }
+  if (v < 1) { snprintf(b, n, "%.2g", v); return; }
+  int i = 0;
+  while (v >= 1000.0 && i < 6) { v /= 1000.0; i++; }
+  if (i == 0)
+    snprintf(b, n, v >= 100 ? "%.0f" : "%.3g", v);
+  else
+    snprintf(b, n, v >= 100 ? "%.0f%s" : "%.1f%s", v, suf[i]);
+}
+
+static void fmtAge(uint32_t now, uint32_t t, char *b, size_t n)
+{
+  if (!now || !t || t > now + 60) { snprintf(b, n, "--"); return; }
+  uint32_t s = now > t ? now - t : 0;
+  if (s < 60) snprintf(b, n, "now");
+  else if (s < 3600) snprintf(b, n, "%um ago", (unsigned)(s / 60));
+  else if (s < 86400) snprintf(b, n, "%uh ago", (unsigned)(s / 3600));
+  else snprintf(b, n, "%ud ago", (unsigned)(s / 86400));
+}
+
+// Geometry shared by chrome and paint.
+struct ArchGeo
+{
+  bool P;
+  int topX, topY, topW, topH;
+  int plotX, plotY, plotW, plotH;
+  int listX, listY, listW, listH, rowH, rows;
+  int footX, footY, footW, footH;
+};
+
+static ArchGeo archGeo()
+{
+  ArchGeo g;
+  g.P = isPortrait();
+  if (g.P)
+  {
+    g.topX = 6; g.topY = 30; g.topW = 228; g.topH = 50;
+    g.plotX = 6; g.plotY = 84; g.plotW = 228; g.plotH = 124;
+    g.listX = 6; g.listY = 212; g.listW = 228; g.rowH = 16; g.rows = 4; g.listH = 18 + g.rows * g.rowH + 2;
+    g.footX = 6; g.footY = 298; g.footW = 228; g.footH = 20;
+  }
+  else
+  {
+    g.topX = 8; g.topY = 30; g.topW = 304; g.topH = 42;
+    g.plotX = 8; g.plotY = 76; g.plotW = 200; g.plotH = 132;
+    g.listX = 212; g.listY = 76; g.listW = 100; g.rowH = 18; g.rows = 6; g.listH = 132;
+    g.footX = 8; g.footY = 212; g.footW = 304; g.footH = 24;
+  }
+  return g;
 }
 
 static void chromeArchitecture(TFT_eSPI &d)
 {
-  // Static chrome only: plot panel frame + footer band. Live ink is paintArchitecture.
-  const bool P = isPortrait();
-  const int scrW = P ? 240 : 320;
-  const int scrH = P ? 320 : 240;
-  const int plotX = P ? 6 : 8;
-  const int plotY = 28;
-  const int plotW = scrW - (P ? 12 : 16);
-  const int footH = P ? 52 : 44;
-  const int footY = scrH - footH - 4;
-
-  panel(d, plotX, plotY, plotW, footY - plotY - 4, 6, C_PANEL, C_EDGE, C_BG);
-  panel(d, plotX, footY, plotW, footH, 6, C_PANEL, C_EDGE, C_BG);
-}
-
-// Sample → difficulty: diff = truediffone / hash ≈ 2^224 / hash, so
-// log2(diff) = 224 - log2(hash). Samples store log2(hash) in Q8; plot
-// log2(diff) in signed Q8 (higher = rarer). Pure display math — no mining.
-static inline int32_t protoDiffQ8FromHashQ8(uint16_t hashLog2q8)
-{
-  return (int32_t)(224 << 8) - (int32_t)hashLog2q8;
-}
-
-// Y window in log2(diff): bottom ≈ 2^-32 (typical random hash), top =
-// network target + 4 bits headroom. Linear in log2 → compressed rarity.
-static int protoYDiff(int32_t dq8, int32_t topQ8, int32_t botQ8, int plotH)
-{
-  int32_t span = topQ8 - botQ8;
-  if (span <= 0) return plotH / 2;
-  int32_t v = topQ8 - dq8;
-  if (v < 0) v = 0;
-  if (v > span) v = span;
-  return 2 + (int)((v * (plotH - 5)) / span);
-}
-
-static void paintProtocolPlot(const ArchitectureV &av)
-{
-  const bool P = isPortrait();
-  const int scrW = P ? 240 : 320;
-  const int scrH = P ? 320 : 240;
-  const int plotX = P ? 6 : 8;
-  const int plotY = 28;
-  const int plotW = scrW - (P ? 12 : 16);
-  const int footH = P ? 52 : 44;
-  const int footY = scrH - footH - 4;
-  const int plotH = footY - plotY - 4;
-
-  // Snapshot ring (volatile reads; no mutex).
-  uint8_t count = g_hashSampleCount;
-  uint8_t head = g_hashSampleHead;
-  uint16_t latest = g_hashSampleLatest;
-  uint16_t snap[HASH_SAMPLE_N];
-  if (count > HASH_SAMPLE_N)
-    count = HASH_SAMPLE_N;
-  for (uint8_t i = 0; i < count; i++)
+  // Static chrome: plot frame and the recent-shares list frame + title.
+  const ArchGeo g = archGeo();
+  panel(d, g.plotX, g.plotY, g.plotW, g.plotH, 6, C_PANEL, C_EDGE, C_BG);
+  panel(d, g.listX, g.listY, g.listW, g.listH, 6, C_PANEL, C_EDGE, C_BG);
+  text(d, g.P ? "RECENT SHARES" : "RECENT", g.listX + 8, dY(g.listY + 4), 10, C_DIM, C_PANEL);
+  if (g.P)
   {
-    uint8_t idx = (uint8_t)((head + HASH_SAMPLE_N - count + i) % HASH_SAMPLE_N);
-    snap[i] = g_hashSamples[idx]; // oldest .. newest
+    text(d, "to go", g.listX + 150, dY(g.listY + 4), 10, C_DIM, C_PANEL, Align::TopRight);
+    text(d, "when", g.listX + g.listW - 8, dY(g.listY + 4), 10, C_DIM, C_PANEL, Align::TopRight);
   }
+}
 
-  double net = av.netDiffRaw > 0 ? av.netDiffRaw : 1e14;
-  // hashLog2Q8FromDifficulty returns log2(truediffone/diff); invert to log2(diff).
-  int32_t tgtQ8 = protoDiffQ8FromHashQ8(protoLog2Q8FromDiff(net));
-  int32_t bestQ8 = av.bestDiffRaw > 0
-                       ? protoDiffQ8FromHashQ8(protoLog2Q8FromDiff(av.bestDiffRaw))
-                       : INT32_MIN;
-  // Fixed meaning: top edge = live network difficulty (block threshold),
-  // bottom baseline = diff 1 ("<1": nearly every hash lands here).
-  const int32_t topQ8 = tgtQ8;
-  const int32_t botQ8 = 0;
-  // Highest plotted sample; BEST must never sit below a plotted point.
-  int bestI = -1;
-  int32_t maxSampQ8 = INT32_MIN;
-  for (int i = 0; i < count; i++)
+static void paintArchBody(const ArchitectureV &av)
+{
+  const ArchGeo g = archGeo();
+  const bool P = g.P;
+  const double net = av.netDiffRaw > 0 ? av.netDiffRaw : 1e14;
+  // Closest = best hash this miner has ever found (every hash >= the pool
+  // difficulty is sent as a share, so this is the best share).
+  double best = av.bestDiffRaw;
+  for (int i = 0; i < av.nShares; i++)
+    if (av.shares[i].diff > best) best = av.shares[i].diff;
+  char bestS[16], netS[16], needS[16], ordS[24];
+  fmtDiff(best, bestS, sizeof(bestS));
+  fmtDiff(net, netS, sizeof(netS));
+  const bool haveBest = best > 0;
+  const double ratio = haveBest ? net / best : 0;
+  fmtDiff(ratio, needS, sizeof(needS));
+  snprintf(ordS, sizeof(ordS), "%.1f", haveBest ? log10(ratio) : 0.0);
+
+  // ---- Top: closest share readout -------------------------------------
+  char tkey[96];
+  snprintf(tkey, sizeof(tkey), "%s|%s|%s|%d", bestS, netS, ordS, P ? 1 : 0);
+  if (need(W_ARCH_TOP, tkey) && wBegin(g.topW, g.topH, C_BG))
   {
-    int32_t q = protoDiffQ8FromHashQ8(snap[i]);
-    if (q > maxSampQ8) { maxSampQ8 = q; bestI = i; }
-  }
-  if (maxSampQ8 > bestQ8)
-    bestQ8 = maxSampQ8; // race guard (best_diff also tracks samples)
-  const bool bestIsSample = (bestI >= 0 && maxSampQ8 >= bestQ8 - 8);
-
-  char kbuf[96];
-  snprintf(kbuf, sizeof(kbuf), "%u|%u|%ld|%ld|%s|%d",
-           (unsigned)count, (unsigned)latest, (long)tgtQ8, (long)bestQ8,
-           av.bestDiff.c_str(), P ? 1 : 0);
-  if (need(W_PROTO_PLOT, kbuf))
-  {
-    TFT_eSPI &d = out();
-    panel(d, plotX, plotY, plotW, plotH, 6, C_PANEL, C_EDGE, C_BG);
-
-    const int G = textW("1G", 10) + 8;
-    const int sx0 = plotX + G + 10;
-    const int sxSpan = plotW - (G + 10) - 14;
-    const int yTop = plotY + 16, yBot = plotY + plotH - 16; // leave room for top banner and x caption
-    auto Y = [&](int32_t q) -> int {
-      int32_t span = topQ8 - botQ8;
-      if (span <= 0) return (yTop + yBot) / 2;
-      int32_t v = topQ8 - q;
-      if (v < 0) v = 0;
-      if (v > span) v = span;
-      return yTop + (int)((v * (yBot - yTop)) / span);
-    };
-    // Mid ticks: 1K, 1M, 1G (log2 ≈ 10/20/30 bits) when below the top.
-    static const char *tk[] = {"1K", "1M", "1G"};
-    for (int t = 0; t < 3; t++)
+    panel(wgt, 0, 0, g.topW, g.topH, 6, C_PANEL, C_EDGE, C_BG);
+    char blk[32];
+    snprintf(blk, sizeof(blk), "BLOCK NEEDS %s", netS);
+    text(wgt, "CLOSEST SHARE", 8, 4, 10, C_DIM, C_PANEL);
+    text(wgt, blk, g.topW - 8, 4, 10, C_WARN, C_PANEL, Align::TopRight);
+    text(wgt, haveBest ? bestS : "--", 8, P ? 17 : 15, P ? 26 : 24, C_METER, C_PANEL);
+    char l1[32], l2[32];
+    if (haveBest)
     {
-      int32_t q = (int32_t)((t + 1) * 10) << 8;
-      if (q >= topQ8 - (4 << 8)) break;
-      int ty = Y(q);
-      for (int x = plotX + G + 2; x < plotX + plotW - 4; x += 4)
-        d.drawPixel(x, dY(ty), C_EDGE);
-      text(d, tk[t], plotX + G - 4, dY(ty - 5), 10, C_DIM, C_PANEL, Align::TopRight);
-    }
-    d.drawFastVLine(plotX + G, dY(yTop), yBot - yTop + 1, C_EDGE);
-    // Baseline "<1".
-    d.drawFastHLine(plotX + G, dY(yBot), plotW - G - 4, C_EDGE);
-    text(d, "<1", plotX + G - 4, dY(yBot - 5), 10, C_DIM, C_PANEL, Align::TopRight);
-
-    // Top banner above threshold line
-    text(d, "RARER ^", plotX + G + 6, dY(plotY + 3), 10, C_DIM, C_PANEL);
-    char tlab[48];
-    snprintf(tlab, sizeof(tlab), "TARGET: %s diff", av.netDiff.c_str());
-    text(d, tlab, plotX + plotW - 6, dY(plotY + 3), 10, C_WARN, C_PANEL, Align::TopRight);
-
-    // Top: orange BLOCK THRESHOLD at live network difficulty.
-    d.drawFastHLine(plotX + G, dY(yTop), plotW - G - 4, C_WARN);
-    d.drawFastHLine(plotX + G, dY(yTop + 1), plotW - G - 4, C_WARN);
-    text(d, "TGT", plotX + G - 4, dY(yTop - 5), 10, C_WARN, C_PANEL, Align::TopRight);
-    text(d, "hash < target -> valid block", plotX + plotW - 6, dY(yTop + 4), 9, C_DIM, C_PANEL, Align::TopRight);
-
-    if (count < 1)
-    {
-      text(d, "waiting for samples...", plotX + G + (plotW - G) / 2, dY(plotY + plotH / 2 - 6), 10, C_DIM, C_PANEL, Align::TopCenter);
+      snprintf(l1, sizeof(l1), "needs %s x more", needS);
+      snprintf(l2, sizeof(l2), "%s orders to go", ordS);
     }
     else
     {
-      for (int i = 0; i < count; i++)
-      {
-        if (bestIsSample && i == bestI) continue;
-        int x = sx0 + (i * sxSpan) / (count > 1 ? (count - 1) : 1);
-        drawProtoX(d, x, dY(Y(protoDiffQ8FromHashQ8(snap[i]))), C_BAD);
-      }
-      // Newest: thin outline only.
-      int cx = sx0 + sxSpan;
-      int cy = Y(protoDiffQ8FromHashQ8(snap[count - 1]));
-      d.drawCircle(cx, dY(cy), 5, C_DIM);
+      snprintf(l1, sizeof(l1), "no shares yet");
+      l2[0] = 0;
     }
-    // BEST: the highest plotted point, labeled in place. If it came from a
-    // share (not in the 48-sample ring) it is pinned at the left edge.
-    if (bestQ8 != INT32_MIN)
-    {
-      int bx = bestIsSample ? sx0 + (bestI * sxSpan) / (count > 1 ? (count - 1) : 1) : sx0;
-      int by = Y(bestQ8);
-      d.fillCircle(bx, dY(by), 4, C_METER);
-      d.drawCircle(bx, dY(by), 5, C_WARN);
-      char blab[32];
-      snprintf(blab, sizeof(blab), "* BEST %s", av.bestDiff.c_str());
-      int lw = textW(blab, 10);
-      bool right = bx + 8 + lw < plotX + plotW - 4;
-      int ly = (by > yTop + 30) ? by - 12 : by + 7;
-      text(d, blab, right ? bx + 8 : bx - 8, dY(ly), 10, C_METER, C_PANEL,
-           right ? Align::TopLeft : Align::TopRight);
-    }
-    text(d, "recent samples - newest ->", plotX + G + (plotW - G) / 2, dY(plotY + plotH - 13), 10, C_DIM, C_PANEL, Align::TopCenter);
-    done(W_PROTO_PLOT, kbuf);
+    text(wgt, l1, g.topW - 8, P ? 18 : 16, 12, C_TEXT, C_PANEL, Align::TopRight);
+    if (l2[0])
+      text(wgt, l2, g.topW - 8, P ? 33 : 29, 10, C_DIM, C_PANEL, Align::TopRight);
+    wEnd(g.topX, g.topY);
+    done(W_ARCH_TOP, tkey);
   }
 
-  // Footer: lightning KH/s + attempts/sec + live-sample note
-  char fkey[64];
-  snprintf(fkey, sizeof(fkey), "%s|%d", av.hashRate.c_str(), P ? 1 : 0);
-  if (!need(W_PROTO_FOOT, fkey))
-    return;
-  if (!wBegin(plotW, footH, C_PANEL))
-    return;
-  wgt.drawRoundRect(0, 0, plotW, footH, 6, C_EDGE);
+  // ---- Plot: each share at its difficulty, pool floor .. block line -----
+  // Y axis is log10(difficulty): bottom = pool difficulty, top = network.
+  double floorD = av.poolDiff > 0 ? av.poolDiff : 1;
+  for (int i = 0; i < av.nShares; i++)
+    if (av.shares[i].diff > 0 && av.shares[i].diff < floorD) floorD = av.shares[i].diff;
+  const double lo = floor(log10(floorD));
+  const double hi = log10(net);
+  char pkey[96];
+  snprintf(pkey, sizeof(pkey), "%u|%d|%s|%s|%.4g|%d", (unsigned)av.seq, av.nShares, netS, bestS, av.poolDiff, P ? 1 : 0);
+  if (need(W_PROTO_PLOT, pkey))
+  {
+    TFT_eSPI &d = out();
+    panel(d, g.plotX, g.plotY, g.plotW, g.plotH, 6, C_PANEL, C_EDGE, C_BG);
+    const int G = textW("100T", 9) + 6;          // y-label column
+    const int ax = g.plotX + G + 4;               // axis x
+    const int x0 = ax + 8, x1 = g.plotX + g.plotW - 10;
+    const int yTop = g.plotY + 20, yBot = g.plotY + g.plotH - 18;
+    auto Y = [&](double dv) -> int {
+      double l = dv > 0 ? log10(dv) : lo;
+      if (l < lo) l = lo;
+      if (l > hi) l = hi;
+      return yBot - (int)((l - lo) * (yBot - yTop) / (hi - lo > 0.1 ? hi - lo : 0.1));
+    };
+    // Decade ticks every 3 orders: 1, 1K, 1M, 1G, 1T (and 1m if below 1)
+    static const char *tl[] = {"1n", "1u", "1m", "1", "1K", "1M", "1G", "1T", "1P"};
+    for (int e = -9; e <= 15; e += 3)
+    {
+      if (e < lo + 0.5 || e > hi - 0.6)
+        continue;
+      int ty = Y(pow(10.0, e));
+      for (int x = ax + 2; x < x1 + 4; x += 4)
+        d.drawPixel(x, dY(ty), C_EDGE);
+      text(d, tl[(e + 9) / 3], ax - 4, dY(ty - 5), 9, C_DIM, C_PANEL, Align::TopRight);
+    }
+    d.drawFastVLine(ax, dY(yTop), yBot - yTop + 1, C_EDGE);
+    // Pool floor (a share must reach this)
+    d.drawFastHLine(ax, dY(yBot), x1 + 4 - ax, C_DIM);
+    char pd[12];
+    fmtDiff(pow(10.0, lo), pd, sizeof(pd));
+    text(d, pd, ax - 4, dY(yBot - 5), 9, C_DIM, C_PANEL, Align::TopRight);
+    // Block line (network difficulty)
+    d.drawFastHLine(ax, dY(yTop), x1 + 4 - ax, C_WARN);
+    d.drawFastHLine(ax, dY(yTop + 1), x1 + 4 - ax, C_WARN);
+    char bl[32];
+    snprintf(bl, sizeof(bl), "BLOCK %s", netS);
+    text(d, bl, x1 + 2, dY(g.plotY + 5), 10, C_WARN, C_PANEL, Align::TopRight);
+    {
+      char pl[24], pv[12];
+      fmtDiff(av.poolDiff, pv, sizeof(pv));
+      snprintf(pl, sizeof(pl), "pool asks %s", pv);
+      text(d, pl, g.plotX + 6, dY(g.plotY + 5), 9, C_DIM, C_PANEL);
+    }
+
+    // Best ever, if not among the plotted shares: dashed gold line.
+    double bestHere = 0;
+    int bestI = -1;
+    for (int i = 0; i < av.nShares; i++)
+      if (av.shares[i].diff > bestHere) { bestHere = av.shares[i].diff; bestI = i; }
+    if (best > 0 && best > bestHere * 1.0001)
+    {
+      int by = Y(best);
+      for (int x = ax + 2; x < x1; x += 6)
+        d.drawFastHLine(x, dY(by), 3, C_GOLD);
+      char lb[24];
+      snprintf(lb, sizeof(lb), "best ever %s", bestS);
+      text(d, lb, ax + 4, dY(by - 11), 9, C_GOLD, C_PANEL);
+    }
+    if (av.nShares == 0)
+    {
+      text(d, "no shares yet", (x0 + x1) / 2, dY((yTop + yBot) / 2 - 6), 11, C_DIM, C_PANEL, Align::TopCenter);
+    }
+    else
+    {
+      const int n = av.nShares;
+      const int step = n > 1 ? (x1 - x0) / (n - 1) : 0;
+      const int sx = n > 1 ? x0 : (x0 + x1) / 2;
+      for (int i = 0; i < n; i++)
+      {
+        const ShareRec &r = av.shares[i];
+        int x = sx + i * (n > 1 ? step : 0);
+        int y = Y(r.diff);
+        uint16_t c = r.accepted ? C_METER : C_BAD;
+        d.drawFastVLine(x, dY(y), yBot - y, c);
+        if (i == bestI)
+        {
+          d.fillCircle(x, dY(y), 4, C_GOLD);
+          d.drawCircle(x, dY(y), 6, C_GOLD);
+        }
+        else
+          d.fillCircle(x, dY(y), 2, c);
+      }
+      // Newest share: ring + its value
+      {
+        const ShareRec &r = av.shares[n - 1];
+        int x = sx + (n - 1) * (n > 1 ? step : 0);
+        int y = Y(r.diff);
+        if (bestI != n - 1)
+          d.drawCircle(x, dY(y), 5, C_TEXT);
+        char lv[16];
+        fmtDiff(r.diff, lv, sizeof(lv));
+        int lw = textW(lv, 10);
+        int lx = x - 8 - lw < ax + 4 ? x + 8 : x - 8 - lw;
+        int ly = y - 14 < yTop + 2 ? y + 4 : y - 14;
+        text(d, lv, lx, dY(ly), 10, C_TEXT, C_PANEL);
+      }
+    }
+    text(d, "only a share on the top line pays", (ax + x1) / 2, dY(yBot + 3), 9, C_DIM, C_PANEL, Align::TopCenter);
+    done(W_PROTO_PLOT, pkey);
+  }
+
+  // ---- Recent shares list (newest first) --------------------------------
+  for (int k = 0; k < g.rows; k++)
+  {
+    const int idx = av.nShares - 1 - k;
+    char dv[16] = "", og[16] = "", ag[16] = "";
+    uint16_t dc = C_TEXT;
+    if (idx >= 0)
+    {
+      const ShareRec &r = av.shares[idx];
+      fmtDiff(r.diff, dv, sizeof(dv));
+      if (!r.accepted) { strncat(dv, " rej", sizeof(dv) - strlen(dv) - 1); dc = C_BAD; }
+      else if (r.diff >= best * 0.9999) dc = C_GOLD;
+      snprintf(og, sizeof(og), "%.1f", r.diff > 0 ? log10(net / r.diff) : 0.0);
+      fmtAge(av.nowUtc, r.utc, ag, sizeof(ag));
+      if (!P && strlen(ag) > 4 && strcmp(ag + strlen(ag) - 4, " ago") == 0)
+        ag[strlen(ag) - 4] = 0; // narrow column: "12m"
+    }
+    else if (k == 0)
+      snprintf(dv, sizeof(dv), "none yet");
+    char rkey[64];
+    snprintf(rkey, sizeof(rkey), "%s|%s|%s|%u|%d", dv, og, ag, (unsigned)dc, P ? 1 : 0);
+    if (!need(W_ARCH_ROW0 + k, rkey))
+      continue;
+    const int rw = g.listW - 8;
+    if (!wBegin(rw, g.rowH, C_PANEL))
+      continue;
+    if (idx >= 0 || k == 0)
+    {
+      text(wgt, dv, 4, 2, P ? 12 : 11, idx >= 0 ? dc : C_DIM, C_PANEL);
+      if (P && og[0])
+        text(wgt, og, 146, 2, 12, C_TEXT, C_PANEL, Align::TopRight);
+      if (ag[0])
+        text(wgt, ag, rw - 4, 3, 10, C_DIM, C_PANEL, Align::TopRight);
+    }
+    wEnd(g.listX + 4, g.listY + 18 + k * g.rowH);
+    done(W_ARCH_ROW0 + k, rkey);
+  }
+
+  // ---- Footer: hashrate + how often a share should land ------------------
   float kh = av.hashRate.toFloat();
-  char rateBuf[24];
+  char rateBuf[24], every[40];
   if (kh > 0)
     snprintf(rateBuf, sizeof(rateBuf), "%.0f KH/s", kh);
   else
     snprintf(rateBuf, sizeof(rateBuf), "-- KH/s");
-  int bx = 10, by = P ? 5 : 7;
-  drawBolt(wgt, bx, by, C_METER);
-  text(wgt, rateBuf, 28, P ? 4 : 6, 20, C_METER, C_PANEL);
-  char att[40];
-  if (kh > 0)
-    snprintf(att, sizeof(att), "~ %.0f attempts/sec", kh * 1000.0f);
+  if (kh > 0 && av.poolDiff > 0)
+  {
+    double sec = av.poolDiff * 4294967296.0 / (kh * 1000.0);
+    if (sec >= 5400) snprintf(every, sizeof(every), "~1 share / %.1f h", sec / 3600.0);
+    else if (sec >= 90) snprintf(every, sizeof(every), "~1 share / %.0f min", sec / 60.0);
+    else snprintf(every, sizeof(every), "~1 share / %.0f s", sec);
+  }
   else
-    snprintf(att, sizeof(att), "~ -- attempts/sec");
-  if (P)
-    text(wgt, att, 28, 27, 10, C_TEXT, C_PANEL);
-  else
-    text(wgt, att, plotW - 8, 10, 11, C_TEXT, C_PANEL, Align::TopRight);
-  text(wgt, "LIVE SAMPLE - MINING ACTIVE", 28, P ? 40 : 28, 10, C_DIM, C_PANEL);
-  wEnd(plotX, footY);
+    snprintf(every, sizeof(every), " ");
+  char fkey[80];
+  snprintf(fkey, sizeof(fkey), "%s|%s|%d", rateBuf, every, P ? 1 : 0);
+  if (!need(W_PROTO_FOOT, fkey))
+    return;
+  if (!wBegin(g.footW, g.footH, C_PANEL))
+    return;
+  wgt.drawRoundRect(0, 0, g.footW, g.footH, 6, C_EDGE);
+  const int ty = (g.footH - 14) / 2;
+  text(wgt, rateBuf, 8, ty, 14, C_METER, C_PANEL);
+  text(wgt, every, g.footW - 8, ty + 2, 11, C_TEXT, C_PANEL, Align::TopRight);
+  wEnd(g.footX, g.footY);
   done(W_PROTO_FOOT, fkey);
 }
 
 static void paintArchitecture(const ArchitectureV &av)
 {
-  // Tiny top title: PROTOCOL|HASHING + time (reuse header chrome)
   HdrV h = av.hdr;
   h.screen = SCR_ARCH;
   drawHeader(h);
-  paintProtocolPlot(av);
+  paintArchBody(av);
 }
 
 // ------------------------------------------------------ boot / setup pages --
@@ -2072,7 +2176,8 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
   av.hashRate = data.currentHashRate;
   av.bestDiff = data.bestDiff;
   // best_diff is the real session/persisted best (updated on improve).
-  av.bestDiffRaw = best_diff;
+  av.bestDiffRaw = getBestDiff();
+  archFillShares(av);
   lastArch = av;
   haveArch = true;
   paintArchitecture(av);
@@ -2766,12 +2871,6 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
     gaugeShown += (gaugeTarget - gaugeShown) * 0.3f; // ease toward the measured rate
     gaugeDraw(tft, gaugeShown);
   }
-  // Protocol scatter: 5–10 Hz partial redraw from the sample ring.
-  if (uiScreen == SCR_ARCH && haveArch && (frame & 1) == 0)
-  {
-    // Refresh hashrate text periodically from lastArch; samples read live.
-    paintProtocolPlot(lastArch);
-  }
   g_displayMutex.unlock();
 }
 
@@ -3256,6 +3355,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       if (haveArch)
       {
         lastArch.hdr = liveHeader(getTime());
+        archFillShares(lastArch);
         paintArchitecture(lastArch);
       }
       else
@@ -3269,6 +3369,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
         a.bestDiff = String(bestBuf);
         a.bestDiffRaw = best_diff;
         a.hashRate = getCurrentHashRate(0);
+        archFillShares(a);
         paintArchitecture(a);
       }
     }

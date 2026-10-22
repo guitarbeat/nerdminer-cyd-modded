@@ -84,7 +84,7 @@ String getDate(); // monitor.cpp
 static String buildStatsJson(const mining_data &d)
 {
   String json;
-  json.reserve(1792);
+  json.reserve(3072);
   json += "{";
   json += "\"fw\":\"" FW_GIT "\",";
   json += "\"status\":";
@@ -122,6 +122,24 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"is_portrait\":" + String(isPort ? "true" : "false");
   json += ",\"rotation\":" + String(Settings.screenRotation);
   json += ",\"market\":" + getMarketJson();
+  // Every share the pool answered (newest last): d = difficulty the hash
+  // reached, t = UTC seconds (0 = clock unknown), ok = accepted.
+  json += ",\"pool_diff\":" + String(getPoolDifficulty(), 6);
+  {
+    time_t nowUtc = 0;
+    json += ",\"now_utc\":" + String((unsigned long)(getUtcTime(nowUtc, false) ? nowUtc : 0));
+    static ShareRec hist[SHARE_HIST_N];
+    int n = getShareHistory(hist, SHARE_HIST_N);
+    json += ",\"share_log\":[";
+    char b[64];
+    for (int i = 0; i < n; i++)
+    {
+      snprintf(b, sizeof(b), "%s{\"d\":%.6g,\"t\":%lu,\"ok\":%d}", i ? "," : "", hist[i].diff,
+               (unsigned long)hist[i].utc, hist[i].accepted ? 1 : 0);
+      json += b;
+    }
+    json += "]";
+  }
   json += ",\"hash_samples\":[";
   {
     uint8_t count = g_hashSampleCount;
@@ -439,6 +457,14 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .diag-val{font-size:15px;font-weight:600;color:var(--text);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .diag-item.primary .diag-val{font-size:26px;line-height:1.2;color:var(--amber)}
 .diag-sub{font-size:12px;font-weight:400;color:var(--muted)}
+.share-log{display:flex;flex-direction:column;border-top:1px solid var(--card-border)}
+.sl-row{display:grid;grid-template-columns:5.5em 1fr 6.5em 5em;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--card-border);font-size:12.5px;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
+.sl-row.hdr{font-family:inherit;color:var(--muted);font-size:12px}
+.sl-row.rej{color:var(--red,#f85149)}
+.sl-row.best .sl-d{color:var(--amber)}
+.sl-bar{height:6px;background:var(--card-border);border-radius:3px;overflow:hidden}
+.sl-bar>i{display:block;height:100%;background:var(--amber)}
+.sl-r{text-align:right;color:var(--muted)}
 .btn-reset-stats{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--muted);padding:2px 9px;font-size:12px;font-family:inherit;cursor:pointer}
 .btn-reset-stats:hover{color:var(--text);border-color:var(--dim)}
 .btn-reset-stats:disabled{opacity:.6;cursor:wait}
@@ -695,6 +721,21 @@ function resetSession(){
 if(confirm('Reset this session\u2019s shares and best difficulty? Lifetime hashes stay saved.')){
 const b=document.getElementById('btn-reset-session');if(b){b.disabled=true;b.textContent='Resetting\u2026';}
 postJson('/api/reset-session').then(()=>{showToast('Session stats reset');pollStats();}).catch(()=>{showToast('Could not reset stats',true);}).finally(()=>{if(b){b.disabled=false;b.textContent='Reset';}});}}
+function fmtDiffC(v){if(!(v>0))return'0';if(v<1)return v.toPrecision(2);const u=['','K','M','G','T','P','E'];let i=0;while(v>=1000&&i<6){v/=1000;i++;}return i?(v>=100?v.toFixed(0):v.toFixed(1))+u[i]:(v>=100?v.toFixed(0):String(Number(v.toPrecision(3))));}
+function fmtAgo(now,t){if(!now||!t)return'--';const s=Math.max(0,now-t);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return Math.floor(s/86400)+' d ago';}
+function renderShareLog(d,net){
+const log=Array.isArray(d.share_log)?d.share_log:[],pool=Number(d.pool_diff)||1,now=Number(d.now_utc)||0;
+let best=Number(d.best_diff_raw)||0;log.forEach(s=>{if(s.d>best)best=s.d;});
+const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+set('sl-pool',fmtDiffC(pool));set('sl-net',fmtDiffC(net));
+if(best>0){set('sl-best',fmtDiffC(best));set('sl-best-gap','needs '+fmtDiffC(net/best)+'\u00d7 more \u00b7 '+Math.log10(net/best).toFixed(1)+' orders to go');}
+const box=document.getElementById('share-log');if(!box)return;
+if(!log.length){box.innerHTML="<div class='muted' style='font-size:13px;padding:6px 0'>No shares recorded yet. One lands about every "+(d.hashrate>0?Math.round(pool*4294967296/(parseFloat(d.hashrate)*1000)/60)+' min':'while')+'.</div>';return;}
+const lo=Math.log10(Math.min(pool,...log.map(s=>s.d>0?s.d:pool))),hi=Math.log10(net),span=Math.max(hi-lo,0.1);
+let h="<div class='sl-row hdr'><span>Difficulty</span><span>Pool floor \u2192 block</span><span class='sl-r'>Orders to go</span><span class='sl-r'>When</span></div>";
+log.slice().reverse().forEach(s=>{const pct=Math.max(1,Math.min(100,(Math.log10(s.d)-lo)/span*100));const cls='sl-row'+(s.ok?'':' rej')+(s.d>=best*0.9999?' best':'');
+h+="<div class='"+cls+"'><span class='sl-d'>"+fmtDiffC(s.d)+(s.ok?'':' (rejected)')+"</span><span class='sl-bar' title='"+pct.toFixed(1)+"% of the way on a log scale'><i style='width:"+pct.toFixed(1)+"%'></i></span><span class='sl-r'>"+Math.log10(net/s.d).toFixed(1)+"</span><span class='sl-r'>"+fmtAgo(now,s.t)+"</span></div>";});
+box.innerHTML=h;}
 function updateStats(d){
 const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;
 const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;
@@ -728,6 +769,7 @@ const txt=document.getElementById('st-txt');if(txt){
 if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
 else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
 else{txt.className='txt-gray';txt.textContent='Idle';}}
+renderShareLog(d,netDiff);
 cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();cydSyncInitialTab();}cydRender();}
 let simIsHist=true,simN=856192320,simAutoTimer=null;
 function toHex32LE(n){
@@ -1015,6 +1057,13 @@ static void handleRoot()
             "<div class='tele-row'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of 700 EH/s</span></div>"
             "<div class='tele-row'><span>Power</span><span class='hl-val'>~1.2 W, under 1 kWh/month</span></div>"
             "</div>"
+            "</div>"
+            "<div class='tele-card'>"
+            "<div class='tele-card-hdr'><div class='tele-card-title'>How close each share got</div>"
+            "<span class='muted' style='font-size:12px'>pool asks for <span id='sl-pool'>--</span></span></div>"
+            "<div class='tele-hero-sub'>A share proves work but pays nothing on a solo pool. Only a share that reaches the network difficulty (<span id='sl-net'>--</span>) is a block.</div>"
+            "<div class='tele-row'><span>Closest share</span><span class='hl-val'><span id='sl-best'>--</span> <span class='muted' id='sl-best-gap'></span></span></div>"
+            "<div id='share-log' class='share-log'><div class='muted' style='font-size:13px;padding:6px 0'>No shares yet.</div></div>"
             "</div>"
             "</section>");
 

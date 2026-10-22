@@ -162,6 +162,27 @@ typedef struct{
 
 
 // ---------------------------------------------------------------------------
+// Share history: the difficulty of each share this miner sent to the pool and
+// the pool's answer. A share only has to beat the pool difficulty (proof of
+// work); it is a block only if its difficulty also reaches the network
+// difficulty. Kept in a small ring (saved to NVS) for the Architecture screen
+// and /api/stats. Any task may read it: getShareHistory copies under a lock.
+// ---------------------------------------------------------------------------
+#define SHARE_HIST_N 24
+struct ShareRec
+{
+  double diff;      // difficulty this share's hash achieved
+  uint32_t utc;     // when the pool answered (UTC seconds), 0 = clock not set
+  uint8_t accepted; // 1 = pool accepted, 0 = refused
+  uint8_t pad[3];
+};
+// Copies the history oldest..newest into out (up to max); returns the count.
+int getShareHistory(ShareRec *out, int max);
+uint32_t getShareHistorySeq(void); // bumps on every new share (change detection)
+double getPoolDifficulty(void);    // difficulty the pool asked for (mining.set_difficulty)
+void clearShareHistory(void);
+
+// ---------------------------------------------------------------------------
 // Display-only hash samples for the Protocol scatter plot.
 // Hot path: power-of-two mask (~1/16384). Fixed ring, no heap / mutex / String.
 // ---------------------------------------------------------------------------
