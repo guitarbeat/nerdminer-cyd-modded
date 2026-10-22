@@ -1868,7 +1868,10 @@ static void logShare(const String &shares, const String &khashes, const String &
 void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 {
   if (g_onb)
-    return; // onboarding owns the panel
+  {
+    (void)getMiningData(mElapsed); // keep the per-second hashrate sample ticking
+    return;             // onboarding owns the panel
+  }
   if (restorePage > 0 && restorePage < currentDisplayDriver->num_cyclic_screens)
   {
     // First tick after boot: go straight to the page that was showing before.
@@ -1928,7 +1931,10 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 {
   if (g_onb)
-    return; // onboarding owns the panel
+  {
+    (void)getCoinData(mElapsed); // keep the per-second hashrate sample ticking
+    return;             // onboarding owns the panel
+  }
   std::lock_guard<std::mutex> lock(g_displayMutex);
   coin_data data = getCoinData(mElapsed);
   refreshPool();
@@ -1960,7 +1966,10 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 {
   if (g_onb)
-    return; // onboarding owns the panel
+  {
+    (void)getClockData(mElapsed); // keep the per-second hashrate sample ticking
+    return;             // onboarding owns the panel
+  }
   std::lock_guard<std::mutex> lock(g_displayMutex);
   clock_data data = getClockData(mElapsed);
   uiLive = true;
@@ -2032,7 +2041,10 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 {
   if (g_onb)
-    return; // onboarding owns the panel
+  {
+    (void)getMiningData(mElapsed); // keep the per-second hashrate sample ticking
+    return;             // onboarding owns the panel
+  }
   std::lock_guard<std::mutex> lock(g_displayMutex);
   mining_data data = getMiningData(mElapsed);
   uiLive = true;
@@ -2324,23 +2336,53 @@ static bool obTap(bool down, int32_t x, int32_t y, int32_t &ox, int32_t &oy)
   return ok;
 }
 
-static void obSkipCurrent()
+// BOOT hold: get out of onboarding entirely, keeping what's in use now.
+static void obSkipAll()
 {
-  const int st = g_onb;
-  if (st == OB_TOUCH || st == OB_VERIFY)
+  if (!Settings.touchCalibrated)
   {
     touch.setCalibration(obPrevCal);
-    Settings.touchCalibrated = true; // keep the current/default mapping
-    Serial.println("CYD touch: skipped with BOOT, keeping current mapping");
+    Settings.touchCal[0] = obPrevCal.x0;
+    Settings.touchCal[1] = obPrevCal.x1;
+    Settings.touchCal[2] = obPrevCal.y0;
+    Settings.touchCal[3] = obPrevCal.y1;
+    Settings.touchCal[4] = obPrevCal.rel_rotation;
+    Settings.touchCalibrated = true;
   }
-  else
+  if (!Settings.colorCalibrated)
   {
     Settings.invertColors = invertColors;
     Settings.colorCalibrated = true;
-    Serial.printf("CYD colors: skipped with BOOT, keeping invertColors=%d\n", (int)invertColors);
   }
+  Serial.printf("CYD onboarding: skipped with BOOT, keeping touch {%u,%u,%u,%u,%u} invertColors=%d\n",
+                obPrevCal.x0, obPrevCal.x1, obPrevCal.y0, obPrevCal.y1, obPrevCal.rel_rotation, (int)invertColors);
   obSave();
-  obNext();
+  obFinish();
+}
+
+// Diagnostics + web escape hatch (GET /api/onboarding, POST /api/onboarding/skip)
+static volatile bool obSkipReq = false;
+static uint32_t obPolls = 0, obRawHits = 0, obXyHits = 0, obLastHitMs = 0;
+static TFT_eTouchBase::Measure obLastRaw = {};
+
+String cydOnboardingJson()
+{
+  char b[300];
+  snprintf(b, sizeof(b),
+           "{\"step\":%d,\"target\":%d,\"touchCalibrated\":%s,\"colorCalibrated\":%s,\"invertColors\":%s,"
+           "\"boot\":%d,\"polls\":%lu,\"rawHits\":%lu,\"xyHits\":%lu,\"lastHitAgoMs\":%ld,"
+           "\"lastRaw\":[%u,%u,%u,%u,%u]}",
+           (int)g_onb, obTarget, Settings.touchCalibrated ? "true" : "false", Settings.colorCalibrated ? "true" : "false",
+           Settings.invertColors ? "true" : "false", digitalRead(PIN_BOOT_BTN), (unsigned long)obPolls,
+           (unsigned long)obRawHits, (unsigned long)obXyHits, obLastHitMs ? (long)(millis() - obLastHitMs) : -1L,
+           obLastRaw.x, obLastRaw.y, obLastRaw.z1, obLastRaw.z2, obLastRaw.rz);
+  return String(b);
+}
+
+void cydOnboardingSkip()
+{
+  if (g_onb)
+    obSkipReq = true;
 }
 
 static unsigned long obBootSince = 0;
@@ -2356,7 +2398,7 @@ static void onboardingTick()
     if (!obBootLatched && millis() - obBootSince > 1500)
     {
       obBootLatched = true;
-      obSkipCurrent();
+      obSkipAll();
       return;
     }
   }
@@ -2367,6 +2409,42 @@ static void onboardingTick()
   }
 
   const int st = g_onb;
+  {
+    // diagnostics: raw controller readout every 200 ms, and a heartbeat
+    static unsigned long lastDiag = 0, lastBeat = 0;
+    TFT_eTouchBase::Measure m;
+    const bool d = touch.getRaw(m);
+    int16_t gx = -1, gy = -1;
+    const bool gd = touch.getXY(gx, gy);
+    obPolls++;
+    if (d)
+    {
+      obRawHits++;
+      obLastRaw = m;
+      obLastHitMs = millis();
+    }
+    if (gd)
+      obXyHits++;
+    if ((d || gd) && millis() - lastDiag > 200)
+    {
+      lastDiag = millis();
+      Serial.printf("CYD touch diag: st=%d raw=%d x=%u y=%u z1=%u z2=%u rz=%u xy=%d (%d,%d)\n",
+                    st, (int)d, m.x, m.y, m.z1, m.z2, m.rz, (int)gd, gx, gy);
+    }
+    if (millis() - lastBeat > 3000)
+    {
+      lastBeat = millis();
+      Serial.printf("CYD onboarding: st=%d target=%d boot=%d\n", st, obTarget, digitalRead(PIN_BOOT_BTN));
+    }
+  }
+  if (Serial.peek() == 's' || obSkipReq)
+  {
+    if (!obSkipReq)
+      Serial.read();
+    obSkipReq = false;
+    obSkipAll();
+    return;
+  }
   if (st == OB_TOUCH)
   {
     uint16_t x, y, z1, z2, rz;

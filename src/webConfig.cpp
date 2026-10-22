@@ -292,6 +292,17 @@ static void handleRecalibrateTouch()
   recalibrateAndRestart();
 }
 
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+String cydOnboardingJson();
+void cydOnboardingSkip();
+static void handleOnboarding() { webCfgServer.send(200, "application/json", cydOnboardingJson()); }
+static void handleOnboardingSkip()
+{
+  cydOnboardingSkip();
+  webCfgServer.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+#endif
+
 static void handleGetScreen()
 {
   String json = "{\"screen\":" + String(getDisplayScreen()) + "}";
@@ -1816,6 +1827,10 @@ void setup_webConfig(void)
   webCfgServer.on("/api/invert", HTTP_POST, handleSetInvert);
   webCfgServer.on("/api/recalibrate-colors", HTTP_POST, handleRecalibrateColors);
   webCfgServer.on("/api/recalibrate-touch", HTTP_POST, handleRecalibrateTouch);
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+  webCfgServer.on("/api/onboarding", HTTP_GET, handleOnboarding);
+  webCfgServer.on("/api/onboarding/skip", HTTP_POST, handleOnboardingSkip);
+#endif
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/api/screenshot", HTTP_GET, handleScreenshot);
