@@ -2101,6 +2101,26 @@ static const struct { pl_mine_fn fn; const char *name; } s_pl_loops[] = {
 #define PL_LOOP_PLAIN (PL_LOOP_COUNT - 1)
 static unsigned s_pl_loop = 0;
 
+// Guard against getting stuck on a slow loop. The self-test (and the runtime
+// health check) can fail for a transient reason -- core 0 busy with Wi-Fi /
+// TLS / a web screenshot at the wrong moment -- and that used to cost ~30% of
+// the hashrate for the whole uptime: "polled" runs ~356 cycles/hash (~690
+// KH/s) against ~247 (~980 KH/s) for "fast". So whenever the miner is not on
+// the fast loop, re-run the selection later, backing off 1 -> 2 -> 4 ... 30 min.
+static bool s_pl_fast_ok = true;      // false on chips that must not run the pipelined loops
+static uint32_t s_pl_retry_at = 0;    // millis() of the next re-selection, 0 = none pending
+static uint32_t s_pl_retry_gap = 60000;
+static void pl_schedule_retry()
+{
+  if (!s_pl_fast_ok)
+    return;
+  s_pl_retry_at = millis() + s_pl_retry_gap;
+  if (s_pl_retry_at == 0)
+    s_pl_retry_at = 1;
+  if (s_pl_retry_gap < 30UL * 60UL * 1000UL)
+    s_pl_retry_gap *= 2;
+}
+
 const char *activeHwShaLoopName(void)
 {
   if (s_pl_loop < PL_LOOP_COUNT)
@@ -2154,6 +2174,7 @@ static void pl_select_loop()
   {
     Serial.printf("[MINER] chip revision %u: the pipelined HW SHA loops need revision 3\n", chip_rev);
     n = PL_LOOP_PLAIN;
+    s_pl_fast_ok = false;
   }
   // Best of three: one stray candidate (a misread digest word) must not cost
   // the fast loop for the whole uptime.
@@ -2170,6 +2191,8 @@ static void pl_select_loop()
   esp_sha_unlock_engine(SHA2_256);
   g_hwShaMutex.unlock();
   Serial.printf("[MINER] HW SHA loop: %s\n", s_pl_loops[n].name);
+  if (n != 0)
+    pl_schedule_retry();
 }
 
 // Every candidate is recomputed in software before it is used, which makes
@@ -2189,6 +2212,7 @@ static void pl_health(bool confirmed)
     s_pl_loop++;
     Serial.printf("[MINER] %u of %u HW candidates not confirmed; switching HW SHA loop to: %s\n",
                   unconfirmed, hits, s_pl_loops[s_pl_loop].name);
+    pl_schedule_retry();
   }
   hits = unconfirmed = 0;
 }
@@ -2244,6 +2268,14 @@ void minerWorkerHw(void * task_id)
 
   while (1)
   {
+    #ifdef PIPELINED_ASM_MINING
+    if (s_pl_loop != 0 && s_pl_retry_at != 0 && (int32_t)(millis() - s_pl_retry_at) >= 0)
+    {
+      s_pl_retry_at = 0;
+      Serial.printf("[MINER] on the '%s' HW SHA loop; re-testing the faster ones\n", s_pl_loops[s_pl_loop].name);
+      pl_select_loop();
+    }
+    #endif
     {
       std::lock_guard<std::mutex> lock(s_job_mutex);
       if (result)

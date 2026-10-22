@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "lwip/sockets.h"
 #include "utils.h"
+#include "monitor.h"
 #include "version.h"
 
 
@@ -203,6 +204,7 @@ bool parse_mining_notify(String line, mining_job& mJob)
     mJob.nbits = String((const char*) doc["params"][6]);
     mJob.ntime = String((const char*) doc["params"][7]);
     mJob.clean_jobs = doc["params"][8]; //bool
+    noteJobHeightFromCoinb1(mJob.coinb1.c_str());
 
     #ifdef DEBUG_MINING
     Serial.print("    job_id: "); Serial.println(mJob.job_id);

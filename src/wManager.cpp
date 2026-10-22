@@ -196,6 +196,7 @@ void init_WifiManager()
     //wm.setClass("invert"); // dark theme
 
     // Set config save notify callback
+    wm.setTitle("Aaron Miner");
     wm.setSaveConfigCallback(saveConfigCallback);
     wm.setSaveParamsCallback(saveConfigCallback);
 

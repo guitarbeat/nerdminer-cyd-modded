@@ -137,7 +137,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 }
 .cyd-tabs{
   display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:0;
   margin-top:10px;
   width:100%;
@@ -240,7 +240,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
     <div class='cyd-title-wrap'>
       <div class='cyd-preview-title'>Live screen mirror</div>
       <span id='cyd-device-badge' class='cyd-badge'>
-        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>On device: Mining
+        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>On device: Mine
       </span>
     </div>
     <div class='cyd-hdr-right'>
@@ -262,15 +262,14 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
     <div class='cyd-shot-cap'><span id='cyd-shot-ts'></span></div>
     <div class='cyd-tabs' role='tablist'>
       <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'>
-        <span class='cyd-live-dot' title='On the device now'></span>Mining
+        <span class='cyd-live-dot' title='On the device now'></span>Mine
       </button>
-      <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>Market</button>
-      <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>Clock</button>
-      <button type='button' class='cyd-tab-btn' id='ctab-3' onclick='cydSelectTab(3)'>Architecture</button>
+      <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>Odds</button>
+      <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>World</button>
     </div>
     <div class='cyd-ctrls'>
       <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous screen'>&larr; Prev</button>
-      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Show Mining on device</button>
+      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Show Mine on device</button>
       <button type='button' class='cyd-btn-nav' onclick='cydNextScreen()' title='Next screen'>Next &rarr;</button>
       <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview is portrait; click to rotate'>Rotate preview</button>
     </div>
@@ -288,7 +287,8 @@ let cydTabSynced = false;    // first stats: line the tabs up with the device
 let cydIsLoading = false;
 let cydPendingRefresh = false;
 
-const CYD_SCREEN_NAMES = ['Mining', 'Market', 'Clock', 'Architecture'];
+const CYD_SCREEN_NAMES = ['Mine', 'Odds', 'World'];
+const CYD_SCREEN_COUNT = CYD_SCREEN_NAMES.length;
 
 function cydGetScreenUrl(screenIdx) {
   const s = (typeof screenIdx === 'number') ? screenIdx : cydPreviewScr;
@@ -383,7 +383,7 @@ function cydSnapshot() {
 }
 
 function cydHighlightTab() {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < CYD_SCREEN_COUNT; i++) {
     const el = document.getElementById('ctab-' + i);
     if (el) {
       if (i === cydPreviewScr) el.classList.add('active');
@@ -396,7 +396,7 @@ function cydHighlightTab() {
 
 function cydSelectTab(idx, fetchNow) {
   if (fetchNow === undefined) fetchNow = true;
-  cydPreviewScr = (typeof idx === 'number' && idx >= 0 && idx < 4) ? idx : 0;
+  cydPreviewScr = (typeof idx === 'number' && idx >= 0 && idx < CYD_SCREEN_COUNT) ? idx : 0;
   cydHighlightTab();
   if (fetchNow) cydFetchScreenshot(true);
 }
@@ -411,11 +411,11 @@ function cydSyncInitialTab() {
 }
 
 function cydPrevScreen() {
-  cydSelectTab((cydPreviewScr + 3) % 4);
+  cydSelectTab((cydPreviewScr + CYD_SCREEN_COUNT - 1) % CYD_SCREEN_COUNT);
 }
 
 function cydNextScreen() {
-  cydSelectTab((cydPreviewScr + 1) % 4);
+  cydSelectTab((cydPreviewScr + 1) % CYD_SCREEN_COUNT);
 }
 
 function cydSwitchPhysical() {
@@ -447,7 +447,7 @@ function cydUpdateDevBadge() {
     const cls = pulse ? pulse.className : 'cyd-pulse-dot';
     b.innerHTML = "<span id='cyd-live-pulse' class='" + cls + "'></span>On device: " + label;
   }
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < CYD_SCREEN_COUNT; i++) {
     const el = document.getElementById('ctab-' + i);
     if (el) {
       const dot = el.querySelector('.cyd-live-dot');

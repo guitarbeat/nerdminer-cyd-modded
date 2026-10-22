@@ -186,6 +186,13 @@ bool isTimeSynced(void);
 bool isBlockHeightKnown(void);
 unsigned int getBTCpriceValue(void); // raw price in the selected currency, 0 = unknown
 uint32_t getBlockHeightValue(void);  // last block height fetched, 0 = unknown (any task)
+// Block height read from the pool job's coinbase (BIP34), so the height,
+// halving countdown and "last block" age work without any web API.
+void noteJobHeightFromCoinb1(const char *coinb1);
+// One-line reason the market web fetches have no data ("" when they work).
+const char *getMarketError(void);
+// True when the next Market/Clock refresh will run an HTTPS fetch.
+bool marketFetchSoon(void);
 bool getLocalClock(int &hour, int &minute, int &second, int &day, int &month, int &year); // no NTP call (any task)
 long currentDstOffset(void);         // summer-time offset in force now, seconds (AUTO_DST_EU)
 

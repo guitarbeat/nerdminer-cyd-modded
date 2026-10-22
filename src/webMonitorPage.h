@@ -14,7 +14,7 @@ static const char MONITOR_HTML[] PROGMEM = R"rawliteral(<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12">
-<title>NerdMiner</title>
+<title>Aaron Miner</title>
 <style>
 :root{--bg:#0b0d12;--card:#11151c;--line:#1e2530;--txt:#e6ebf2;--mut:#8a96a6;--acc:#f7931a;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--grid:#1a202a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 @media (prefers-color-scheme:light){:root{--bg:#f6f7f9;--card:#fff;--line:#d9dee5;--txt:#1b1f24;--mut:#5b6573;--grid:#eceff3;--acc:#c66a00}}
@@ -59,7 +59,7 @@ body.stale .card{opacity:.5;transition:opacity .3s}
 <div class="wrap">
 <header>
   <span class="logo">&#8383;</span>
-  <h1>NerdMiner CYD</h1>
+  <h1>Aaron Miner</h1>
   <span id="st" class="pill"><span class="dot"></span><span id="stt">Connecting&hellip;</span></span>
   <span class="sp"></span>
   <a class="btn" href="/">Dashboard</a>
@@ -95,7 +95,7 @@ body.stale .card{opacity:.5;transition:opacity .3s}
   <div class="card"><div class="lbl">Pool</div><div class="val s" id="pool">&ndash;</div><div class="sub" id="pinfo">&ndash;</div></div>
 </div>
 
-<footer><span id="ver">NerdMiner</span> &middot; up <span id="up">&ndash;</span> &middot; free heap <span id="heap">&ndash;</span> &middot; updated <span id="ts">&ndash;</span></footer>
+<footer><span id="ver">Aaron Miner</span> &middot; up <span id="up">&ndash;</span> &middot; free heap <span id="heap">&ndash;</span> &middot; updated <span id="ts">&ndash;</span></footer>
 </div>
 <script>
 (function(){
@@ -127,7 +127,7 @@ function update(j){
   var q=w.rssi>=-55?4:w.rssi>=-65?3:w.rssi>=-75?2:w.rssi<0?1:0,bars=$('sig').children;for(var i=0;i<4;i++)bars[i].className=i<q?'on':'';
   var po=j.pool||{};set('pool',po.address||'–');
   set('pinfo',(po.backup?'backup · ':'')+'port '+(po.port||'–')+' · diff '+(po.difficulty!=null?diff(po.difficulty):'–'));
-  set('ver','NerdMiner '+(j.version||''));set('up',dur(j.uptime_s));set('heap',j.free_heap?Math.round(j.free_heap/1024)+' KB':'–');
+  set('ver','Aaron Miner '+(j.version||''));set('up',dur(j.uptime_s));set('heap',j.free_heap?Math.round(j.free_heap/1024)+' KB':'–');
   set('ts',new Date().toLocaleTimeString('en-GB'));
   live.push(j.hashrate_khs||0);if(live.length>40)live.shift();
 }

@@ -361,7 +361,7 @@ static void handleSetScreen()
   else if (webCfgServer.hasArg("screen"))
     scr = webCfgServer.arg("screen").toInt();
 
-  if (scr < 0 || scr > 3)
+  if (scr < 0 || scr > 2) // Mine, Odds, World
     scr = 0;
 
   setDisplayScreen(scr);
@@ -374,6 +374,12 @@ static void handleScreenshot()
   int screenIdx = -1;
   if (webCfgServer.hasArg("screen"))
     screenIdx = webCfgServer.arg("screen").toInt();
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+  // ?rot=0..3 renders the capture as if in that rotation (panel untouched),
+  // so portrait and landscape layouts can both be checked remotely.
+  extern void cydSetShotRotation(int r);
+  cydSetShotRotation(webCfgServer.hasArg("rot") ? webCfgServer.arg("rot").toInt() : -1);
+#endif
 
   webCfgServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   webCfgServer.sendHeader("Pragma", "no-cache");
@@ -973,14 +979,14 @@ static void handleRoot()
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
             "<meta name='theme-color' content='#0b0d12'>"
-            "<title>NerdMiner</title>"
+            "<title>Aaron Miner</title>"
             "<link rel='stylesheet' href='/dash.css?v=" FW_GIT "'>"
             "<link rel='stylesheet' href='/cyd-twin.css?v=" FW_GIT "'></head><body>"
             "<div class='container'>"
             "<header>"
             "<div class='brand'>"
             "<div class='logo-box' id='site-logo'>&#8383;</div>"
-            "<div><div class='brand-title'>NerdMiner CYD</div><div class='brand-subtitle'>v1.6.3 (" FW_GIT ") &bull; ");
+            "<div><div class='brand-title'>Aaron Miner</div><div class='brand-subtitle'>" CURRENT_VERSION " (" FW_GIT ") &bull; ");
 
   page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>");
   {
@@ -1008,7 +1014,7 @@ static void handleRoot()
 
   page += F("</div></header>"
             "<div class='diag-strip'>"
-            "<div class='diag-item primary'><span class='diag-label'>Hashrate</span><span class='diag-val'><span id='st-top-hr'>");
+            "<div class='diag-item primary'><span class='diag-label'>Speed</span><span class='diag-val'><span id='st-top-hr'>");
   page += d.currentHashRate.length() ? d.currentHashRate : String("--");
   page += F("</span> <span class='diag-sub'>KH/s</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Temp</span><span class='diag-val'><span id='st-temp'>");
@@ -1051,7 +1057,7 @@ static void handleRoot()
             "<div class='overview-grid'>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Hashrate</div>"
+            "<div class='tele-card-title'>Speed <span class='muted' style='font-weight:400'>guesses per second (hashrate)</span></div>"
             "</div>"
             "<div class='tele-hero-val amber'><span id='dyn-hps'>");
   float hr = d.currentHashRate.toFloat();
@@ -1070,14 +1076,14 @@ static void handleRoot()
             "</div>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Shares <span class='muted' id='dyn-poolcoin' style='font-weight:400'></span></div>"
+            "<div class='tele-card-title'>Shares <span class='muted' style='font-weight:400'>proofs of work</span> <span class='muted' id='dyn-poolcoin' style='font-weight:400'></span></div>"
             "<button type='button' class='btn-reset-stats' id='btn-reset-session' onclick='resetSession()' title='Reset session shares and best difficulty'>Reset</button>"
             "</div>"
             "<div class='tele-hero-val'><span id='dyn-shares'>");
   page += (d.completedShares.length() ? d.completedShares : F("0"));
   page += F("</span> <span class='unit'>shares</span></div>"
-            "<div class='tele-hero-sub'>About 1 per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
-            "<div class='tele-row'><span>Best difficulty (session)</span><span class='hl-val'><span id='dyn-diff'>");
+            "<div class='tele-hero-sub' title='Why it matters: shares are easy proofs the pool asks for so it can see you are working. On a solo pool they do not pay.'>About 1 per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
+            "<div class='tele-row' title='Why it matters: difficulty measures how good a guess is. A block needs the network difficulty; this is your best so far.'><span>Closest try (best difficulty, session)</span><span class='hl-val'><span id='dyn-diff'>");
   page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
   page += F("</span></span></div>"
             "<div class='tele-row'><span>Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
@@ -1091,8 +1097,8 @@ static void handleRoot()
             "<div class='tele-row'><span>Best vs. network</span><span class='hl-val'><span id='dyn-netpct'>--</span> <span class='muted'>of <span id='dyn-netdiff'>100T</span></span></span></div>"
             "<div class='tele-row'><span>Daily odds</span><span class='hl-val'><span id='dyn-dayodds'>--</span></span></div>"
             "<div class='tele-row'><span>Yearly odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span></span></div>"
-            "<div class='tele-row'><span>Expected wait</span><span class='hl-val' id='dyn-avgwait'>--</span></div>"
-            "<div class='tele-row'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of ~<span id='dyn-nethr'>--</span></span></div>"
+            "<div class='tele-row' title='Why it matters: mining is a lottery. This is the average time for THIS miner to win one block at the current difficulty.'><span>Expected wait (avg)</span><span class='hl-val' id='dyn-avgwait'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: your slice of all the guessing in the world. Blocks go to whoever guesses right first.'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of ~<span id='dyn-nethr'>--</span></span></div>"
             "<div class='tele-row'><span>Power</span><span class='hl-val'>~1.2 W, under 1 kWh/month</span></div>"
             "</div>"
             "</div>"
@@ -1100,7 +1106,7 @@ static void handleRoot()
             "<div class='tele-card-hdr'><div class='tele-card-title'>How close each share got <span class='muted' id='sl-coin' style='font-weight:400'></span></div>"
             "<span class='muted' style='font-size:12px'>pool asks for <span id='sl-pool'>--</span></span></div>"
             "<div class='tele-hero-sub'>A share proves work but pays nothing on a solo pool. Only a share that reaches the network difficulty (<span id='sl-net'>--</span>) is a block.</div>"
-            "<div class='tele-row'><span>Closest share</span><span class='hl-val'><span id='sl-best'>--</span> <span class='muted' id='sl-best-gap'></span></span></div>"
+            "<div class='tele-row'><span>Closest try</span><span class='hl-val'><span id='sl-best'>--</span> <span class='muted' id='sl-best-gap'></span></span></div>"
             "<div id='share-log' class='share-log'><div class='muted' style='font-size:13px;padding:6px 0'>No shares yet.</div></div>"
             "</div>"
             "</section>");
@@ -1468,6 +1474,40 @@ static void handleRoot()
 
   // Tab 3: Learn
   page += F("<section class='tab-pane' id='pane-learn'>");
+  // Start here: the pictures on the CYD, explained (device screens only have room for a few words)
+  page += F("<section class='settings-sec' id='pane-start'>"
+            "<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Start here: what your CYD is showing</div></div>"
+            "<div class='cfg-card-body edu-body' style='line-height:1.55'>"
+            "<svg viewBox='0 0 520 70' width='100%' style='max-width:520px;display:block;margin:0 auto 10px' role='img' aria-label='Pool sends a job, the CYD guesses, good guesses go back as shares'>"
+            "<g font-family='system-ui,sans-serif' font-size='12' text-anchor='middle'>"
+            "<rect x='4' y='18' width='90' height='34' rx='8' fill='none' stroke='#8a96a8'/><text x='49' y='40' fill='#e6edf3'>Pool</text>"
+            "<rect x='214' y='18' width='90' height='34' rx='8' fill='none' stroke='#f7931a'/><text x='259' y='40' fill='#f7931a'>CYD guesses</text>"
+            "<rect x='424' y='18' width='90' height='34' rx='8' fill='none' stroke='#8a96a8'/><text x='469' y='40' fill='#e6edf3'>Pool</text>"
+            "<path d='M96 35H208' stroke='#8a96a8'/><path d='M208 35l-7-4v8z' fill='#8a96a8'/><text x='152' y='28' fill='#8a96a8'>job (puzzle)</text>"
+            "<path d='M306 35H418' stroke='#8a96a8'/><path d='M418 35l-7-4v8z' fill='#8a96a8'/><text x='362' y='28' fill='#8a96a8'>share (proof)</text>"
+            "</g></svg>"
+            "&bull; <strong>Guesses / sec</strong> (hashrate, KH/s = thousand per second). Each guess runs the block header through SHA-256 and checks if the result is small enough. It is a lottery: every guess is an independent ticket.<br>"
+            "&bull; <strong>Share</strong>: a guess good enough to clear the pool's easy bar. It proves your miner is really working. On a solo pool shares pay nothing.<br>"
+            "&bull; <strong>Closest try</strong> (best difficulty): your single best guess so far. Higher is closer to a block.<br>"
+            "&bull; <strong>Block</strong> = the jackpot. A guess must reach the network difficulty (about 140 trillion for Bitcoin today). Your CYD finds a share roughly every hour, a block maybe once in millions of years. Small coins on ESP32 pools have far lower difficulty.<br>"
+            "<svg viewBox='0 0 520 120' width='100%' style='max-width:520px;display:block;margin:10px auto' role='img' aria-label='Ladder: each rung is ten times harder; your closest try lit near the bottom, the block trophy at the top'>"
+            "<g font-family='system-ui,sans-serif' font-size='11'>"
+            "<line x1='30' y1='16' x2='30' y2='112' stroke='#3a4658'/><line x1='54' y1='16' x2='54' y2='112' stroke='#3a4658'/>"
+            "<g stroke-width='3'><line x1='31' y1='110' x2='53' y2='110' stroke='#f7931a'/><line x1='31' y1='103' x2='53' y2='103' stroke='#f7931a'/><line x1='31' y1='96' x2='53' y2='96' stroke='#3a4658'/><line x1='31' y1='89' x2='53' y2='89' stroke='#3a4658'/><line x1='31' y1='82' x2='53' y2='82' stroke='#3a4658'/><line x1='31' y1='75' x2='53' y2='75' stroke='#3a4658'/><line x1='31' y1='68' x2='53' y2='68' stroke='#3a4658'/><line x1='31' y1='61' x2='53' y2='61' stroke='#3a4658'/><line x1='31' y1='54' x2='53' y2='54' stroke='#3a4658'/><line x1='31' y1='47' x2='53' y2='47' stroke='#3a4658'/><line x1='31' y1='40' x2='53' y2='40' stroke='#3a4658'/><line x1='31' y1='33' x2='53' y2='33' stroke='#3a4658'/><line x1='31' y1='26' x2='53' y2='26' stroke='#3a4658'/><line x1='31' y1='18' x2='53' y2='18' stroke='#f59e0b'/></g>"
+            "<text x='66' y='22' fill='#f59e0b'>block (jackpot)</text><text x='66' y='113' fill='#f7931a'>your closest try</text>"
+            "<text x='200' y='50' fill='#e6edf3'>The ODDS screen is a ladder.</text>"
+            "<text x='200' y='68' fill='#8a96a8'>Each rung is 10x harder than the one below.</text>"
+            "<text x='200' y='86' fill='#8a96a8'>Lit rungs = how far your best guess climbed.</text>"
+            "<text x='200' y='104' fill='#8a96a8'>Dots = your shares, oldest to newest.</text>"
+            "</g></svg>"
+            "<p style='margin:10px 0 4px'><strong>The three screens</strong> (tap the right half of the CYD for the next one, the left half to go back):</p>"
+            "&bull; <strong>MINE</strong> &ndash; what is my miner doing right now? The dial is <em>guesses / sec</em>. <em>Last 60 s</em> is your speed over the last minute, zoomed in around the average: a flat line = healthy. <em>Proofs sent</em> = shares the pool accepted (they prove the miner works; on a solo pool they earn nothing). <em>Pool</em> = online / linking / refused. <em>Proof every</em> = how often a share should arrive at your speed.<br>"
+            "&bull; <strong>ODDS</strong> &ndash; how close am I to winning? <em>Closest try / 141T</em>: your best guess next to what a block needs; <em>1 in 4.5T</em> means it would need to be 4.5 trillion times better. The ladder plots every share (gold = your best). <em>Avg wait for block</em> = network difficulty &times; 2<sup>32</sup> &divide; your guesses per second; for Bitcoin it is billions of years, which is why solo mining on a CYD is a lottery ticket, not an income. <em>Odds per block</em> = your chance of winning any one block. <em>Last net block</em>: someone else found a block X ago (about one every 10 minutes); <em>you: N tries</em> is how many guesses your CYD made since.<br>"
+            "&bull; <strong>WORLD</strong> &ndash; how does my miner fit into Bitcoin? <em>Your share of all guesses</em>: the long bar is every miner on Earth, the dot is you (computed from the difficulty, so it works offline). <em>Difficulty</em> = how hard the puzzle is; it adjusts so a block is found about every 10 minutes. <em>Block height</em> = blocks so far (read from the pool's job). <em>Next halving</em>: every 210,000 blocks (~4 years) the reward per block is cut in half. Price and fee show when the price service answers; otherwise the line says why. The strip shows time running, chip temperature and blocks won.<br>"
+            "<span class='muted'>Aaron Miner is built on the open-source <a href='https://github.com/BitMaker-hub/NerdMiner_v2' target='_blank' rel='noopener'>NerdMiner</a> project and its community forks. Thank you to everyone who built it.</span>"
+            "</div></div>"
+            "</section>");
   page += F("<section class='settings-sec' id='pane-pow'>"
             "<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"

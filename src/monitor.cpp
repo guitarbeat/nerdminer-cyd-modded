@@ -111,6 +111,21 @@ String mempoolUrl(const char *path){
 // second, each attempt holding the miner for up to the 10 s timeout. Now a
 // failed fetch waits FETCH_RETRY_ms before the next try, and the timeout is
 // shorter.
+// Why the market fetches have no data, shown on the Market screen instead of
+// empty cards. TLS needs ~40 KB of free heap; a failed handshake (-1, -16
+// "BIGNUM - Memory allocation failed") is usually that.
+static char s_marketErr[40] = "not fetched yet";
+static void noteFetch(int code, const char *what)
+{
+    if (code == 200) { s_marketErr[0] = 0; return; }
+    if (WiFi.status() != WL_CONNECTED) snprintf(s_marketErr, sizeof(s_marketErr), "offline - no Wi-Fi");
+    else if (code == 429) snprintf(s_marketErr, sizeof(s_marketErr), "%s busy - retry 1 min", what);
+    else if (code < 0 && ESP.getMaxAllocHeap() < 52000) snprintf(s_marketErr, sizeof(s_marketErr), "no %s - low RAM for HTTPS", what);
+    else if (code < 0) snprintf(s_marketErr, sizeof(s_marketErr), "offline - no %s", what);
+    else snprintf(s_marketErr, sizeof(s_marketErr), "%s error %d", what, code);
+    Serial.printf("[market] %s fetch failed: %d (max block %u)\n", what, code, ESP.getMaxAllocHeap());
+}
+const char *getMarketError(void) { return s_marketErr; }
 #define FETCH_RETRY_ms   60000
 #define FETCH_TIMEOUT_ms 5000
 static bool fetchDue(unsigned long lastOk, unsigned long &lastTry, unsigned long periodMs)
@@ -136,7 +151,7 @@ void updateGlobalData(void){
         try {
         http.begin(mempoolUrl(getGlobalHash));
         int httpCode;
-        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
+        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); } noteFetch(httpCode, "mempool");
 
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
@@ -184,7 +199,7 @@ void updateGlobalData(void){
       
         //Make third API call to get fees
         http.begin(mempoolUrl(getFees));
-        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
+        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); } noteFetch(httpCode, "mempool");
 
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
@@ -236,7 +251,32 @@ String halvingEtaStr(unsigned long rem) {
 }
 static volatile uint32_t s_blockHeight = 0; // numeric copy, safe to read from any task
 
+static volatile uint32_t s_jobHeight = 0;
+void noteJobHeightFromCoinb1(const char *cb)
+{
+    // version(4) | [segwit marker] | in-count(1) | prevout(36) | script len | push n | height LE
+    if (!cb) return;
+    size_t L = strlen(cb);
+    size_t o = 8;
+    if (L > 12 && cb[8] == '0' && cb[9] == '0') o += 4; // 0001 marker+flag
+    o += 2 + 72;                                         // input count + prevout
+    if (L < o + 6) return;
+    auto hx = [&](size_t p) -> int { char t[3] = {cb[p], cb[p + 1], 0}; return (int)strtol(t, nullptr, 16); };
+    o += 2; // script length (coinbase scripts are < 0xfd)
+    int n = hx(o); o += 2;
+    if (n < 1 || n > 4 || L < o + 2 * n) return;
+    uint32_t h = 0;
+    for (int i = 0; i < n; i++) h |= (uint32_t)hx(o + 2 * i) << (8 * i);
+    if (h < 1 || h > 20000000UL) return;
+    if (s_jobHeight && h != s_jobHeight) g_blockSeenMs = millis(); // a new block appeared
+    s_jobHeight = h;
+}
+
 String getBlockHeight(void){
+    if (s_jobHeight) {
+        if (s_blockHeight != s_jobHeight) { s_blockHeight = s_jobHeight; current_block = String((unsigned long)s_jobHeight); }
+        return current_block;
+    }
     
     if(fetchDue(mHeightUpdate, mHeightTry, UPDATE_Height_min * 60 * 1000)){
             
@@ -245,7 +285,7 @@ String getBlockHeight(void){
         try {
         http.begin(mempoolUrl(getHeightAPI));
         int httpCode;
-        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
+        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); } noteFetch(httpCode, "mempool");
 
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
@@ -326,7 +366,7 @@ String getBTCprice(void){
         try {
         http.begin(String("https://api.coingecko.com/api/v3/simple/price?ids=") + coin.priceApiCoinId + "&vs_currencies=" + cur.code);
         int httpCode;
-        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); }
+        { HW_SHA_REQUEST(); std::lock_guard<std::mutex> shaLock(g_hwShaMutex); httpCode = http.GET(); } noteFetch(httpCode, "price API");
 
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();
@@ -452,7 +492,7 @@ bool isTimeSynced(void)
   return utcNow(utc);
 }
 bool isBlockHeightKnown(void) { return mHeightUpdate != 0; }
-uint32_t getBlockHeightValue(void) { return mHeightUpdate != 0 ? s_blockHeight : 0; }
+uint32_t getBlockHeightValue(void) { return s_jobHeight ? s_jobHeight : (mHeightUpdate != 0 ? s_blockHeight : 0); }
 
 // Local date and time WITHOUT ever starting an NTP request (NTPClient is not
 // thread safe and is driven by the monitor task): for the web server task.
@@ -1086,3 +1126,18 @@ void applyPendingSettings(void) {
     }
 }
 
+
+static bool duePeek(unsigned long lastOk, unsigned long lastTry, unsigned long periodMs)
+{
+    if (WiFi.status() != WL_CONNECTED) return false;
+    const unsigned long now = millis();
+    if (lastOk != 0 && now - lastOk <= periodMs) return false;
+    if (lastTry != 0 && now - lastTry < FETCH_RETRY_ms) return false;
+    return true;
+}
+bool marketFetchSoon(void)
+{
+    return duePeek(mGlobalUpdate, mGlobalTry, UPDATE_Global_min * 60 * 1000) ||
+           duePeek(mBTCUpdate, mBTCTry, UPDATE_BTC_min * 60 * 1000) ||
+           (!s_jobHeight && duePeek(mHeightUpdate, mHeightTry, UPDATE_Height_min * 60 * 1000));
+}
