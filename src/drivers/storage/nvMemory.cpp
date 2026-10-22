@@ -42,6 +42,13 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_TIMEZONE] = Settings->Timezone;
         json[JSON_SPIFFS_KEY_STATS2NV] = Settings->saveStats;
         json[JSON_SPIFFS_KEY_INVCOLOR] = Settings->invertColors;
+        json[JSON_SPIFFS_KEY_COLORCAL] = Settings->colorCalibrated;
+        json[JSON_SPIFFS_KEY_TOUCHCALOK] = Settings->touchCalibrated;
+        {
+            JsonArray tc = json.createNestedArray(JSON_SPIFFS_KEY_TOUCHCAL);
+            for (int i = 0; i < 5; i++)
+                tc.add(Settings->touchCal[i]);
+        }
         json[JSON_SPIFFS_KEY_BRIGHTNESS] = Settings->Brightness;
         json[JSON_SPIFFS_KEY_FLIPDISPLAY] = Settings->flipDisplay;
         json[JSON_SPIFFS_KEY_ROTATION] = Settings->screenRotation;
@@ -143,6 +150,22 @@ bool nvMemory::loadConfig(TSettings* Settings)
                         Settings->invertColors = json[JSON_SPIFFS_KEY_INVCOLOR].as<bool>();
                     } else {
                         Settings->invertColors = false;
+                    }
+                    if (json.containsKey(JSON_SPIFFS_KEY_COLORCAL)) {
+                        Settings->colorCalibrated = json[JSON_SPIFFS_KEY_COLORCAL].as<bool>();
+                        Settings->invertLegacy = false;
+                    } else {
+                        Settings->colorCalibrated = false;
+                        Settings->invertLegacy = true;
+                    }
+                    Settings->touchCalibrated = json[JSON_SPIFFS_KEY_TOUCHCALOK] | false;
+                    {
+                        JsonArray tc = json[JSON_SPIFFS_KEY_TOUCHCAL].as<JsonArray>();
+                        if (!tc.isNull() && tc.size() == 5)
+                            for (int i = 0; i < 5; i++)
+                                Settings->touchCal[i] = tc[i].as<uint16_t>();
+                        else
+                            Settings->touchCalibrated = false;
                     }
                     if (json.containsKey(JSON_SPIFFS_KEY_BRIGHTNESS)) {
                         Settings->Brightness = json[JSON_SPIFFS_KEY_BRIGHTNESS].as<int>();

@@ -271,6 +271,27 @@ static void handleSetInvert()
   webCfgServer.send(200, "application/json", json);
 }
 
+// Forget an on-device calibration and reboot; the CYD asks again at boot.
+static void recalibrateAndRestart()
+{
+  saveSettingsToFlash();
+  webCfgServer.send(200, "application/json", "{\"status\":\"restarting\"}");
+  delay(600);
+  ESP.restart();
+}
+
+static void handleRecalibrateColors()
+{
+  Settings.colorCalibrated = false;
+  recalibrateAndRestart();
+}
+
+static void handleRecalibrateTouch()
+{
+  Settings.touchCalibrated = false;
+  recalibrateAndRestart();
+}
+
 static void handleGetScreen()
 {
   String json = "{\"screen\":" + String(getDisplayScreen()) + "}";
@@ -597,6 +618,9 @@ const cb=document.getElementById('cb-invert');if(cb)cb.disabled=true;
 postJson('/api/invert?val='+(inv?'1':'0')).then(()=>{showToast(inv?'Colors inverted':'Colors restored');}).catch(()=>{
 if(cb)cb.checked=!inv;showToast('Could not change colors',true);
 }).finally(()=>{if(cb)cb.disabled=false;});}
+function recal(what){if(!confirm('Restart the miner and redo the on-screen '+(what==='touch'?'touch':'color')+' check?'))return;
+const b=document.getElementById('btn-recal-'+what);if(b){b.disabled=true;b.textContent='Restarting\u2026';}
+postJson('/api/recalibrate-'+what).then(()=>{showToast('Restarting \u2014 follow the prompt on the miner');pollReboot();}).catch(()=>{if(b){b.disabled=false;b.textContent=what==='touch'?'Recalibrate touch':'Recalibrate colors';}showToast('Could not restart the miner',true);});}
 function pickCity(v){
 if(!v)return;
 const p=v.split(',');
@@ -1101,6 +1125,11 @@ static void handleRoot()
             "<input type='checkbox' name='invert' id='cb-invert' onchange='toggleInvert(this.checked)'");
   if (Settings.invertColors) page += F(" checked");
   page += F("> <span>Invert colors</span></label>"
+            "<div style='display:flex;gap:8px;margin-top:10px'>"
+            "<button type='button' class='btn-restart' id='btn-recal-touch' onclick='recal(\"touch\")'>Recalibrate touch</button>"
+            "<button type='button' class='btn-restart' id='btn-recal-colors' onclick='recal(\"colors\")'>Recalibrate colors</button>"
+            "</div>"
+            "<span class='form-hint'>Restarts the miner and runs that check on its screen. Mining resumes right away; hold BOOT to skip.</span>"
             "</div></div>"
             "<div class='form-group'>"
             "<span class='form-label'>Theme <span class='form-label-sub'>applies immediately</span></span>"
@@ -1785,6 +1814,8 @@ void setup_webConfig(void)
   webCfgServer.on("/api/theme", HTTP_GET, handleGetTheme);
   webCfgServer.on("/api/theme", HTTP_POST, handleSetTheme);
   webCfgServer.on("/api/invert", HTTP_POST, handleSetInvert);
+  webCfgServer.on("/api/recalibrate-colors", HTTP_POST, handleRecalibrateColors);
+  webCfgServer.on("/api/recalibrate-touch", HTTP_POST, handleRecalibrateTouch);
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/api/screenshot", HTTP_GET, handleScreenshot);

@@ -89,6 +89,9 @@
 #define JSON_SPIFFS_KEY_LATITUDE	"latitude"
 #define JSON_SPIFFS_KEY_LONGITUDE	"longitude"
 #define JSON_SPIFFS_KEY_WEBPASSWORD	"webPassword"
+#define JSON_SPIFFS_KEY_COLORCAL	"colorCalibrated"
+#define JSON_SPIFFS_KEY_TOUCHCALOK	"touchCalibrated"
+#define JSON_SPIFFS_KEY_TOUCHCAL	"touchCal"	// [x0, x1, y0, y1, relRotation] raw XPT2046 units
 
 // settings
 struct TSettings
@@ -104,7 +107,11 @@ struct TSettings
 	char FallbackPoolPassword[80]{ DEFAULT_POOLPASS };
 	int Timezone{ DEFAULT_TIMEZONE };
 	bool saveStats{ DEFAULT_SAVESTATS };
-	bool invertColors{ DEFAULT_INVERTCOLORS };
+	bool invertColors{ DEFAULT_INVERTCOLORS };	// CYD: exact argument passed to tft.invertDisplay()
+	bool colorCalibrated{ false };	// CYD: on-device "what color do you see?" check done; persisted
+	bool touchCalibrated{ false };	// CYD: on-device touch calibration done; persisted
+	uint16_t touchCal[5]{ 233, 3785, 3731, 120, 2 };	// CYD: TFT_eTouch Calibation {x0,x1,y0,y1,rel_rotation}, raw panel units (rotation independent)
+	bool invertLegacy{ false };	// runtime only: config predates colorCalibrated (old XOR'd invert semantics)
 	int Brightness{ DEFAULT_BRIGHTNESS };
 	bool flipDisplay{ DEFAULT_FLIPDISPLAY };	// rotate display 180 degrees (USB on the left)
 	int screenRotation{ 1 };	// 0=Portrait (USB bottom), 1=Landscape (USB right), 2=Portrait Inv (USB top), 3=Landscape Inv (USB left)

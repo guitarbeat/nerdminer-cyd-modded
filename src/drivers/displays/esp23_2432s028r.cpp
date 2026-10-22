@@ -243,6 +243,8 @@ static DmaWidgetSprite wgt(&tft); // persistent DMA-ready scratch sprite
 static bool wgtReady = false;
 static TFT_eSprite shot = TFT_eSprite(&tft);
 static std::mutex g_displayMutex;
+static volatile int g_onb = 0;  // onboarding step (OB_*), 0 = off; see "onboarding" below
+static int g_lastStatic = 1;    // 1 = loading splash, 2 = Wi-Fi setup screen (repainted after onboarding)
 static bool shotOn = false;
 static int g_shotYOffset = 0;
 static int g_shotTargetScr = 0;
@@ -1771,14 +1773,22 @@ int esp32_2432S028R_GetTheme()
   return currentThemeIdx;
 }
 
+// Colour polarity. Settings.invertColors is the exact argument handed to
+// tft.invertDisplay() -- no hidden XOR with the TFT_INVERSION_ON build flag.
+// (TFT_eSPI sends INVON once inside tft.init() when that flag is set; the
+// explicit invertDisplay() call right after always overrides it.)
+static void applyPanelInvert(bool inv)
+{
+  invertColors = inv;
+  tft.invertDisplay(inv);
+  Serial.printf("CYD colors: Settings.invertColors=%d calibrated=%d -> tft.invertDisplay(%d)\n",
+                (int)Settings.invertColors, (int)Settings.colorCalibrated, (int)inv);
+}
+
 void esp32_2432S028R_SetInvert(bool inv)
 {
   Settings.invertColors = inv;
-  invertColors = inv;
-#if defined(TFT_INVERSION_ON)
-  invertColors = !invertColors;
-#endif
-  tft.invertDisplay(invertColors);
+  applyPanelInvert(inv);
 }
 
 // ------------------------------------------------------- saved UI choices --
@@ -1857,6 +1867,8 @@ static void logShare(const String &shares, const String &khashes, const String &
 
 void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 {
+  if (g_onb)
+    return; // onboarding owns the panel
   if (restorePage > 0 && restorePage < currentDisplayDriver->num_cyclic_screens)
   {
     // First tick after boot: go straight to the page that was showing before.
@@ -1915,6 +1927,8 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 {
+  if (g_onb)
+    return; // onboarding owns the panel
   std::lock_guard<std::mutex> lock(g_displayMutex);
   coin_data data = getCoinData(mElapsed);
   refreshPool();
@@ -1945,6 +1959,8 @@ void esp32_2432S028R_MarketScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 {
+  if (g_onb)
+    return; // onboarding owns the panel
   std::lock_guard<std::mutex> lock(g_displayMutex);
   clock_data data = getClockData(mElapsed);
   uiLive = true;
@@ -2015,6 +2031,8 @@ void esp32_2432S028R_ClockScreen(unsigned long mElapsed)
 
 void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 {
+  if (g_onb)
+    return; // onboarding owns the panel
   std::lock_guard<std::mutex> lock(g_displayMutex);
   mining_data data = getMiningData(mElapsed);
   uiLive = true;
@@ -2043,6 +2061,433 @@ void esp32_2432S028R_ArchitectureScreen(unsigned long mElapsed)
 static void touchTask(void *);
 void esp32_2432S028R_AlternateRotation(void);
 
+// ------------------------------------------------------------- onboarding --
+// First boot (or after "Recalibrate touch" / "Recalibrate colors" on the web
+// Display tab) the CYD walks through two short checks on its own screen:
+//
+//   1. Touch: tap 4 crosshairs, then tap a dot to verify (within 15 px, else
+//      redo). The fit is stored as a TFT_eTouch Calibation {x0,x1,y0,y1,
+//      rel_rotation} in raw XPT2046 units, so it stays valid when the screen
+//      rotation changes; TFT_eTouch applies the rotation at read time.
+//   2. Colors: a big Bitcoin-orange square, "Orange" / "Not orange". Not
+//      orange flips the panel polarity and asks "orange now?".
+//
+// Both answers land in /config.json (touchCalibrated + touchCal,
+// colorCalibrated + invertColors). It runs on the touch task after boot, so
+// mining, Wi-Fi and the web UI keep running while it waits (and
+// /api/screenshot shows the prompt). Holding BOOT for 1.5 s skips the
+// current step with the defaults, so a dead touch panel can't lock the UI.
+// Serial 'o'/'y' and 'x'/'n' answer the colour step, for headless testing.
+
+#if defined(TFT_INVERSION_ON)
+#define CYD_PANEL_INVERT_DEFAULT true
+#else
+#define CYD_PANEL_INVERT_DEFAULT false
+#endif
+
+#define PIN_BOOT_BTN 0
+#define OB_INSET 20
+#define OB_VERIFY_TOL 15
+
+enum OnbState { OB_OFF = 0, OB_TOUCH, OB_VERIFY, OB_COLOR_ASK, OB_COLOR_CONFIRM };
+static bool obHaveConfig = false;
+static int obTarget = 0;
+static int32_t obRawX[4], obRawY[4];
+static int obLandX = -1, obLandY = -1, obErr = -1;
+static int obColorRound = 0;
+static const char *obNote = "";
+static const TFT_eTouchBase::Calibation CAL_DEFAULT = {233, 3785, 3731, 120, 2};
+static TFT_eTouchBase::Calibation obPrevCal = CAL_DEFAULT;
+
+static void obTargetXY(int i, int &x, int &y)
+{
+  const int W = tft.width(), H = tft.height();
+  x = (i == 1 || i == 2) ? W - 1 - OB_INSET : OB_INSET;
+  y = (i >= 2) ? H - 1 - OB_INSET : OB_INSET;
+}
+
+static void obColorButtons(int &by, int &bw, int &bh)
+{
+  const int W = tft.width(), H = tft.height(), pad = 10;
+  bh = 56;
+  bw = (W - 3 * pad) / 2;
+  by = H - bh - pad;
+}
+
+static void obButton(TFT_eSPI &d, int x, int y, int w, int h, const char *label)
+{
+  const uint16_t fill = RGB565(20, 20, 20);
+  d.fillRoundRect(x, dY(y), w, h, 8, fill);
+  d.drawRoundRect(x, dY(y), w, h, 8, TFT_WHITE);
+  d.setTextColor(TFT_WHITE, fill);
+  d.setTextDatum(MC_DATUM);
+  d.setTextSize(d.textWidth(label, 2) * 2 + 12 < w ? 2 : 1);
+  d.drawString(label, x + w / 2, dY(y + h / 2), 2);
+  d.setTextSize(1);
+}
+
+// Paints the current onboarding step to out(): the panel, or a screenshot slice.
+static void paintOnboarding()
+{
+  TFT_eSPI &d = out();
+  const int W = tft.width(), H = tft.height();
+  d.fillRect(0, dY(0), W, H, TFT_BLACK);
+  d.setTextDatum(MC_DATUM);
+  d.setTextSize(1);
+  d.setTextColor(TFT_WHITE, TFT_BLACK);
+  const int st = g_onb;
+  if (st == OB_TOUCH || st == OB_VERIFY)
+  {
+    char hdr[40];
+    if (st == OB_TOUCH)
+      snprintf(hdr, sizeof(hdr), "Touch setup  %d / 4", obTarget + 1);
+    else
+      snprintf(hdr, sizeof(hdr), "Touch setup  check");
+    d.drawString(hdr, W / 2, dY(H / 2 - 44), 2);
+    d.drawString(st == OB_TOUCH ? "Tap the center of the cross" : "Tap the dot", W / 2, dY(H / 2 - 22), 2);
+    d.setTextColor(RGB565(170, 170, 170), TFT_BLACK);
+    if (obNote[0])
+      d.drawString(obNote, W / 2, dY(H / 2 + 44), 2);
+    d.drawString("Hold BOOT to skip", W / 2, dY(H / 2 + 66), 2);
+    if (st == OB_TOUCH)
+    {
+      int x, y;
+      obTargetXY(obTarget, x, y);
+      d.drawFastHLine(x - 15, dY(y), 31, TFT_WHITE);
+      d.drawFastVLine(x, dY(y - 15), 31, TFT_WHITE);
+      d.drawCircle(x, dY(y), 7, TFT_WHITE);
+    }
+    else
+    {
+      const int x = W / 2, y = H / 2 + 12;
+      d.fillCircle(x, dY(y), 6, TFT_WHITE);
+      d.drawCircle(x, dY(y), 11, TFT_WHITE);
+      if (obLandX >= 0)
+      {
+        d.drawFastHLine(obLandX - 6, dY(obLandY), 13, RGB565(247, 147, 26));
+        d.drawFastVLine(obLandX, dY(obLandY - 6), 13, RGB565(247, 147, 26));
+      }
+    }
+  }
+  else
+  {
+    const int pad = 10, top = 34;
+    int by, bw, bh;
+    obColorButtons(by, bw, bh);
+    d.drawString(st == OB_COLOR_ASK ? "What color is the big square?" : "Is the big square orange now?", W / 2, dY(top / 2), 2);
+    d.fillRect(pad, dY(top), W - 2 * pad, by - pad - top, RGB565(247, 147, 26)); // Bitcoin orange #f7931a
+    obButton(d, pad, by, bw, bh, st == OB_COLOR_ASK ? "Orange" : "Yes");
+    obButton(d, 2 * pad + bw, by, bw, bh, st == OB_COLOR_ASK ? "Not orange" : "No");
+  }
+  d.setTextDatum(TL_DATUM);
+}
+
+static void obRepaint()
+{
+  std::lock_guard<std::mutex> lock(g_displayMutex);
+  paintOnboarding();
+}
+
+static void obSave()
+{
+  // No config yet means the Wi-Fi setup portal still has to run; writing a
+  // config now would skip it. The portal's own save persists these fields.
+  if (obHaveConfig)
+    nvMem.saveConfig(&Settings);
+}
+
+static TFT_eTouchBase::Calibation calFromSettings()
+{
+  TFT_eTouchBase::Calibation c = {Settings.touchCal[0], Settings.touchCal[1], Settings.touchCal[2],
+                                  Settings.touchCal[3], (uint8_t)(Settings.touchCal[4] & 3)};
+  return c;
+}
+
+static void obStartTouch()
+{
+  obTarget = 0;
+  obLandX = obLandY = obErr = -1;
+  g_onb = OB_TOUCH;
+  obRepaint();
+}
+
+static void obStartColor()
+{
+  obColorRound = 0;
+  g_onb = OB_COLOR_ASK;
+  Serial.println("CYD colors: not calibrated, asking (serial: o=orange/yes, x=not orange/no)");
+  obRepaint();
+}
+
+static void obFinish()
+{
+  g_onb = OB_OFF;
+  std::lock_guard<std::mutex> lock(g_displayMutex);
+  tft.fillScreen(C_BG);
+  resetWidgets();
+  memset(segLvl, 0xFF, sizeof(segLvl));
+  if (uiLive)
+  {
+    uiScreen = -1; // next monitor tick repaints the whole page
+  }
+  else if (g_lastStatic == 2)
+    paintSetup(out());
+  else
+    paintLoading(out());
+  Serial.println("CYD onboarding: done");
+}
+
+static void obNext()
+{
+  if (!Settings.touchCalibrated)
+    obStartTouch();
+  else if (!Settings.colorCalibrated)
+    obStartColor();
+  else
+    obFinish();
+}
+
+static uint16_t clampRaw(long v) { return (uint16_t)(v < 0 ? 0 : (v > 4095 ? 4095 : v)); }
+
+// Linear fit of raw (r) against screen (s) at two screen positions a < b,
+// extrapolated to pixels 0 and smax. Returns false when the span is too small.
+static bool fitAxis(float rA, float rB, int a, int b, int smax, uint16_t &r0, uint16_t &r1)
+{
+  const float k = (rB - rA) / (float)(b - a);
+  if (fabsf(k * smax) < 800.0f)
+    return false;
+  r0 = clampRaw(lroundf(rA - k * a));
+  r1 = clampRaw(lroundf(rA + k * (smax - a)));
+  return r0 != r1;
+}
+
+// Builds a rotation-independent Calibation from the 4 targets tapped in the
+// current rotation. Detects axis swap from which raw axis moved left-right.
+static bool obComputeCal(TFT_eTouchBase::Calibation &c)
+{
+  const int W = tft.width(), H = tft.height();
+  const int rot = tft.getRotation() & 3;
+  int xl, yt, xr, yb;
+  obTargetXY(0, xl, yt);
+  obTargetXY(2, xr, yb);
+  // averages per side: targets 0=TL 1=TR 2=BR 3=BL
+  const float rxL = (obRawX[0] + obRawX[3]) / 2.0f, rxR = (obRawX[1] + obRawX[2]) / 2.0f;
+  const float ryL = (obRawY[0] + obRawY[3]) / 2.0f, ryR = (obRawY[1] + obRawY[2]) / 2.0f;
+  const float rxT = (obRawX[0] + obRawX[1]) / 2.0f, rxB = (obRawX[3] + obRawX[2]) / 2.0f;
+  const float ryT = (obRawY[0] + obRawY[1]) / 2.0f, ryB = (obRawY[3] + obRawY[2]) / 2.0f;
+  const bool swap = fabsf(ryR - ryL) > fabsf(rxR - rxL);
+  if (!swap)
+  {
+    // d_rot 0: sx = (rx - x0) * (W-1) / (x1 - x0), sy = (ry - y0) * (H-1) / (y1 - y0)
+    if (!fitAxis(rxL, rxR, xl, xr, W - 1, c.x0, c.x1)) return false;
+    if (!fitAxis(ryT, ryB, yt, yb, H - 1, c.y0, c.y1)) return false;
+    c.rel_rotation = rot;
+  }
+  else
+  {
+    // d_rot 1: sx = (ry - y0) * (W-1) / (y1 - y0), sy = (H-1) - (rx - x0) * (H-1) / (x1 - x0)
+    if (!fitAxis(ryL, ryR, xl, xr, W - 1, c.y0, c.y1)) return false;
+    // u = (H-1) - sy grows from bottom to top
+    if (!fitAxis(rxB, rxT, (H - 1) - yb, (H - 1) - yt, H - 1, c.x0, c.x1)) return false;
+    c.rel_rotation = (rot + 3) & 3;
+  }
+  return true;
+}
+
+// Press tracking shared by the touch steps. Returns true once per completed
+// tap (press of >= 5 samples, then release) with the averaged value.
+struct TapAcc
+{
+  int n = 0;
+  int32_t sx = 0, sy = 0;
+};
+static TapAcc obAcc;
+static bool obTap(bool down, int32_t x, int32_t y, int32_t &ox, int32_t &oy)
+{
+  if (down)
+  {
+    if (++obAcc.n > 2) // drop the first samples while the pen settles
+    {
+      obAcc.sx += x;
+      obAcc.sy += y;
+    }
+    return false;
+  }
+  const int n = obAcc.n - 2;
+  const bool ok = n >= 3;
+  if (ok)
+  {
+    ox = obAcc.sx / n;
+    oy = obAcc.sy / n;
+  }
+  obAcc = TapAcc();
+  return ok;
+}
+
+static void obSkipCurrent()
+{
+  const int st = g_onb;
+  if (st == OB_TOUCH || st == OB_VERIFY)
+  {
+    touch.setCalibration(obPrevCal);
+    Settings.touchCalibrated = true; // keep the current/default mapping
+    Serial.println("CYD touch: skipped with BOOT, keeping current mapping");
+  }
+  else
+  {
+    Settings.invertColors = invertColors;
+    Settings.colorCalibrated = true;
+    Serial.printf("CYD colors: skipped with BOOT, keeping invertColors=%d\n", (int)invertColors);
+  }
+  obSave();
+  obNext();
+}
+
+static unsigned long obBootSince = 0;
+static bool obBootLatched = false;
+
+// One 20 ms tick of the onboarding state machine (touch task).
+static void onboardingTick()
+{
+  // BOOT escape (active low). Must be released before it can skip again.
+  if (digitalRead(PIN_BOOT_BTN) == LOW)
+  {
+    if (!obBootSince) obBootSince = millis();
+    if (!obBootLatched && millis() - obBootSince > 1500)
+    {
+      obBootLatched = true;
+      obSkipCurrent();
+      return;
+    }
+  }
+  else
+  {
+    obBootSince = 0;
+    obBootLatched = false;
+  }
+
+  const int st = g_onb;
+  if (st == OB_TOUCH)
+  {
+    uint16_t x, y, z1, z2, rz;
+    const bool down = touch.getRaw(x, y, z1, z2, rz);
+    int32_t ax, ay;
+    if (obTap(down, x, y, ax, ay))
+    {
+      obRawX[obTarget] = ax;
+      obRawY[obTarget] = ay;
+      Serial.printf("CYD touch: target %d raw %ld,%ld\n", obTarget, (long)ax, (long)ay);
+      if (++obTarget < 4)
+      {
+        obNote = "";
+        obRepaint();
+        return;
+      }
+      TFT_eTouchBase::Calibation c;
+      if (!obComputeCal(c))
+      {
+        obNote = "Taps didn't line up, again";
+        obStartTouch();
+        return;
+      }
+      Serial.printf("CYD touch: fit {%u,%u,%u,%u,%u}\n", c.x0, c.x1, c.y0, c.y1, c.rel_rotation);
+      touch.setCalibration(c); // candidate; the verify step decides
+      obNote = "";
+      obLandX = obLandY = -1;
+      g_onb = OB_VERIFY;
+      obRepaint();
+    }
+  }
+  else if (st == OB_VERIFY)
+  {
+    int16_t x = 0, y = 0;
+    const bool down = touch.getXY(x, y);
+    int32_t ax, ay;
+    if (obTap(down, x, y, ax, ay))
+    {
+      const int tx = tft.width() / 2, ty = tft.height() / 2 + 12;
+      obLandX = ax;
+      obLandY = ay;
+      obErr = (int)lroundf(sqrtf((float)((ax - tx) * (ax - tx) + (ay - ty) * (ay - ty))));
+      Serial.printf("CYD touch: verify landed %ld,%ld, off by %d px\n", (long)ax, (long)ay, obErr);
+      if (obErr <= OB_VERIFY_TOL)
+      {
+        TFT_eTouchBase::Calibation &c = touch.calibration();
+        Settings.touchCal[0] = c.x0;
+        Settings.touchCal[1] = c.x1;
+        Settings.touchCal[2] = c.y0;
+        Settings.touchCal[3] = c.y1;
+        Settings.touchCal[4] = c.rel_rotation;
+        Settings.touchCalibrated = true;
+        obPrevCal = c;
+        obSave();
+        obNote = "";
+        obRepaint(); // show where it landed for a moment
+        vTaskDelay(600 / portTICK_PERIOD_MS);
+        obNext();
+      }
+      else
+      {
+        static char note[40];
+        snprintf(note, sizeof(note), "Off by %d px, let's redo", obErr);
+        obNote = note;
+        obRepaint();
+        vTaskDelay(1200 / portTICK_PERIOD_MS);
+        touch.setCalibration(obPrevCal);
+        obStartTouch();
+      }
+    }
+  }
+  else if (st == OB_COLOR_ASK || st == OB_COLOR_CONFIRM)
+  {
+    int choice = -1;
+    if (Serial.available())
+    {
+      int c = tolower(Serial.read());
+      if (c == 'o' || c == 'y') choice = 0;
+      if (c == 'x' || c == 'n') choice = 1;
+    }
+    int16_t x = 0, y = 0;
+    const bool down = touch.getXY(x, y);
+    int32_t ax, ay;
+    if (choice < 0 && obTap(down, x, y, ax, ay))
+    {
+      int by, bw, bh;
+      obColorButtons(by, bw, bh);
+      if (ay >= by - 10) // anywhere in the bottom strip, split by halves
+        choice = ax < tft.width() / 2 ? 0 : 1;
+    }
+    if (choice < 0)
+      return;
+    bool save = choice == 0; // "Orange" / "Yes": what's on screen is right
+    if (!save && st == OB_COLOR_ASK)
+    {
+      applyPanelInvert(!invertColors); // wrong polarity: flip and confirm
+      g_onb = OB_COLOR_CONFIRM;
+      obRepaint();
+      return;
+    }
+    if (!save)
+    {
+      applyPanelInvert(!invertColors); // neither looked right: back to the first question
+      if (++obColorRound >= 3)
+        save = true; // don't loop forever; the Display tab can redo it
+      else
+      {
+        g_onb = OB_COLOR_ASK;
+        obRepaint();
+        return;
+      }
+    }
+    Settings.invertColors = invertColors;
+    Settings.colorCalibrated = true;
+    obSave();
+    Serial.printf("CYD colors: calibrated, invertColors=%d (%s)\n", (int)Settings.invertColors,
+                  obHaveConfig ? "saved to /config.json" : "saved with first setup");
+    obNext();
+  }
+}
+
 static volatile bool g_backlightReady = false;
 static volatile int g_currentDuty = 255;
 
@@ -2050,14 +2495,18 @@ void esp32_2432S028R_Init(void)
 {
   tft.init();
   // No tft.initDMA(): see wEnd(). With DMA disabled every dmaWait() is a no-op.
-  if (nvMem.loadConfig(&Settings))
+  const bool haveConfig = nvMem.loadConfig(&Settings);
+  if (!haveConfig)
+    Settings.invertColors = CYD_PANEL_INVERT_DEFAULT; // fresh flash: best guess, calibration confirms
+  else if (Settings.invertLegacy)
   {
-    invertColors = Settings.invertColors;
+    // Config written by older firmware stored the setting XOR'd with
+    // TFT_INVERSION_ON. Convert once so the panel looks exactly as before;
+    // the calibration prompt below then confirms (or flips) it.
+    Settings.invertColors = Settings.invertColors != CYD_PANEL_INVERT_DEFAULT;
+    Settings.invertLegacy = false;
   }
-#if defined(TFT_INVERSION_ON)
-  invertColors = !invertColors;
-#endif
-  tft.invertDisplay(invertColors);
+  applyPanelInvert(Settings.invertColors);
   int rot = Settings.screenRotation;
   if (rot < 0 || rot > 3)
     rot = Settings.flipDisplay ? 3 : 1;
@@ -2082,9 +2531,15 @@ void esp32_2432S028R_Init(void)
   ledcWrite(0, initBright);
   g_backlightReady = true;
 
-  TFT_eTouchBase::Calibation calibation = {233, 3785, 3731, 120, 2};
-  touch.setCalibration(calibation);
-  xTaskCreatePinnedToCore(touchTask, "cydTouch", 3072, NULL, 1, NULL, 0);
+  // Touch mapping: the on-device calibration when there is one, else the
+  // stock CYD constants (still the start point for calibrating).
+  obPrevCal = Settings.touchCalibrated ? calFromSettings() : CAL_DEFAULT;
+  touch.setCalibration(obPrevCal);
+  Serial.printf("CYD touch: %s {%u,%u,%u,%u,%u}\n", Settings.touchCalibrated ? "calibrated" : "default",
+                obPrevCal.x0, obPrevCal.x1, obPrevCal.y0, obPrevCal.y1, obPrevCal.rel_rotation);
+  pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
+  obHaveConfig = haveConfig;
+  xTaskCreatePinnedToCore(touchTask, "cydTouch", 4096, NULL, 1, NULL, 0);
 
   loadUiPrefs();
   esp32_2432S028R_SetTheme(Settings.displayTheme);
@@ -2116,6 +2571,10 @@ void esp32_2432S028R_Init(void)
   extern void cydDumpScreens(void);
   cydDumpScreens();
 #endif
+
+  // Touch first (the colour step needs taps to land), then colours.
+  if (!Settings.touchCalibrated || !Settings.colorCalibrated)
+    obNext();
 }
 
 void esp32_2432S028R_AlternateScreenState(void)
@@ -2179,18 +2638,24 @@ void esp32_2432S028R_LoadingScreen(void)
 {
   uiLive = false;
   uiScreen = -1;
-  paintLoading(out());
+  g_lastStatic = 1;
+  if (!g_onb)
+    paintLoading(out());
 }
 
 void esp32_2432S028R_SetupScreen(void)
 {
   uiLive = false;
   uiScreen = -1;
-  paintSetup(out());
+  g_lastStatic = 2;
+  if (!g_onb)
+    paintSetup(out());
 }
 
 void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
 {
+  if (g_onb)
+    return;
   if (!uiLive || uiScreen < 0)
     return;
   if (!g_displayMutex.try_lock())
@@ -2240,6 +2705,12 @@ static void touchTask(void *)
   pinMode(PIN_LDR, INPUT); // CYD LDR photoresistor
   for (;;)
   {
+    if (g_onb != OB_OFF)
+    {
+      onboardingTick();
+      vTaskDelay(20 / portTICK_PERIOD_MS);
+      continue;
+    }
     int16_t t_x, t_y;
     bool down = touch.getXY(t_x, t_y);
     if (down)
@@ -2470,6 +2941,12 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
     g_shotYOffset = yOff;
     shotOn = true;
     shot.fillSprite(C_BG);
+    if (g_onb)
+    {
+      paintOnboarding(); // the panel is showing an onboarding step: capture that
+      shotOn = false;
+      return;
+    }
     ensureChrome(targetScr);
     if (targetScr == SCR_MINE)
     {
