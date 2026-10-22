@@ -19,18 +19,24 @@
 //#define getBTCAPI "https://api.blockchain.com/v3/exchange/tickers/BTC-USDT" -- updates infrequently
 #define getBTCAPI "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=" // + currency code
 
+#ifndef UPDATE_BTC_min // a board can stretch it from platformio.ini
 #define UPDATE_BTC_min   1
+#endif
 
 //API Block height
 #define getHeightAPI "/api/blocks/tip/height"   // path on mempoolUrl()
+#ifndef UPDATE_Height_min // a board can stretch it from platformio.ini
 #define UPDATE_Height_min 2
+#endif
 
 //APIs Global Stats
 // Paths appended to mempoolUrl() (Settings.MempoolHost, default mempool.space)
 #define getGlobalHash "/api/v1/mining/hashrate/3d"
 #define getDifficulty "/api/v1/difficulty-adjustment"
 #define getFees "/api/v1/fees/recommended"
+#ifndef UPDATE_Global_min // a board can stretch it from platformio.ini
 #define UPDATE_Global_min 2
+#endif
 
 //API public-pool.io
 // https://public-pool.io:40557/api/client/btcString
@@ -175,6 +181,20 @@ String getPoolAPIUrl(void);
 String mempoolUrl(const char *path);
 bool getUtcTime(time_t &utc, bool sync = false);
 
+// True once real data is in (see monitor.cpp); screens show "--" until then.
+bool isTimeSynced(void);
+bool isBlockHeightKnown(void);
+unsigned int getBTCpriceValue(void); // raw price in the selected currency, 0 = unknown
+uint32_t getBlockHeightValue(void);  // last block height fetched, 0 = unknown (any task)
+bool getLocalClock(int &hour, int &minute, int &second, int &day, int &month, int &year); // no NTP call (any task)
+long currentDstOffset(void);         // summer-time offset in force now, seconds (AUTO_DST_EU)
+
+// Settings changed on the LAN settings page without a restart. The monitor
+// task (screens, price, pool stats) applies them itself, between screen
+// refreshes, in applyPendingSettings(): a new Settings.Timezone, a currency
+// handed over with requestCurrencyChange() (a kCurrencies code), and, after
+// poolSettingsChanged() from the stratum task, the pool stats lookup.
+// currencySetting() is the currency in use or the one waiting.
 void requestCurrencyChange(const char *code);
 String currencySetting(void);
 pool_data getPoolData(void);

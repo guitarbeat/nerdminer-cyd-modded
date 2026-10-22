@@ -57,6 +57,10 @@ DisplayDriver *currentDisplayDriver = &t_qtDisplayDriver;
 DisplayDriver *currentDisplayDriver = &tDisplayV1Driver;
 #endif
 
+#ifdef TDISPLAY_PULSE
+DisplayDriver *currentDisplayDriver = &tDisplayPulseDriver;
+#endif
+
 #ifdef M5STICKC_DISPLAY
 DisplayDriver *currentDisplayDriver = &m5stickCDriver;
 #endif
@@ -180,7 +184,7 @@ String nightDimStatus()
   if (sunrise < 0)
     return s + F(" all day at this location.");
   // In the timezone set above
-  const int offset = Settings.Timezone * 60 + 1440;
+  const int offset = Settings.Timezone * 60 + (int)(currentDstOffset() / 60) + 1440; // + summer time (AUTO_DST_EU)
   char times[48];
   snprintf(times, sizeof(times), ": sunrise %02d:%02d, sunset %02d:%02d.",
            (sunrise + offset) % 1440 / 60, (sunrise + offset) % 60,

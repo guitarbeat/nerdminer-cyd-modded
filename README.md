@@ -25,6 +25,8 @@ Flash your board directly from Google Chrome, Edge, or any Web-Serial-compatible
 
 ## 📦 Pre-compiled Binaries ([Release v2.0.0](https://github.com/guitarbeat/nerdminer-cyd-modded/releases/tag/v2.0.0))
 
+> Merged upstream [HenrysCat/NerdMiner-Modded V1.5.1](https://github.com/HenrysCat/NerdMiner-Modded): M5StickC Plus2 support, T-Display 1.14" Pulse theme, stratum object-error / duplicate-share fixes, CYD RGB LED Off-at-boot fix, dual-slot power-cut-proof mining stats.
+
 Prefer flashing offline with `esptool.py`, ESP Flash Download Tools, or via local OTA? Pre-built binaries are available for direct download:
 
 | Hardware Target | Full Factory Install (`0x00000`) | Firmware Update (`0x10000` / OTA) |
@@ -95,6 +97,36 @@ If your CYD board has a MicroSD slot on the back, you can configure your miner h
 1. Format a MicroSD card using **FAT32**.
 2. Create a file named `config.json` in the root directory:
 ```json
+{"version":"V1.5.0","uptime_s":3605,"state":"mining","hashrate_khs":991.2,"hashrate_avg_khs":988.7,
+ "total_mhashes":59113,"mining_time_s":60789,"templates":2108,"best_diff":5.26,"shares_32bit":9,
+ "blocks_found":0,"shares_accepted":412,"shares_rejected":0,
+ "pool":{"address":"btc.heliospool.com","port":3333,"backup":false,"subscribed":true,"difficulty":0.0007},
+ "wifi":{"ssid":"MyWifi","rssi":-47,"ip":"192.168.0.115"},"free_heap":117484}
+```
+
+`hashrate_khs` is the last 10 seconds, `hashrate_avg_khs` the average since the miner started; `shares_accepted` and `shares_rejected` count the pool's answers since then. `total_mhashes`, `mining_time_s`, `shares_32bit`, `best_diff` and `blocks_found` are the same totals the screen shows (kept across restarts when "Save mining statistics" is on).
+
+##### Night dimming
+
+On the boards with a touch screen, and on the T-Display 1.14", the settings page can also fade the backlight down after dark. Tick **Dim the screen at night**, set a night brightness and a fade length in minutes, and pick the nearest city from the list. A city a few hundred kilometres away is still good to a few minutes; for an exact location choose **Custom** and enter your latitude and longitude in decimal degrees (south and west are negative, e.g. London is 51.51 and -0.13). The backlight then moves between the normal brightness and the night level across a window centred on each crossing: the default 60 minute fade starts 30 minutes before sunset and finishes 30 minutes after, then reverses at sunrise.
+
+The page prints the current sun state and today's sunrise and sunset next to the controls, in the timezone set on the page, so you can check the location is right. Until the clock has been set from the network, or with no location entered, the normal brightness is used.
+
+##### LED on the back (CYD)
+
+The CYD's RGB LED is set from the same page:
+
+- **Off**: never lights.
+- **Status** (the default): red while starting up or in setup, blue while connecting, then it blinks the chosen colour while mining.
+- **Always on**: the chosen colour all the time.
+
+Pick any colour and a brightness from 1 to 255 (the LED is very bright, so 20-60 is plenty at night). Tick **LED off while the screen is off** to have it go dark whenever the backlight is off, by a touch or the screen timeout.
+
+#### SD card (if available)
+
+1. Format a SD card using Fat32.
+1. Create a file named "config.json" in your card's root, containing the the following structure. Adjust the settings to your needs:
+```
 {
   "SSID": "YourHomeWiFi",
   "WifiPW": "YourWiFiPassword",
@@ -165,6 +197,36 @@ Once connected to your home network, the miner serves a full web dashboard:
 - **URL**: `http://<miner-ip>` (e.g. `http://192.168.0.27`)
 - **Username**: `admin`
 - **Password**: `MineYourCoins`
+
+#### T-Display 1.14" (Pulse)
+
+The same two buttons, plus:
+
+- **TOP BUTTON** double click > next accent colour (five to choose from; kept across restarts, like the last screen shown).
+- The orientation set by the bottom button's double click is kept across restarts too, and is the same setting as **Flip display** on the web settings page.
+- While the screen is off (bottom button, or the screen timeout from the settings page), the first press of either button only turns it back on.
+
+#### M5StickC Plus2
+
+Build environment: `M5Stick-C-Plus2` (`pio run -e M5Stick-C-Plus2 -t upload`).
+
+- **Button A** (front, "M5"): one click > screen off/on, double click > rotate 180°.
+- **Button B** (right side): one click > next screen, hold 5 s > **reset the configuration and reboot**. Hold it while powering on > **configuration mode**.
+- **Power button** (left side): press ~2 s to switch on. Once running, hold 2 s > **power off** (on USB power the stick goes to deep sleep instead; press the power button to wake it up).
+- The power-hold latch (GPIO4) is set before `setup()` and pad-latched, so automatic reboots (saving the Wi-Fi config, watchdog...) no longer switch the stick off when it runs on battery.
+- **Battery level** (GPIO38) with an icon in the top bar of the miner screen, instead of the chip temperature.
+- **Screen brightness, screen off after N minutes and night dimming** from the web settings page (backlight on GPIO27 driven in PWM). When the screen is off, any button press wakes it up.
+- **Last screen remembered** across restarts (e.g. keep the clock as the start screen).
+- **Share found**: short red LED flash + beep; a found block plays a longer pattern. Turn them off with `-D SHARE_LED=0` / `-D SHARE_BEEP=0` in the `M5Stick-C-Plus2` environment.
+- Both cores mine: the fast hardware SHA loop on core 1, a software miner on core 0.
+- Info screens (clock, global stats, BTC price) refresh every 5-10 min instead of 1-2 min, and a failed request waits 1 min before the next try: every HTTPS request pauses the hardware miner ~1.5 s. For the best hashrate, stay on the miner screen (it makes no request).
+- **Automatic summer/winter time** (EU rules, `-D AUTO_DST_EU=1`): set the timezone to the **winter** UTC offset (France: `1`) on the web page or in the WiFi portal; the hour is added on the last Sunday of March and removed on the last Sunday of October.
+- **Clock right at power-on**: the on-board BM8563 RTC gives the time until NTP answers (works without WiFi), and is set again after every NTP sync.
+- **Mining stats saved at least every 10 min** (`-D STATS_SAVE_MAX_s=600`; stock firmware: up to every 12 h, so a restart could lose hours of shares and best difficulty), and also right before a power off from the button, a flat-battery power off or a restart from the settings page.
+- **Power-cut-proof stats**: two save slots used in turn, each save one record with its own CRC. A power cut in the middle of a save only damages the slot being written; the miner restarts from the other one (the stock format reset every counter to zero in that case). Stats saved by the stock firmware are taken over automatically.
+- **Flat battery protection**: on battery, below 3.40 V for 30 s, a "Low battery" message then power off (no brown-out reboot loop). On USB nothing happens. `-D PLUS2_LOW_BATTERY_OFF=0` turns it off.
+
+### Project guidelines
 
 ### ✨ Web Features:
 1. **Interactive Virtual CYD Twin**:

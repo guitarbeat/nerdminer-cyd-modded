@@ -1,7 +1,7 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-#define CURRENT_VERSION "v2.0.0"
+#define CURRENT_VERSION "v2.0.0"  /* fork; merged HenrysCat V1.5.1 */
 
 // Git short hash (+"-dirty") injected at build time by auto_firmware_version.py
 #ifndef FW_GIT

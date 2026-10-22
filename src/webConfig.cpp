@@ -4,6 +4,7 @@
 #include <WebServer.h>
 #include <Update.h>
 #include <ArduinoJson.h>
+#include <esp_timer.h>
 #include "webConfig.h"
 #include "wManager.h"
 #include "drivers/storage/storage.h"
@@ -14,6 +15,14 @@
 #include "webCydTwin.h"
 #include "drivers/displays/rgbLed.h"
 #include "cities.h"
+#include "webMonitorPage.h"
+#ifdef M5STICK_C_PLUS2
+#include "m5stickPlus2Hw.h"
+#endif
+
+// Settings page login (optional change via webpass/webpass2 form fields).
+#define WEBCFG_USER "admin"
+#define WEBCFG_PASS_MAX 63
 
 extern TSettings Settings;
 extern monitor_data mMonitor;
@@ -1431,6 +1440,25 @@ static void handleSave()
   const TSettings before = currentSettings();
   TSettings next = before;
 
+  // New page password: checked first, so a typo saves nothing at all.
+  const String webPass = webCfgServer.arg("webpass");
+  if (!webPass.isEmpty() || !webCfgServer.arg("webpass2").isEmpty())
+  {
+    const char *problem = webPass != webCfgServer.arg("webpass2") ? "The two new passwords are not the same."
+                          : webPass.length() > WEBCFG_PASS_MAX   ? "The new password is longer than 63 characters."
+                                                                  : nullptr;
+    if (problem)
+    {
+      webCfgServer.send(400, "text/html",
+                        String("<!DOCTYPE html><html><head><meta charset='utf-8'>"
+                               "<meta name='viewport' content='width=device-width, initial-scale=1'></head>"
+                               "<body style='font-family:sans-serif'><p>") + problem +
+                            " Nothing was saved.</p><p><a href='/settings'>Back to settings</a></p></body></html>");
+      return;
+    }
+    next.WebPassword = webPass;
+  }
+
   if (webCfgServer.hasArg("pool"))
     next.PoolAddress = webCfgServer.arg("pool");
   if (webCfgServer.hasArg("port"))
@@ -1489,6 +1517,15 @@ static void handleSave()
   if (webCfgServer.hasArg("brightness"))
     next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
 #endif
+#ifdef TDISPLAY_PULSE
+  next.flipDisplay = webCfgServer.hasArg("flip");
+  if (webCfgServer.hasArg("brightness"))
+    next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
+#endif
+#if defined(M5STICK_C_PLUS2) && PLUS2_BACKLIGHT_PWM
+  if (webCfgServer.hasArg("brightness"))
+    next.Brightness = constrain(webCfgServer.arg("brightness").toInt(), 0, 255);
+#endif
 #ifdef HAS_RGB_LED
   if (webCfgServer.hasArg("ledmode"))
     next.ledMode = constrain(webCfgServer.arg("ledmode").toInt(), LED_MODE_OFF, LED_MODE_STEADY);
@@ -1533,6 +1570,7 @@ static void handleSave()
     Settings.Timezone = next.Timezone;
     Settings.MempoolHost = next.MempoolHost;
     Settings.saveStats = next.saveStats;
+    Settings.WebPassword = next.WebPassword;
     Settings.displayTheme = next.displayTheme;
     setDisplayTheme(Settings.displayTheme);
     Settings.invertColors = next.invertColors;
@@ -1581,17 +1619,18 @@ static void handleSave()
                      "<script>function p(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(p,1200))};setTimeout(p,5000);</script>"
                      "</body></html>");
 
-  delay(800);
+  saveStat(); // stats mined since the last periodic save
+  delay(1000);
   ESP.restart();
 }
 
 static void handleStatus()
 {
   const MinerStatus m = getMinerStatus();
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(1536);
   doc["version"] = CURRENT_VERSION;
   doc["fw"] = FW_GIT;
-  doc["uptime_s"] = (uint32_t)(millis() / 1000);
+  doc["uptime_s"] = (uint32_t)(esp_timer_get_time() / 1000000ULL); // 64-bit clock: millis() wraps after 49.7 days
   doc["state"] = mMonitor.NerdStatus == NM_hashing ? "mining" : mMonitor.NerdStatus == NM_Connecting ? "connecting" : "starting";
   doc["hashrate_khs"] = round(m.hashrateKHs * 10.0) / 10.0;
   doc["hashrate_avg_khs"] = round(m.avgHashrateKHs * 10.0) / 10.0;
@@ -1599,8 +1638,9 @@ static void handleStatus()
   doc["total_mhashes"] = Mhashes + hashes / 1000000;
   doc["mining_time_s"] = (uint32_t)upTime;
   doc["templates"] = templates;
-  doc["best_diff"] = best_diff;
-  doc["shares_32bit"] = shares;
+  doc["best_diff"] = getBestDiff();
+  doc["shares_32bit"] = shares;                    // accepted by the pool
+  doc["shares_32bit_rejected"] = shares32Rejected; // refused by the pool
   doc["blocks_found"] = valids;
   doc["shares_accepted"] = m.accepted;
   doc["shares_rejected"] = m.rejected;
@@ -1616,11 +1656,86 @@ static void handleStatus()
   wifi["ip"] = WiFi.localIP().toString();
   doc["free_heap"] = ESP.getFreeHeap();
 
+  // Cached values only: nothing here may start an HTTPS fetch or an NTP
+  // request (those run on the monitor task and pause the miner).
+  JsonObject clock = doc.createNestedObject("clock");
+  int hh, mi, ss, dd, mo, yy;
+  if (getLocalClock(hh, mi, ss, dd, mo, yy)) {
+    char buf[16];
+    clock["synced"] = true;
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hh, mi, ss);
+    clock["time"] = buf;
+    snprintf(buf, sizeof(buf), "%02d/%02d/%04d", dd, mo, yy);
+    clock["date"] = buf;
+  } else {
+    clock["synced"] = false;
+  }
+  JsonObject btc = doc.createNestedObject("btc");
+  btc["price"] = getBTCpriceValue();                         // 0 = not fetched yet
+  btc["prefix"] = currencyFor(currencySetting()).prefix;
+  btc["block_height"] = getBlockHeightValue();               // 0 = not fetched yet
+#if defined(M5STICK_C_PLUS2) && defined(PIN_BATTERY_ADC)
+  const int batMv = plus2BatteryCachedMillivolts();
+  if (batMv > 0) {
+    JsonObject bat = doc.createNestedObject("battery");
+    bat["mv"] = batMv;
+    bat["percent"] = plus2BatteryPercent(batMv);
+  }
+#endif
+
   String out;
   serializeJson(doc, out);
   webCfgServer.sendHeader("Access-Control-Allow-Origin", "*");
   webCfgServer.sendHeader("Cache-Control", "no-store");
   webCfgServer.send(200, "application/json", out);
+}
+
+// --------------------------------------------------------------------------
+// Live monitor (webMonitorPage.h) and its hashrate history: one sample every
+// 30 s, the last hour, kept here in RAM (240 bytes).
+// --------------------------------------------------------------------------
+#define HISTORY_LEN 120
+#define HISTORY_PERIOD_ms 30000
+static uint16_t s_history[HISTORY_LEN]; // KH/s x 10
+static uint8_t s_historyCount = 0, s_historyHead = 0;
+static uint32_t s_historyLast = 0;
+
+static void historyTick()
+{
+  if (millis() - s_historyLast < HISTORY_PERIOD_ms)
+    return;
+  s_historyLast = millis();
+  uint32_t v = (uint32_t)(getMinerStatus().hashrateKHs * 10.0f + 0.5f);
+  if (v > 65535) v = 65535;
+  s_history[s_historyHead] = (uint16_t)v;
+  s_historyHead = (s_historyHead + 1) % HISTORY_LEN;
+  if (s_historyCount < HISTORY_LEN) s_historyCount++;
+}
+
+static void handleHistory()
+{
+  String out;
+  out.reserve(16 + s_historyCount * 7);
+  out = F("{\"interval_s\":");
+  out += HISTORY_PERIOD_ms / 1000;
+  out += F(",\"khs\":[");
+  for (uint8_t i = 0; i < s_historyCount; i++) {
+    const uint16_t v = s_history[(s_historyHead + HISTORY_LEN - s_historyCount + i) % HISTORY_LEN];
+    if (i) out += ',';
+    out += v / 10;
+    out += '.';
+    out += v % 10;
+  }
+  out += F("]}");
+  webCfgServer.sendHeader("Access-Control-Allow-Origin", "*");
+  webCfgServer.sendHeader("Cache-Control", "no-store");
+  webCfgServer.send(200, "application/json", out);
+}
+
+static void handleMonitor()
+{
+  webCfgServer.sendHeader("Cache-Control", "no-cache");
+  webCfgServer.send_P(200, "text/html; charset=utf-8", MONITOR_HTML);
 }
 
 void setup_webConfig(void)
@@ -1648,6 +1763,8 @@ void setup_webConfig(void)
     webCfgServer.send_P(200, "application/javascript", DASH_JS);
   });
   webCfgServer.on("/", HTTP_GET, handleRoot);
+  webCfgServer.on("/monitor", HTTP_GET, handleMonitor); // upstream live monitor page
+  webCfgServer.on("/api/history", HTTP_GET, handleHistory);
   webCfgServer.on("/save", HTTP_POST, handleSave);
   webCfgServer.on("/api/stats", HTTP_GET, handleApiStats);
   webCfgServer.on("/api/profile", HTTP_GET, handleApiProfile);
@@ -1662,6 +1779,24 @@ void setup_webConfig(void)
   webCfgServer.on("/api/screenshot", HTTP_GET, handleScreenshot);
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
   webCfgServer.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
+#ifdef TDISPLAY_UI_SCREENSHOT
+  // Dev builds: the screens rendered at boot (tDisplayPulseDriver.cpp),
+  // run-length encoded; tools/tdisplay_shots.py turns them into PNGs.
+  webCfgServer.on("/shot", HTTP_GET, []()
+  {
+    extern bool tDisplayShot(int i, const char **name, const uint8_t **data, size_t *len);
+    const char *name;
+    const uint8_t *data;
+    size_t len;
+    if (!tDisplayShot(webCfgServer.arg("i").toInt(), &name, &data, &len))
+    {
+      webCfgServer.send(404, "text/plain", "no such shot");
+      return;
+    }
+    webCfgServer.sendHeader("X-Shot-Name", name);
+    webCfgServer.send_P(200, "application/octet-stream", (PGM_P)data, len);
+  });
+#endif
   webCfgServer.onNotFound([]()
   {
     webCfgServer.sendHeader("Location", "/");
@@ -1670,12 +1805,14 @@ void setup_webConfig(void)
   webCfgServer.begin();
   webCfgStarted = true;
 
-  Serial.print("[WEBCFG] Settings & dashboard available at http://");
-  Serial.println(WiFi.localIP());
+  Serial.print("[WEBCFG] Dashboard at http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/  (upstream monitor: /monitor)");
 }
 
 void webConfigProcess(void)
 {
+  historyTick(); // also before the server is up, so the graph has the full hour
   if (webCfgStarted)
     webCfgServer.handleClient();
 }

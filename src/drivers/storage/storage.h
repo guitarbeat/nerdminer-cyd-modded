@@ -16,7 +16,11 @@
 #define DEFAULT_POOLPASS	"x"
 #define DEFAULT_WALLETID	"yourBtcAddress"
 #define DEFAULT_POOLPORT	3333
+#ifdef AUTO_DST_EU
+#define DEFAULT_TIMEZONE	1	// winter offset, summer time added automatically
+#else
 #define DEFAULT_TIMEZONE	2
+#endif
 #define DEFAULT_SAVESTATS	false
 #define DEFAULT_INVERTCOLORS	false
 #define DEFAULT_BRIGHTNESS	250
@@ -30,6 +34,7 @@
 #define DEFAULT_LEDCOLOR	0xF7931A	// 0xRRGGBB (Bitcoin Amber)
 #define DEFAULT_LEDBRIGHTNESS	255
 #define DEFAULT_LEDSCREENOFF	false
+#define DEFAULT_WEBPASSWORD	DEFAULT_WIFIPW	// LAN settings page login (user admin)
 #define DEFAULT_SCREENTIMEOUT	0	// minutes, 0 = never
 #define DEFAULT_NIGHTDIM	false
 #define DEFAULT_NIGHTBRIGHTNESS	40	// backlight duty 1-255
@@ -83,6 +88,7 @@
 #define JSON_SPIFFS_KEY_NIGHTFADE	"nightFade"
 #define JSON_SPIFFS_KEY_LATITUDE	"latitude"
 #define JSON_SPIFFS_KEY_LONGITUDE	"longitude"
+#define JSON_SPIFFS_KEY_WEBPASSWORD	"webPassword"
 
 // settings
 struct TSettings
@@ -117,6 +123,7 @@ struct TSettings
 	int NightFade{ DEFAULT_NIGHTFADE };
 	float Latitude{ 0 };	// decimal degrees, north positive; 0,0 = not set
 	float Longitude{ 0 };	// decimal degrees, east positive
+	String WebPassword{ DEFAULT_WEBPASSWORD };	// LAN settings page login, never empty
 };
 
 #endif // _STORAGE_H_
