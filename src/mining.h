@@ -142,6 +142,9 @@ double getBestDiff();
 void saveStat();   // write the stats to NVS now (before a planned restart / power off)
 
 extern volatile uint32_t g_stratumPing;
+extern volatile uint32_t g_lastJobMs; // millis() of the last mining.notify job (0 = none yet)
+// Seconds since the pool's last job, -1 if none yet.
+inline long lastJobAgeSec(void) { return g_lastJobMs ? (long)((millis() - g_lastJobMs) / 1000UL) : -1L; }
 extern volatile uint32_t g_acceptedShares;
 extern double g_networkDifficulty;
 extern double best_diff;

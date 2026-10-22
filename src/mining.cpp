@@ -149,6 +149,7 @@ double getBestDiff()
 
 // Stratum ping latency & live network stats
 volatile uint32_t g_stratumPing = 0;
+volatile uint32_t g_lastJobMs = 0;   // millis() of the last mining.notify (0 = none yet)
 // Bumped on every pool-accepted submit (drives the CYD RGB "share" pulse).
 volatile uint32_t g_acceptedShares = 0;
 double g_networkDifficulty = 0.0;
@@ -961,6 +962,7 @@ void runStratumWorker(void *name) {
       {
           case MINING_NOTIFY:         if(parse_mining_notify(line, mJob))
                                       {
+                                          g_lastJobMs = millis(); // a fresh puzzle from the pool
                                           clearPoolError();
                                           // The old job keeps mining while the new one is prepared below
                                           // (calculateMiningData prints a lot to the UART, which blocks for

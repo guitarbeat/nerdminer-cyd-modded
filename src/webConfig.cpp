@@ -115,6 +115,13 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
   json += ",\"theme\":" + String(Settings.displayTheme);
   json += ",\"ping\":" + String(g_stratumPing);
+  {
+    MinerStatus ms = getMinerStatus();
+    json += ",\"last_job_s\":" + String(lastJobAgeSec());   // seconds since the pool's last job (-1 = none)
+    json += ",\"shares_accepted\":" + String(ms.accepted);
+    json += ",\"shares_rejected\":" + String(ms.rejected);
+    json += ",\"pool_ping_ms\":" + String(g_stratumPing); // submit -> answer round trip (smoothed)
+  }
   json += ",\"net_diff\":" + String(g_networkDifficulty > 0.0 ? g_networkDifficulty : 0.0, 6); // job nbits; 0 = no job yet
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += ",\"screen\":" + String(getDisplayScreen());
@@ -793,6 +800,8 @@ const netHps=netDiff*4294967296/600,eNetpow=document.getElementById('dyn-netpow'
 if(d.temp){const e=document.getElementById('st-temp');if(e)e.textContent=d.temp;}
 if(d.uptime){const u=document.getElementById('st-uptime');if(u){const m=d.uptime.match(/^(\d+)\s+(\d{2}:\d{2}:\d{2})$/);u.textContent=m?(parseInt(m[1])>0?m[1]+'d '+m[2]:m[2]):d.uptime;}}
 const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;
+const eJob=document.getElementById('dyn-lastjob');if(eJob&&d.last_job_s!==undefined){const s=d.last_job_s;eJob.textContent=s<0?'waiting for pool':(s<60?s+'s ago':(s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'));}
+const eOkBad=document.getElementById('dyn-okbad');if(eOkBad&&d.shares_accepted!==undefined)eOkBad.textContent=d.shares_accepted+' ok / '+d.shares_rejected+' bad';
 if(d.free_heap){const e=document.getElementById('st-heap');if(e)e.textContent=Math.round(d.free_heap/1024)+' KB';}
 if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}
 const txt=document.getElementById('st-txt');if(txt){
@@ -1070,6 +1079,8 @@ static void handleRoot()
   if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
   else page += String((unsigned long)mhashes) + F(" million");
   page += F("</span></span></div>"
+            "<div class='tele-row' title='Why it matters: the pool hands your miner a fresh puzzle (a job) every 30-60 s, and right away when anyone finds a block. Old puzzles are worthless, so a recent time means you are working on current work.'><span>New puzzle from pool</span><span class='hl-val' id='dyn-lastjob'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: every proof (share) is checked by the pool. ok = it counted; bad = refused (stale after a new block, or a duplicate). A few bad ones are normal.'><span>Proofs checked by pool</span><span class='hl-val' id='dyn-okbad'>--</span></div>"
             "<div class='tele-row'><span>Uptime</span><span class='hl-val' id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
   page += F("</span></div>"

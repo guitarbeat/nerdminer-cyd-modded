@@ -724,7 +724,7 @@ static String fmtAgo(uint32_t sec)
 }
 
 // Strip cell: icon on the left, tiny LABEL over the value.
-// icon: 0 block, 1 clock, 2 thermometer, 3 status dot
+// icon: 0 block, 1 clock, 2 thermometer, 3 status dot, 4 check, 5 pie, 6 puzzle piece
 static void drawIconCell(int id, int x, int y, int cw, int ch, int icon, const char *label, const char *value,
                          uint16_t vCol, uint16_t iCol)
 {
@@ -739,6 +739,15 @@ static void drawIconCell(int id, int x, int y, int cw, int ch, int icon, const c
   else if (icon == 1) drawClockIcon(wgt, 3, iy, iCol);
   else if (icon == 2) drawThermoIcon(wgt, 5, iy - 1, iCol);
   else if (icon == 3) wgt.fillCircle(9, ch / 2, 4, iCol);
+  else if (icon == 6)
+  { // puzzle piece = a job from the pool (filled when it just arrived)
+    const int px = 3, py = iy + 3;
+    wgt.drawRect(px, py, 11, 11, iCol);
+    wgt.fillCircle(px + 5, py - 1, 2, iCol);  // knob on top
+    wgt.fillCircle(px + 12, py + 5, 2, iCol); // knob on the right
+    if (iCol == C_METER)
+      wgt.fillRect(px + 2, py + 2, 7, 7, iCol);
+  }
   else if (icon == 5)
   { // the world (circle) and your sliver of it
     wgt.drawCircle(9, ch / 2, 7, C_DIM);
@@ -756,7 +765,7 @@ static void drawIconCell(int id, int x, int y, int cw, int ch, int icon, const c
   unsigned vs = 12;
   while (vs > 9 && textW(value, vs) > cw - tx - 2)
     vs--;
-  text(wgt, value, tx, top + 10, vs, vCol, C_PANEL);
+  text(wgt, value, tx, top + (ch < 28 ? 8 : 10), vs, vCol, C_PANEL); // short cells: room for descenders (g in "ago")
   wEnd(x, y);
   done(id, k);
 }
@@ -1152,8 +1161,8 @@ static void ladderBar(TFT_eSPI &d, int x, int y, int w, int h, float f, uint16_t
 struct MineV
 {
   HdrV hdr;
-  String hash, shares, pool, every;
-  uint16_t poolCol = 0;
+  String hash, okBad, jobLabel, job, every;
+  uint16_t jobCol = 0, jobICol = 0, jobIcon = 0, okCol = 0;
   float kh = 0;
   bool flash = false;
 };
@@ -1272,17 +1281,50 @@ static void paintMine(const MineV &m)
     done(W_HERO, k);
   }
   drawChart(mineChartRect());
-  stripCell(0, 4, "PROOFS SENT", m.shares.c_str(), m.flash ? C_GOOD : C_TEXT, C_GOOD);
-  stripCell(1, 3, "POOL", m.pool.c_str(), m.poolCol, m.poolCol);
+  stripCell(0, 4, P ? "OK / BAD" : "PROOFS OK/BAD", m.okBad.c_str(), m.flash ? C_GOOD : m.okCol, C_GOOD);
+  stripCell(1, m.jobIcon, m.jobLabel.c_str(), m.job.c_str(), m.jobCol, m.jobICol);
   stripCell(2, 1, "PROOF EVERY", m.every.c_str(), C_TEXT, C_DIM);
 }
 
 static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
 {
+  (void)sharesN;
   m.hash = rate;
   m.kh = rate.toFloat();
-  m.shares = commas(String(sharesN));
-  poolState(m.pool, m.poolCol);
+  // proofs the pool checked: accepted / refused
+  MinerStatus ms = getMinerStatus();
+  m.okBad = String(ms.accepted) + " / " + String(ms.rejected);
+  m.okCol = ms.rejected > 0 ? C_WARN : C_TEXT;
+  // how the pool works: it keeps handing out fresh puzzles (jobs)
+  String st;
+  uint16_t sc;
+  poolState(st, sc);
+  const long age = lastJobAgeSec();
+  if (st == "ONLINE" && age >= 0)
+  {
+    m.jobLabel = "NEW PUZZLE";
+    m.job = fmtAgo((uint32_t)age);
+    m.jobIcon = 6;
+    m.jobCol = C_TEXT;
+    m.jobICol = age < 3 ? C_METER : C_DIM; // piece fills orange for a moment when a job lands
+  }
+  else if (st == "REFUSED")
+  {
+    char perr[48];
+    getPoolError(perr, sizeof(perr));
+    const char *mm = strstr(perr, ": ");
+    m.jobLabel = "REFUSED";
+    m.job = String(mm ? mm + 2 : perr).substring(0, 14);
+    m.jobIcon = 3;
+    m.jobCol = m.jobICol = C_BAD;
+  }
+  else
+  {
+    m.jobLabel = "POOL";
+    m.job = st == "ONLINE" ? String("LINKING...") : st + (st == "LINKING" ? "..." : "");
+    m.jobIcon = 3;
+    m.jobCol = m.jobICol = (sc == C_GOOD ? C_WARN : sc);
+  }
   m.every = fmtEvery(getPoolDifficulty(), m.kh);
   m.flash = millis() < shareFlashUntil;
 }
