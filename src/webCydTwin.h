@@ -236,6 +236,8 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   background:#161d2b;
 }
 .cyd-btn-snap{flex:0 0 auto;}
+.cyd-shot-cap{margin-top:8px;min-height:16px;font-size:12px;color:var(--cyd-muted);text-align:center;}
+.cyd-shot-cap.err{color:var(--cyd-red);}
 .cyd-btn-snap:disabled{opacity:.6;cursor:wait;}
 @media(max-width:480px){
   .cyd-preview-hdr{padding:10px 12px;}
@@ -272,6 +274,7 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
            width='240'
            height='320'>
     </div>
+    <div class='cyd-shot-cap'><span id='cyd-shot-ts'></span></div>
     <div class='cyd-tabs' role='tablist'>
       <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'>
         <span class='cyd-live-dot' title='On the device now'></span>Mining
@@ -307,6 +310,36 @@ function cydGetScreenUrl(screenIdx) {
   return '/api/screenshot?screen=' + s + '&t=' + Date.now();
 }
 
+const CYD_SNAP_LABEL = 'Take screenshot';
+let cydErrTimer = null;
+
+function cydSetSnapBtn(busy) {
+  const btn = document.getElementById('cyd-snap-btn');
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.textContent = busy ? 'Capturing\u2026' : CYD_SNAP_LABEL;
+}
+
+function cydSetShotCaption(ok) {
+  const ts = document.getElementById('cyd-shot-ts');
+  if (!ts) return;
+  const cap = ts.parentNode;
+  if (cydErrTimer) { clearTimeout(cydErrTimer); cydErrTimer = null; }
+  if (ok) {
+    ts.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour12: false });
+    if (cap) cap.classList.remove('err');
+  } else {
+    const prev = ts.textContent;
+    ts.textContent = 'Capture failed';
+    if (cap) cap.classList.add('err');
+    cydErrTimer = setTimeout(function() {
+      ts.textContent = (prev && prev !== 'Capture failed') ? prev : '';
+      if (cap) cap.classList.remove('err');
+      cydErrTimer = null;
+    }, 4000);
+  }
+}
+
 // One-shot fetch of the device screenshot. Called on button press, tab
 // change, and after switching the device's screen -- never on a timer.
 function cydFetchScreenshot(force) {
@@ -320,8 +353,7 @@ function cydFetchScreenshot(force) {
   cydIsLoading = true;
   const pulse = document.getElementById('cyd-live-pulse');
   if (pulse) pulse.classList.add('loading');
-  const btn = document.getElementById('cyd-snap-btn');
-  if (btn) btn.disabled = true;
+  cydSetSnapBtn(true);
 
   const next = new Image();
   const targetUrl = cydGetScreenUrl(cydPreviewScr);
@@ -329,7 +361,8 @@ function cydFetchScreenshot(force) {
   next.onload = function() {
     img.src = next.src;
     cydIsLoading = false;
-    if (btn) btn.disabled = false;
+    cydSetSnapBtn(false);
+    cydSetShotCaption(true);
     if (pulse) {
       pulse.classList.remove('loading');
       pulse.classList.remove('offline');
@@ -342,7 +375,8 @@ function cydFetchScreenshot(force) {
 
   next.onerror = function() {
     cydIsLoading = false;
-    if (btn) btn.disabled = false;
+    cydSetSnapBtn(false);
+    cydSetShotCaption(false);
     if (pulse) {
       pulse.classList.remove('loading');
       pulse.classList.add('offline');
@@ -474,15 +508,21 @@ function cydRender() {
   }
 }
 
-// Initial bootstrap: the <img> loads one screenshot; nothing polls after that.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    cydUpdateDevBadge();
-    cydRender();
-  });
-} else {
+function cydInit() {
   cydUpdateDevBadge();
   cydRender();
+  const img = document.getElementById('cyd-screen-img');
+  if (img) {
+    if (img.complete && img.naturalWidth > 0) cydSetShotCaption(true);
+    else img.addEventListener('load', function() { cydSetShotCaption(true); }, { once: true });
+  }
+}
+
+// Initial bootstrap: the <img> loads one screenshot; nothing polls after that.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', cydInit);
+} else {
+  cydInit();
 }
 )rawjs";
 
