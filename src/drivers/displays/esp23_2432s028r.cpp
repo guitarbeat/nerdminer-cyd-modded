@@ -312,8 +312,11 @@ static void wEnd(int x, int y)
     wgt.pushToSprite(&shot, x, dY(y));
     return;
   }
-  tft.dmaWait();
-  tft.pushImageDMA(x, y, wgt.width(), wgt.height(), wgt.getBuffer());
+  // Blocking push. The SPI DMA path (pushImageDMA + dmaWait) never got its
+  // completion on the CYD: the first transfer was queued and the next
+  // dmaWait() blocked forever, freezing the Monitor task -- hashrate stuck at
+  // 0.00, uptime frozen, screen not updating, stats never saved.
+  wgt.pushSprite(x, y);
   g_dmaTransferCount++;
 }
 
@@ -2027,7 +2030,7 @@ static volatile int g_currentDuty = 255;
 void esp32_2432S028R_Init(void)
 {
   tft.init();
-  tft.initDMA(true);
+  // No tft.initDMA(): see wEnd(). With DMA disabled every dmaWait() is a no-op.
   if (nvMem.loadConfig(&Settings))
   {
     invertColors = Settings.invertColors;
