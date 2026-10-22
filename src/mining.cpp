@@ -19,6 +19,7 @@
 #include <stddef.h> // offsetof (saved stats record)
 #include <string.h>
 #include <map>
+#include <memory>
 #include "mbedtls/sha256.h"
 #include "i2c_master.h"
 #include <esp_timer.h>
@@ -832,6 +833,8 @@ void runStratumWorker(void *name) {
 
     if(!isMinerSuscribed)
     {
+      // Shares / best / blocks are kept per pool (and coin).
+      selectPoolStats(activePoolAddress(), activePoolPort());
       //Stop miner current jobs
       mWorker = init_mining_subscribe();
 
@@ -2637,62 +2640,263 @@ void restoreStat() {
   loadShareHistory();
 }
 
-// Share history blob ("shist" in the stats namespace). Written when a share
-// lands, at most once a minute (a pool with a tiny difficulty can send
-// several shares a second), and with every periodic stats save.
-#define SHIST_MAGIC 0x31485348UL // "HSH1"
-struct ShareHistBlob {
+// ---------------------------------------------------------------------------
+// Per-pool stats. Shares, best difficulty, blocks found and the recent-share
+// ring belong to the pool (and so the coin) they were mined on: a BTC best of
+// 31 says nothing about an altcoin pool. Each pool ("host:port") gets one NVS
+// blob ("pst0".."pst7", least recently used evicted). The globals (shares,
+// best_diff, valids, shares32Rejected, the share ring) always hold the ACTIVE
+// pool's numbers, so the rest of the firmware reads them as before. Total
+// hashes, templates and uptime stay global (StatsRecord).
+// The first boot with this code adopts the old global stats for the pool in
+// the settings (the one they were mined on).
+// ---------------------------------------------------------------------------
+#define POOLSTAT_MAGIC 0x31535450UL // "PST1"
+struct PoolStatRec {
   uint32_t magic;
-  uint32_t count;
-  ShareRec recs[SHARE_HIST_N]; // oldest..newest
+  uint32_t lru;   // higher = used more recently
+  char key[64];   // "host:port"
+  double best_diff;
+  uint32_t shares;
+  uint32_t valids;
+  uint32_t shares32Rejected;
+  uint32_t ringCount;
+  ShareRec ring[SHARE_HIST_N]; // oldest..newest
+  uint32_t crc;
 };
+
+static std::recursive_mutex s_poolStatMutex;
+static char s_poolKey[64] = "";
+static int s_poolSlot = -1;
+static uint32_t s_poolLru = 0;
+static PoolStatSummary s_poolSum[POOLSTAT_N]; // RAM copy of the table for /api/stats
 static volatile bool s_shareDirty = false;
 static uint32_t s_shareSavedMs = 0;
 static bool s_shareSaveEver = false;
 
-static void writeShareHistory(void)
+const char *poolCoinLabel(const char *key)
 {
-  if (!Settings.saveStats || !s_statsLoaded)
+  if (strstr(key, "shears.co.uk"))
+  {
+    const char *c = strrchr(key, ':');
+    int port = c ? atoi(c + 1) : 0;
+    return port == 3690 ? "POL" : port == 3700 ? "EMB" : port == 3710 ? "FXTC" : "ALT";
+  }
+  return "BTC";
+}
+
+static void poolKeyFor(const String &host, int port, char *out, size_t n)
+{
+  snprintf(out, n, "%s:%d", host.c_str(), port);
+}
+
+static uint32_t poolRecCrc(const PoolStatRec &r)
+{
+  uint32_t crc = crc32_reset();
+  crc = crc32_add(crc, &r, offsetof(PoolStatRec, crc));
+  return crc32_finish(crc);
+}
+
+static bool readPoolSlot(int i, PoolStatRec &r)
+{
+  char k[6];
+  snprintf(k, sizeof(k), "pst%d", i);
+  size_t size = sizeof(r);
+  return nvs_get_blob(stat_handle, k, &r, &size) == ESP_OK && size == sizeof(r) &&
+         r.magic == POOLSTAT_MAGIC && r.crc == poolRecCrc(r) && r.key[0];
+}
+
+static void sumFromRec(int i, const PoolStatRec &r)
+{
+  PoolStatSummary &s = s_poolSum[i];
+  memset(&s, 0, sizeof(s));
+  strncpy(s.key, r.key, sizeof(s.key) - 1);
+  s.best = r.best_diff;
+  s.shares = r.shares;
+  s.valids = r.valids;
+  s.used = true;
+}
+
+static void writePoolSlot(int i, PoolStatRec &r)
+{
+  char k[6];
+  snprintf(k, sizeof(k), "pst%d", i);
+  r.magic = POOLSTAT_MAGIC;
+  r.crc = poolRecCrc(r);
+  if (nvs_set_blob(stat_handle, k, &r, sizeof(r)) != ESP_OK || nvs_commit(stat_handle) != ESP_OK)
+    Serial.printf("[MONITOR] Pool stats save failed (%s)\n", r.key);
+  sumFromRec(i, r);
+}
+
+static void recFromActive(PoolStatRec &r)
+{
+  memset(&r, 0, sizeof(r));
+  strncpy(r.key, s_poolKey, sizeof(r.key) - 1);
+  r.lru = s_poolLru;
+  r.best_diff = getBestDiff();
+  r.shares = shares;
+  r.valids = valids;
+  r.shares32Rejected = shares32Rejected;
+  r.ringCount = (uint32_t)getShareHistory(r.ring, SHARE_HIST_N);
+}
+
+static void activeFromRec(const PoolStatRec *r)
+{
+  portENTER_CRITICAL(&s_bestDiffMux);
+  best_diff = r ? r->best_diff : 0.0;
+  portEXIT_CRITICAL(&s_bestDiffMux);
+  shares = r ? r->shares : 0;
+  valids = r ? r->valids : 0;
+  shares32Rejected = r ? r->shares32Rejected : 0;
+  g_blockBestDiff = 0.0;
+  uint32_t n = r ? (r->ringCount <= SHARE_HIST_N ? r->ringCount : SHARE_HIST_N) : 0;
+  portENTER_CRITICAL(&s_shareMux);
+  for (uint32_t i = 0; i < n; i++)
+    s_shareHist[i] = r->ring[i];
+  s_shareCount = (uint8_t)n;
+  s_shareHead = (uint8_t)(n % SHARE_HIST_N);
+  s_shareSeq++;
+  portEXIT_CRITICAL(&s_shareMux);
+}
+
+static bool poolStatsUsable() { return Settings.saveStats && s_statsLoaded; }
+
+// Writes the active pool's numbers to its slot.
+static void savePoolStats(void)
+{
+  std::lock_guard<std::recursive_mutex> lock(s_poolStatMutex);
+  if (!poolStatsUsable() || s_poolSlot < 0)
     return;
-  ShareHistBlob *b = new ShareHistBlob();
-  if (!b)
-    return;
-  b->magic = SHIST_MAGIC;
-  b->count = (uint32_t)getShareHistory(b->recs, SHARE_HIST_N);
+  std::unique_ptr<PoolStatRec> r(new PoolStatRec());
+  recFromActive(*r);
   s_shareDirty = false;
   s_shareSavedMs = millis();
   s_shareSaveEver = true;
-  if (nvs_set_blob(stat_handle, "shist", b, sizeof(*b)) != ESP_OK || nvs_commit(stat_handle) != ESP_OK)
-    Serial.printf("[MONITOR] Share history save failed\n");
-  delete b;
+  writePoolSlot(s_poolSlot, *r);
 }
 
+// Makes host:port the active pool: saves the old one's numbers, loads the
+// new one's (or starts it at zero). adoptGlobals: no table yet (first boot
+// with per-pool stats) -- the restored global numbers become this pool's.
+static void selectPoolStatsKey(const char *key, bool adoptGlobals)
+{
+  std::lock_guard<std::recursive_mutex> lock(s_poolStatMutex);
+  if (!strcmp(key, s_poolKey))
+    return;
+  if (!Settings.saveStats)
+  { // nothing persisted: just don't mix pools
+    if (s_poolKey[0])
+      activeFromRec(nullptr);
+    strncpy(s_poolKey, key, sizeof(s_poolKey) - 1);
+    return;
+  }
+  if (!s_statsLoaded)
+    return;
+  savePoolStats(); // the pool we are leaving
+  std::unique_ptr<PoolStatRec> r(new PoolStatRec());
+  int found = -1, freeSlot = -1, oldest = -1, nValid = 0;
+  uint32_t maxLru = s_poolLru, minLru = UINT32_MAX;
+  for (int i = 0; i < POOLSTAT_N; i++)
+  {
+    if (!readPoolSlot(i, *r))
+    {
+      s_poolSum[i].used = false;
+      if (freeSlot < 0)
+        freeSlot = i;
+      continue;
+    }
+    nValid++;
+    sumFromRec(i, *r);
+    if (r->lru > maxLru)
+      maxLru = r->lru;
+    if (!strcmp(r->key, key))
+      found = i;
+    else if (r->lru < minLru)
+    {
+      minLru = r->lru;
+      oldest = i;
+    }
+  }
+  int slot = found >= 0 ? found : (freeSlot >= 0 ? freeSlot : oldest);
+  if (found >= 0)
+  {
+    readPoolSlot(found, *r);
+    activeFromRec(r.get());
+    Serial.printf("[MONITOR] Pool stats for %s restored (%u shares, best %.3f)\n", key, (unsigned)r->shares, r->best_diff);
+  }
+  else if (adoptGlobals && nValid == 0)
+    Serial.printf("[MONITOR] Pool stats: saved totals assigned to %s\n", key);
+  else
+  {
+    activeFromRec(nullptr);
+    Serial.printf("[MONITOR] Pool stats for %s start at zero (slot %d)\n", key, slot);
+  }
+  strncpy(s_poolKey, key, sizeof(s_poolKey) - 1);
+  s_poolKey[sizeof(s_poolKey) - 1] = 0;
+  s_poolSlot = slot;
+  s_poolLru = maxLru + 1;
+  savePoolStats(); // claim the slot now (and bump its LRU)
+}
+
+void selectPoolStats(const String &host, int port)
+{
+  char key[64];
+  poolKeyFor(host, port, key, sizeof(key));
+  selectPoolStatsKey(key, false);
+}
+
+void getActivePool(char *key, size_t keyLen, const char **coin)
+{
+  std::lock_guard<std::recursive_mutex> lock(s_poolStatMutex);
+  if (s_poolKey[0])
+    strncpy(key, s_poolKey, keyLen - 1);
+  else
+    poolKeyFor(activePoolAddress(), activePoolPort(), key, keyLen);
+  key[keyLen - 1] = 0;
+  if (coin)
+    *coin = poolCoinLabel(key);
+}
+
+int getPoolStatsTable(PoolStatSummary *out, int max)
+{
+  std::lock_guard<std::recursive_mutex> lock(s_poolStatMutex);
+  int n = 0;
+  for (int i = 0; i < POOLSTAT_N && n < max; i++)
+  {
+    if (i == s_poolSlot)
+    { // live numbers for the active pool
+      PoolStatSummary s;
+      memset(&s, 0, sizeof(s));
+      strncpy(s.key, s_poolKey, sizeof(s.key) - 1);
+      s.best = getBestDiff();
+      s.shares = shares;
+      s.valids = valids;
+      s.used = true;
+      s.active = true;
+      out[n++] = s;
+    }
+    else if (s_poolSum[i].used)
+      out[n++] = s_poolSum[i];
+  }
+  return n;
+}
+
+// A share landed: save soon (at most once a minute -- a pool with a tiny
+// difficulty can send several a second); saveStat() flushes the rest.
 static void saveShareHistory(void)
 {
   s_shareDirty = true;
   if (!s_shareSaveEver || millis() - s_shareSavedMs >= 60000UL)
-    writeShareHistory();
+    savePoolStats();
 }
 
+// Boot: pick the pool in the settings, adopting the old global totals if
+// there is no per-pool table yet.
 static void loadShareHistory(void)
 {
-  ShareHistBlob *b = new ShareHistBlob();
-  if (!b)
-    return;
-  size_t size = sizeof(*b);
-  if (nvs_get_blob(stat_handle, "shist", b, &size) == ESP_OK && size == sizeof(*b) &&
-      b->magic == SHIST_MAGIC && b->count <= SHARE_HIST_N)
-  {
-    portENTER_CRITICAL(&s_shareMux);
-    for (uint32_t i = 0; i < b->count; i++)
-      s_shareHist[i] = b->recs[i];
-    s_shareCount = (uint8_t)b->count;
-    s_shareHead = (uint8_t)(b->count % SHARE_HIST_N);
-    s_shareSeq++;
-    portEXIT_CRITICAL(&s_shareMux);
-    Serial.printf("[MONITOR] Share history restored (%u shares)\n", (unsigned)b->count);
-  }
-  delete b;
+  char key[64];
+  poolKeyFor(activePoolAddress(), activePoolPort(), key, sizeof(key));
+  selectPoolStatsKey(key, true);
 }
 
 void saveStat() {
@@ -2717,8 +2921,7 @@ void saveStat() {
   if (nvs_set_blob(stat_handle, slot, &r, sizeof(r)) == ESP_OK && nvs_commit(stat_handle) == ESP_OK) {
     s_statsSeq = r.seq; // the next save goes to the other slot
     Serial.printf("[MONITOR] Stats saved (slot %s, #%u)\n", slot + 4, (unsigned)r.seq);
-    if (s_shareDirty)
-      writeShareHistory();
+    savePoolStats();
   } else {
     Serial.printf("[MONITOR] Stats save failed (slot %s)\n", slot + 4);
   }

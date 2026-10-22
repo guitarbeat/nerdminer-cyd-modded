@@ -124,6 +124,25 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"market\":" + getMarketJson();
   // Every share the pool answered (newest last): d = difficulty the hash
   // reached, t = UTC seconds (0 = clock unknown), ok = accepted.
+  {
+    // Active pool and the per-pool table (shares / best / blocks are per pool).
+    char key[64];
+    const char *coin = "BTC";
+    getActivePool(key, sizeof(key), &coin);
+    json += ",\"pool\":\"" + htmlEscape(String(key)) + "\",\"coin\":\"" + String(coin) + "\"";
+    static PoolStatSummary tab[POOLSTAT_N];
+    int n = getPoolStatsTable(tab, POOLSTAT_N);
+    json += ",\"pool_stats\":[";
+    char b[200];
+    for (int i = 0; i < n; i++)
+    {
+      snprintf(b, sizeof(b), "%s{\"pool\":\"%s\",\"coin\":\"%s\",\"shares\":%lu,\"best_diff\":%.6g,\"blocks\":%lu,\"active\":%s}",
+               i ? "," : "", htmlEscape(String(tab[i].key)).c_str(), poolCoinLabel(tab[i].key), (unsigned long)tab[i].shares,
+               tab[i].best, (unsigned long)tab[i].valids, tab[i].active ? "true" : "false");
+      json += b;
+    }
+    json += "]";
+  }
   json += ",\"pool_diff\":" + String(getPoolDifficulty(), 6);
   {
     time_t nowUtc = 0;
@@ -726,7 +745,7 @@ function fmtAgo(now,t){if(!now||!t)return'--';const s=Math.max(0,now-t);if(s<60)
 function renderShareLog(d,net){
 const log=Array.isArray(d.share_log)?d.share_log:[],pool=Number(d.pool_diff)||1,now=Number(d.now_utc)||0;
 let best=Number(d.best_diff_raw)||0;log.forEach(s=>{if(s.d>best)best=s.d;});
-const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};
+const set=(id,t)=>{const e=document.getElementById(id);if(e)e.textContent=t;};if(d.pool){set('dyn-poolcoin','\u00b7 '+(d.coin||'')+' on '+d.pool);set('sl-coin','\u00b7 '+(d.coin||''));}
 set('sl-pool',fmtDiffC(pool));set('sl-net',fmtDiffC(net));
 if(best>0){set('sl-best',fmtDiffC(best));set('sl-best-gap','needs '+fmtDiffC(net/best)+'\u00d7 more \u00b7 '+Math.log10(net/best).toFixed(1)+' orders to go');}
 const box=document.getElementById('share-log');if(!box)return;
@@ -1032,7 +1051,7 @@ static void handleRoot()
             "</div>"
             "<div class='tele-card'>"
             "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Shares</div>"
+            "<div class='tele-card-title'>Shares <span class='muted' id='dyn-poolcoin' style='font-weight:400'></span></div>"
             "<button type='button' class='btn-reset-stats' id='btn-reset-session' onclick='resetSession()' title='Reset session shares and best difficulty'>Reset</button>"
             "</div>"
             "<div class='tele-hero-val'><span id='dyn-shares'>");
@@ -1059,7 +1078,7 @@ static void handleRoot()
             "</div>"
             "</div>"
             "<div class='tele-card'>"
-            "<div class='tele-card-hdr'><div class='tele-card-title'>How close each share got</div>"
+            "<div class='tele-card-hdr'><div class='tele-card-title'>How close each share got <span class='muted' id='sl-coin' style='font-weight:400'></span></div>"
             "<span class='muted' style='font-size:12px'>pool asks for <span id='sl-pool'>--</span></span></div>"
             "<div class='tele-hero-sub'>A share proves work but pays nothing on a solo pool. Only a share that reaches the network difficulty (<span id='sl-net'>--</span>) is a block.</div>"
             "<div class='tele-row'><span>Closest share</span><span class='hl-val'><span id='sl-best'>--</span> <span class='muted' id='sl-best-gap'></span></span></div>"

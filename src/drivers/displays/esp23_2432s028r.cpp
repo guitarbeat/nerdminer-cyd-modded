@@ -1419,6 +1419,7 @@ struct ArchitectureV
   double poolDiff = 1;
   uint32_t nowUtc = 0;
   uint32_t seq = 0;
+  char coin[8] = "BTC";
   int nShares = 0;
   ShareRec shares[SHARE_HIST_N]; // oldest..newest
   StripV strip;     // unused (kept so call sites compile)
@@ -1428,6 +1429,12 @@ static void archFillShares(ArchitectureV &av)
 {
   av.nShares = getShareHistory(av.shares, SHARE_HIST_N);
   av.seq = getShareHistorySeq();
+  {
+    char key[64];
+    const char *c = "BTC";
+    getActivePool(key, sizeof(key), &c);
+    strncpy(av.coin, c, sizeof(av.coin) - 1);
+  }
   av.poolDiff = getPoolDifficulty();
   time_t u = 0;
   av.nowUtc = (getUtcTime(u, false) && u > 1600000000) ? (uint32_t)u : 0;
@@ -1522,13 +1529,15 @@ static void paintArchBody(const ArchitectureV &av)
 
   // ---- Top: closest share readout -------------------------------------
   char tkey[96];
-  snprintf(tkey, sizeof(tkey), "%s|%s|%s|%d", bestS, netS, ordS, P ? 1 : 0);
+  snprintf(tkey, sizeof(tkey), "%s|%s|%s|%s|%d", bestS, netS, ordS, av.coin, P ? 1 : 0);
   if (need(W_ARCH_TOP, tkey) && wBegin(g.topW, g.topH, C_BG))
   {
     panel(wgt, 0, 0, g.topW, g.topH, 6, C_PANEL, C_EDGE, C_BG);
     char blk[32];
     snprintf(blk, sizeof(blk), "BLOCK NEEDS %s", netS);
-    text(wgt, "CLOSEST SHARE", 8, 4, 10, C_DIM, C_PANEL);
+    char ttl[32];
+    snprintf(ttl, sizeof(ttl), "CLOSEST %s SHARE", av.coin);
+    text(wgt, ttl, 8, 4, 10, C_DIM, C_PANEL);
     text(wgt, blk, g.topW - 8, 4, 10, C_WARN, C_PANEL, Align::TopRight);
     text(wgt, haveBest ? bestS : "--", 8, P ? 17 : 15, P ? 26 : 24, C_METER, C_PANEL);
     char l1[32], l2[32];

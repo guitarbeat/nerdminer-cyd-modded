@@ -182,6 +182,23 @@ uint32_t getShareHistorySeq(void); // bumps on every new share (change detection
 double getPoolDifficulty(void);    // difficulty the pool asked for (mining.set_difficulty)
 void clearShareHistory(void);
 
+// Per-pool stats (see mining.cpp): shares, best diff, blocks and the share
+// ring are kept per "host:port", up to POOLSTAT_N pools (LRU).
+#define POOLSTAT_N 8
+struct PoolStatSummary
+{
+  char key[64]; // "host:port"
+  double best;
+  uint32_t shares;
+  uint32_t valids;
+  bool used;
+  bool active;
+};
+void selectPoolStats(const String &host, int port); // stratum task, before subscribing
+void getActivePool(char *key, size_t keyLen, const char **coin);
+int getPoolStatsTable(PoolStatSummary *out, int max);
+const char *poolCoinLabel(const char *key); // "BTC", "EMB", "POL", "FXTC"...
+
 // ---------------------------------------------------------------------------
 // Display-only hash samples for the Protocol scatter plot.
 // Hot path: power-of-two mask (~1/16384). Fixed ring, no heap / mutex / String.
