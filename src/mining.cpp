@@ -2685,6 +2685,37 @@ const char *poolCoinLabel(const char *key)
   return "BTC";
 }
 
+void poolShortName(const char *key, char *out, size_t n)
+{
+  char host[64];
+  strncpy(host, key, sizeof(host) - 1);
+  host[sizeof(host) - 1] = 0;
+  char *c = strchr(host, ':');
+  if (c)
+    *c = 0;
+  const char *h = host;
+  static const char *pre[] = {"stratum.", "pool.", "solo.", "www.", "eu.", "us."};
+  for (bool again = true; again;)
+  {
+    again = false;
+    for (const char *p : pre)
+      if (!strncmp(h, p, strlen(p)) && strchr(h + strlen(p), '.'))
+      {
+        h += strlen(p);
+        again = true;
+      }
+  }
+  if (!strncmp(h, "shears.", 7))
+  {
+    snprintf(out, n, "Shears");
+    return;
+  }
+  snprintf(out, n, "%s", h);
+  char *dot = strchr(out, '.');
+  if (dot)
+    *dot = 0;
+}
+
 static void poolKeyFor(const String &host, int port, char *out, size_t n)
 {
   snprintf(out, n, "%s:%d", host.c_str(), port);

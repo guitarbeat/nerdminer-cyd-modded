@@ -453,6 +453,7 @@ code{font-family:var(--mono);font-size:.88em;background:var(--input-bg);border:1
 .container{max-width:1160px;margin:0 auto}
 
 /* Header: identity on the left, mining state on the right */
+.coin-pill{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--amber);border:1px solid var(--card-border);border-radius:999px;padding:3px 10px;white-space:nowrap}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 12px;margin-bottom:12px}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand>div{min-width:0}
@@ -757,7 +758,7 @@ h+="<div class='"+cls+"'><span class='sl-d'>"+fmtDiffC(s.d)+(s.ok?'':' (rejected
 box.innerHTML=h;}
 function updateStats(d){
 const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;
-const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;
+const eCoin=document.getElementById('st-coin');if(eCoin&&d.pool){let h=d.pool.split(':')[0].replace(/^((stratum|pool|solo|www|eu|us)\.)+(?=.*\.)/,'');h=/^shears\./.test(h)?'Shears':h.split('.')[0];eCoin.textContent=(d.coin||'')+' \u00b7 '+h;eCoin.title=d.pool;}const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;
 const mhashes=Number(d.mhashes)||0,totHashes=mhashes*1e6,shares=parseInt(d.shares)||0,diff=parseFloat(d.best_diff)||0;
 const eHps=document.getElementById('dyn-hps');if(eHps)eHps.textContent=hps.toLocaleString();
 const eHpd=document.getElementById('dyn-hpd');if(eHpd)eHpd.textContent=fmtNum(hpd);
@@ -975,7 +976,19 @@ static void handleRoot()
             "<div class='logo-box' id='site-logo'>&#8383;</div>"
             "<div><div class='brand-title'>NerdMiner CYD</div><div class='brand-subtitle'>v1.6.3 (" FW_GIT ") &bull; ");
 
-  page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>"
+  page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>");
+  {
+    char key[64], shortName[24];
+    const char *coin = "BTC";
+    getActivePool(key, sizeof(key), &coin);
+    poolShortName(key, shortName, sizeof(shortName));
+    page += F("<div class='coin-pill' id='st-coin' title='");
+    page += htmlEscape(String(key));
+    page += F("'>");
+    page += String(coin) + F(" &middot; ") + htmlEscape(String(shortName));
+    page += F("</div>");
+  }
+  page += F(""
             "<div class='status-badge' role='status' aria-live='polite'>"
             "<span id='st-txt' class='");
 

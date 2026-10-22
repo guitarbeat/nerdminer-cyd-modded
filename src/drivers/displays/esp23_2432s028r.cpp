@@ -226,6 +226,7 @@ enum WidgetId
   W_ARCH_ROW3,
   W_ARCH_ROW4,
   W_ARCH_ROW5,
+  W_HDR_COIN,
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -718,6 +719,26 @@ static void drawHeader(const HdrV &h)
       text(wgt, h.blocks.c_str(), 32, 4, 13, blockNumCol, C_PANEL, Align::TopCenter);
       wEnd(bx, 4);
       done(W_HDR_BADGE, kBadge);
+    }
+  }
+
+  // Active coin + pool between the badge and the clock: "EMB · Shears",
+  // or just the ticker when that doesn't fit.
+  {
+    char key[64], shortName[24], lab[40];
+    const char *coin = "BTC";
+    getActivePool(key, sizeof(key), &coin);
+    poolShortName(key, shortName, sizeof(shortName));
+    const int cx0 = bx + wBadge + 4, cw = tx - cx0 - 4, ch = 20;
+    snprintf(lab, sizeof(lab), "%s \xC2\xB7 %s", coin, shortName);
+    if (textW(lab, 12) > cw - 4)
+      snprintf(lab, sizeof(lab), "%s", coin);
+    String kCoin = String("hcoin|") + lab + "|" + (P ? "P" : "L");
+    if (need(W_HDR_COIN, kCoin) && wBegin(cw, ch, C_BG))
+    {
+      text(wgt, lab, cw / 2, 4, 12, C_GOLD, C_BG, Align::TopCenter);
+      wEnd(cx0, 5);
+      done(W_HDR_COIN, kCoin);
     }
   }
 
