@@ -190,7 +190,11 @@ static float roundShown = 0;
 static uint8_t rndLvl[G_SEGS];
 static char hexShown[HEX_N]; // middle ring: char drawn per cell (0 = redraw)
 static bool rndDrain = false;  // a new block: drain the inner ring to 0 first
-#define C_ROUND 0x2DBF // teal-blue, so it doesn't compete with the orange dial
+// Screen 0 colors: orange = speed, blue = guesses this round, magenta = my
+// best hash (its zeros), teal = zeros needed / the winners.
+#define C_ROUND 0x0656 // teal: inner zeros ring and winner markers
+#define C_GUESS 0x441F // blue: guesses this round
+#define C_BEST 0xFA99  // magenta: my best hash this round
 static unsigned long shareFlashUntil = 0;
 static uint32_t lastShares = 0;
 
@@ -927,8 +931,8 @@ static void hexRingDraw(const String &hex)
     const char t[2] = {c, 0};
     if (z)
     {
-      wgt.fillRoundRect(0, 0, cs, cs, 2, C_METER);
-      text(wgt, t, cs / 2, -2, 9, TFT_BLACK, C_METER, Align::TopCenter);
+      wgt.fillRoundRect(0, 0, cs, cs, 2, C_BEST);
+      text(wgt, t, cs / 2, -2, 9, TFT_BLACK, C_BEST, Align::TopCenter);
     }
     else
       text(wgt, t, cs / 2, -2, 9, c == '-' ? mix565(C_BG, C_DIM, 110) : mix565(C_BG, C_DIM, 170), C_BG, Align::TopCenter);
@@ -1283,6 +1287,14 @@ static uint8_t zhZ[ZH_N];
 static uint8_t zhHead = 0, zhCount = 0;
 static int zhLast = -1;
 static uint32_t zhEpoch = 0;
+// Winner markers (teal): the winning block's zeros, at the time it arrived.
+#define ZW_N 8
+#define ZH_HOLD_MS 5000UL // keep the finished round on screen as long as the banner
+static uint32_t zwT[ZW_N];
+static uint8_t zwZ[ZW_N];
+static uint8_t zwHead = 0, zwCount = 0;
+static uint32_t zhHoldUntil = 0; // != 0: the finished round is being held
+static int winnerZeros();
 static int bestZerosNow()
 {
   uint8_t bh[32];
@@ -1314,9 +1326,28 @@ static void zerosSample()
   if (zhLast < 0)
     push(0); // the first round starts (at boot) from nothing
   const uint32_t nb = g_newBlockMs;
-  if (nb != lastBlk && zhLast > 0)
-    push(0); // a new block: the round restarts from nothing (the sawtooth drop)
-  lastBlk = nb;
+  if (nb != lastBlk)
+  { // a new block: mark the winner's zeros (teal) and hold the finished round
+    if (nb)
+    {
+      zwT[zwHead] = now;
+      zwZ[zwHead] = (uint8_t)winnerZeros();
+      zwHead = (zwHead + 1) % ZW_N;
+      if (zwCount < ZW_N) zwCount++;
+      zhHoldUntil = now + ZH_HOLD_MS;
+      if (!zhHoldUntil) zhHoldUntil = 1;
+      zhEpoch++;
+    }
+    lastBlk = nb;
+  }
+  if (zhHoldUntil)
+  {
+    if ((int32_t)(now - zhHoldUntil) < 0)
+      return; // still comparing: staircase frozen at the round's best
+    zhHoldUntil = 0;
+    if (zhLast > 0)
+      push(0); // then the round restarts from nothing (the sawtooth drop)
+  }
   if (z != zhLast)
     push(z);
 }
@@ -1339,11 +1370,11 @@ static void drawZerosChart(const Rect &r, int winZ)
   banded(r.x + 2, r.y + 2, r.w - 4, r.h - 4, C_PANEL, [&] {
     TFT_eSPI &d = out();
     d.fillRect(r.x + 2, dY(r.y + 2), r.w - 4, r.h - 4, C_PANEL);
-    text(d, P ? "BEST ZEROS THIS ROUND" : "BEST ZEROS", px, dY(py), 9, C_DIM, C_PANEL);
-    if (!P) text(d, "THIS ROUND", px, dY(py + 11), 9, C_DIM, C_PANEL);
+    text(d, P ? "YOUR BEST ZEROS" : "YOUR BEST", px, dY(py), 9, C_DIM, C_PANEL);
+    if (!P) text(d, "ZEROS", px, dY(py + 11), 9, C_DIM, C_PANEL);
     char t[24];
     snprintf(t, sizeof(t), "%d", zhLast > 0 ? zhLast : 0);
-    text(d, t, px + W, dY(P ? py - 3 : py + 22), 24, C_METER, C_PANEL, Align::TopRight);
+    text(d, t, px + W, dY(P ? py - 3 : py + 22), 24, C_BEST, C_PANEL, Align::TopRight);
     const int top = py + (P ? 26 : 52), bot = py + H - 14;
     const int zMax = 20;
     auto Yz = [&](int z) { if (z > zMax) z = zMax; return bot - (z * (bot - top)) / zMax; };
@@ -1362,6 +1393,15 @@ static void drawZerosChart(const Rect &r, int winZ)
       snprintf(t, sizeof(t), "target ~%d", winZ);
       text(d, t, px, dY(wy + 2), 8, C_BAD, C_PANEL);
     }
+    // winner markers: where the block that ended each round landed (teal)
+    for (int i = 0; i < zwCount; i++)
+    {
+      const int idx = (zwHead + ZW_N - zwCount + i) % ZW_N;
+      if (now - zwT[idx] > span) continue;
+      const int x = Xt(zwT[idx]), y = Yz(zwZ[idx]);
+      d.drawFastVLine(x, dY(y), bot - y, mix565(C_PANEL, C_ROUND, 110));
+      d.fillCircle(x, dY(y), 3, C_ROUND);
+    }
     // staircase, oldest to newest
     int prevX = px, prevY = bot;
     bool any = false;
@@ -1371,9 +1411,9 @@ static void drawZerosChart(const Rect &r, int winZ)
       const int x = Xt(zhT[idx]), y = Yz(zhZ[idx]);
       if (any)
       {
-        d.drawFastHLine(prevX, dY(prevY), x - prevX + 1, C_METER); // flat until it changes
-        d.drawFastHLine(prevX, dY(prevY) - 1, x - prevX + 1, C_METER);
-        d.drawFastVLine(x, dY(y < prevY ? y : prevY), abs(y - prevY) + 1, C_METER);
+        d.drawFastHLine(prevX, dY(prevY), x - prevX + 1, C_BEST); // flat until it changes
+        d.drawFastHLine(prevX, dY(prevY) - 1, x - prevX + 1, C_BEST);
+        d.drawFastVLine(x, dY(y < prevY ? y : prevY), abs(y - prevY) + 1, C_BEST);
       }
       prevX = x;
       prevY = y;
@@ -1381,9 +1421,9 @@ static void drawZerosChart(const Rect &r, int winZ)
     }
     if (any)
     {
-      d.drawFastHLine(prevX, dY(prevY), px + W - prevX, C_METER);
-      d.drawFastHLine(prevX, dY(prevY) - 1, px + W - prevX, C_METER);
-      d.fillCircle(px + W - 1, dY(prevY), 2, C_METER);
+      d.drawFastHLine(prevX, dY(prevY), px + W - prevX, C_BEST);
+      d.drawFastHLine(prevX, dY(prevY) - 1, px + W - prevX, C_BEST);
+      d.fillCircle(px + W - 1, dY(prevY), 2, C_BEST);
     }
     snprintf(t, sizeof(t), "%lu min ago", (unsigned long)(span / 60000UL));
     caption(d, t, px, dY(bot + 2), W - 24);
@@ -1406,10 +1446,9 @@ static void paintMine(const MineV &m)
   if (need(W_HERO, k) && wBegin(hw, hh, C_BG))
   {
     int c = hw / 2;
-    text(wgt, "GUESSES / SEC", c, 4, P ? 10 : 9, C_DIM, C_BG, Align::TopCenter);
     unsigned sz = P ? (m.hash.length() <= 5 ? 42 : 36) : (m.hash.length() <= 5 ? 36 : 30);
-    text(wgt, m.hash.c_str(), c, P ? 18 : 16, sz, C_TEXT, C_BG, Align::TopCenter);
-    text(wgt, "thousand (KH/s)", c, P ? 64 : 52, P ? 12 : 11, C_METER, C_BG, Align::TopCenter);
+    text(wgt, m.hash.c_str(), c, P ? 8 : 6, sz, C_TEXT, C_BG, Align::TopCenter);
+    text(wgt, "KH/s", c, P ? 56 : 48, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
     wEnd(G_CX - c, G_CY - (P ? 38 : 34));
     done(W_HERO, k);
   }
@@ -1488,10 +1527,10 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
   else
   {
     const String t = fmtCount((double)g_currentBlockHashes);
-    m.rA = (P ? "this round " : "round ") + t + " guesses";
-    m.rACol = C_ROUND;
-    m.rB = "BEST: " + String(bestZerosNow()) + " ZEROS";
-    m.rBCol = C_METER;
+    m.rA = t + " guesses"; // this round
+    m.rACol = C_GUESS;
+    m.rB = ""; // the best zeros count lives beside the chart title
+    m.rBCol = C_DIM;
     m.rC = "";
   }
   {
