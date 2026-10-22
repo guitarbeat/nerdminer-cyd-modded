@@ -137,7 +137,9 @@ String printLocalTime(void);
 void resetStat();
 void resetSessionStats();
 
-void updateBestDiff(double diff); // keep the best hash difficulty seen (any core)
+void updateBestDiff(double diff, const uint8_t *hashLE = nullptr); // keep the best hash difficulty seen (any core); hashLE = that hash (round best)
+bool getRoundBestHash(uint8_t outBE[32]); // best hash this round, printed order; false = none yet
+extern char g_lastWinnerHashHex[65];      // last winning block hash, printed order ("" = none yet)
 double getBestDiff();
 void saveStat();   // write the stats to NVS now (before a planned restart / power off)
 
@@ -153,7 +155,25 @@ extern volatile uint64_t g_currentBlockHashes;
 extern volatile uint64_t g_lastBlockHashes;
 extern volatile uint32_t g_blockStartTimeSec;
 extern volatile uint32_t g_lastBlockDurationSec;
-extern double g_blockBestDiff;
+extern double g_blockBestDiff; // best hash difficulty this network round (read with getRoundBest)
+double getRoundBest(void);
+// One network round = the time between two Bitcoin blocks.
+struct RoundRec
+{
+  uint32_t height;  // the block that ended the round (won by someone)
+  uint32_t secs;    // how long the round lasted
+  uint64_t tries;   // hashes this miner tried in it
+  double myBest;    // best hash difficulty this miner reached in it
+  double winner;    // difficulty of the winning block's hash
+  bool partial;     // round began at boot / pool switch
+};
+#define ROUND_HIST_N 6
+int getRounds(RoundRec *out, int maxN); // newest first
+double prevhashDifficulty(const char *stratumPrevhashHex);
+extern double g_lastWinnerDiff;
+extern volatile uint32_t g_lastWinnerHeight;
+extern volatile uint32_t g_newBlockMs;
+extern volatile bool g_roundPartial;
 
 typedef struct{
   uint8_t bytearray_target[32];

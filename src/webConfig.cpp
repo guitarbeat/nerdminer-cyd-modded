@@ -122,6 +122,48 @@ static String buildStatsJson(const mining_data &d)
     json += ",\"shares_rejected\":" + String(ms.rejected);
     json += ",\"pool_ping_ms\":" + String(g_stratumPing); // submit -> answer round trip (smoothed)
   }
+  {
+    // The network round: hashes since the last Bitcoin block (prevhash change).
+    uint32_t nowSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+    uint32_t age = (g_blockStartTimeSec > 0 && nowSec >= g_blockStartTimeSec) ? nowSec - g_blockStartTimeSec : 0;
+    time_t now = 0;
+    if (!getUtcTime(now, false)) now = 0; // web task: never touches the RTC chip
+    MinerStatus ms2 = getMinerStatus();
+    char b[48];
+    json += ",\"round_tries\":" + String((double)g_currentBlockHashes, 0);
+    json += ",\"round_age_s\":" + String(age);
+    json += ",\"round_start_s\":" + String((now > 1600000000 && g_blockStartTimeSec > 0) ? (unsigned long)(now - age) : 0UL); // unix time, 0 = unknown
+    json += ",\"round_expected\":" + String((double)ms2.avgHashrateKHs * 1000.0 * 600.0, 0); // tries in an average 10-min round
+    json += ",\"round_partial\":" + String(g_roundPartial ? "true" : "false"); // began at boot, not at a block
+    snprintf(b, sizeof(b), "%.6g", getRoundBest());
+    json += ",\"round_best\":" + String(b);
+    snprintf(b, sizeof(b), "%.6g", g_lastWinnerDiff);
+    json += ",\"last_winner_diff\":" + String(b);
+    json += ",\"last_winner_height\":" + String((unsigned long)g_lastWinnerHeight);
+    json += ",\"last_winner_hash\":\"" + String(g_lastWinnerHashHex) + "\"";
+    {
+      uint8_t bh[32];
+      char hx[65] = "";
+      if (getRoundBestHash(bh))
+        for (int i = 0; i < 32; i++) snprintf(hx + 2 * i, 3, "%02x", bh[i]);
+      json += ",\"round_best_hash\":\"" + String(hx) + "\""; // "" = none yet this round
+    }
+    json += ",\"last_winner_ok\":" + String((g_lastWinnerDiff > 0 && g_lastWinnerDiff >= g_networkDifficulty * 0.999) ? "true" : "false");
+    json += ",\"new_block_s\":" + String(g_newBlockMs ? (long)((millis() - g_newBlockMs) / 1000UL) : -1L);
+    RoundRec rr[ROUND_HIST_N];
+    int n = getRounds(rr, ROUND_HIST_N);
+    json += ",\"rounds\":[";
+    for (int i = 0; i < n; i++)
+    {
+      snprintf(b, sizeof(b), "%.6g", rr[i].myBest);
+      String best = b;
+      snprintf(b, sizeof(b), "%.6g", rr[i].winner);
+      json += String(i ? "," : "") + "{\"height\":" + String((unsigned long)rr[i].height) + ",\"secs\":" + String(rr[i].secs) +
+              ",\"tries\":" + String((double)rr[i].tries, 0) + ",\"my_best\":" + best + ",\"winner\":" + String(b) +
+              ",\"partial\":" + (rr[i].partial ? "true" : "false") + "}";
+    }
+    json += "]";
+  }
   json += ",\"net_diff\":" + String(g_networkDifficulty > 0.0 ? g_networkDifficulty : 0.0, 6); // job nbits; 0 = no job yet
   json += ",\"using_fallback\":" + String(g_usingFallback ? "true" : "false");
   json += ",\"screen\":" + String(getDisplayScreen());
@@ -801,6 +843,13 @@ if(d.temp){const e=document.getElementById('st-temp');if(e)e.textContent=d.temp;
 if(d.uptime){const u=document.getElementById('st-uptime');if(u){const m=d.uptime.match(/^(\d+)\s+(\d{2}:\d{2}:\d{2})$/);u.textContent=m?(parseInt(m[1])>0?m[1]+'d '+m[2]:m[2]):d.uptime;}}
 const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;
 const eJob=document.getElementById('dyn-lastjob');if(eJob&&d.last_job_s!==undefined){const s=d.last_job_s;eJob.textContent=s<0?'waiting for pool':(s<60?s+'s ago':(s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'));}
+{const fd=v=>{v=Number(v);if(!(v>0))return '0';const u=['','K','M','B','T','P','E'];let i=0;while(v>=1000&&i<6){v/=1000;i++;}return (i===0?(v>=100?v.toFixed(0):v.toPrecision(3)):(v>=100?v.toFixed(0):v.toFixed(1)))+u[i];};
+const eRt=document.getElementById('dyn-rtries');if(eRt&&d.round_tries!==undefined){eRt.textContent=fd(d.round_tries);const ex=Number(d.round_expected)||0,p=ex>0?d.round_tries/ex*100:0;const eP=document.getElementById('dyn-rpct');if(eP)eP.textContent=ex>0?('('+p.toFixed(0)+'% of a 10-min round'+(d.round_partial?', since boot':'')+')'):'';const eB=document.getElementById('dyn-rbar');if(eB){eB.style.width=Math.min(p,100)+'%';eB.style.background=p>100?'#e5534b':'#f7931a';}}
+const fr=fd;
+const eRb=document.getElementById('dyn-rbest');if(eRb&&d.round_best!==undefined){eRb.textContent=fr(d.round_best);eRb.title='score (difficulty) '+fd(d.round_best);}
+const eRw=document.getElementById('dyn-rwin');if(eRw&&d.last_winner_diff!==undefined){eRw.textContent=d.last_winner_diff>0?('#'+Number(d.last_winner_height).toLocaleString()+' score '+fr(d.last_winner_diff)):'waiting for a job';eRw.title='score (difficulty) '+fd(d.last_winner_diff)+(d.last_winner_ok?' - beats the network difficulty':'');}
+const eHs=document.getElementById('dyn-hstrip');if(eHs&&d.round_best_hash!==undefined){const h=(d.round_best_hash||'').slice(0,20),wz=((d.last_winner_hash||'').match(/^0*/)||[''])[0].length,wn=Math.min(wz,20);let o='';for(let i=0;i<20;i++){const c=h[i]||'-';o+=(c==='0'?'<span style="background:#f7931a;color:#000">0</span>':'<span style="color:#9aa4b2">'+c+'</span>');if(i+1===wn)o+='<span style="color:#e5534b" title="winner zeros">|</span>';}eHs.innerHTML=o+(wn>0?' <span class="muted" style="font-family:system-ui;font-size:11px;letter-spacing:0">winner: '+wz+' zeros</span>':'');}
+const eRr=document.getElementById('dyn-rounds');if(eRr&&d.rounds)eRr.textContent=d.rounds.length?d.rounds.slice(0,5).map(r=>fr(r.my_best)+' vs '+fr(r.winner)).join(' | '):'none yet (one per block)';}
 const eOkBad=document.getElementById('dyn-okbad');if(eOkBad&&d.shares_accepted!==undefined)eOkBad.textContent=d.shares_accepted+' ok / '+d.shares_rejected+' bad';
 if(d.free_heap){const e=document.getElementById('st-heap');if(e)e.textContent=Math.round(d.free_heap/1024)+' KB';}
 if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}
@@ -1081,6 +1130,12 @@ static void handleRoot()
   page += F("</span></span></div>"
             "<div class='tele-row' title='Why it matters: the pool hands your miner a fresh puzzle (a job) every 30-60 s, and right away when anyone finds a block. Old puzzles are worthless, so a recent time means you are working on current work.'><span>New puzzle from pool</span><span class='hl-val' id='dyn-lastjob'>--</span></div>"
             "<div class='tele-row' title='Why it matters: every proof (share) is checked by the pool. ok = it counted; bad = refused (stale after a new block, or a duplicate). A few bad ones are normal.'><span>Proofs checked by pool</span><span class='hl-val' id='dyn-okbad'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: every new block starts a new round and all earlier work is thrown away - everyone starts over. The bar fills with your tries since the last block; 100% = what you try in an average 10-minute round.'><span>Tries this round</span><span class='hl-val'><span id='dyn-rtries'>--</span> <span class='muted' id='dyn-rpct'></span></span></div>"
+            "<div style='height:6px;border-radius:3px;background:var(--card-border);overflow:hidden;margin:2px 0 4px'><div id='dyn-rbar' style='height:100%;width:0;background:#f7931a'></div></div>"
+            "<div class='tele-row' title='Why it matters: a hash is a random 64-digit hex number. A block needs one that starts with enough zeros (the red mark = how many the last winner had). Each extra zero is 16x rarer. This is your best hash since the last block.'><span>Best hash this round</span><span class='hl-val' id='dyn-hstrip' style='font-family:ui-monospace,monospace;font-size:12px;letter-spacing:1px'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: your closest hash since the last block. It resets every block, because old work cannot win the next one.'><span>My best this round</span><span class='hl-val' id='dyn-rbest'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: the winning block hash itself, scored like your proofs. It had to beat the network difficulty, which is why one CYD almost never wins.'><span>Last winner</span><span class='hl-val' id='dyn-rwin'>--</span></div>"
+            "<div class='tele-row' title='Why it matters: each round you get a fresh lottery ticket. Your best vs the winner shows how far off a small miner is, round after round.'><span>Recent rounds (my best vs winner)</span><span class='hl-val' id='dyn-rounds'>--</span></div>"
             "<div class='tele-row'><span>Uptime</span><span class='hl-val' id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
   page += F("</span></div>"
@@ -1513,7 +1568,7 @@ static void handleRoot()
             "<text x='200' y='104' fill='#8a96a8'>Dots = your shares, oldest to newest.</text>"
             "</g></svg>"
             "<p style='margin:10px 0 4px'><strong>The three screens</strong> (tap the right half of the CYD for the next one, the left half to go back):</p>"
-            "&bull; <strong>MINE</strong> &ndash; what is my miner doing right now? The dial is <em>guesses / sec</em>. <em>Last 60 s</em> is your speed over the last minute, zoomed in around the average: a flat line = healthy. <em>Proofs sent</em> = shares the pool accepted (they prove the miner works; on a solo pool they earn nothing). <em>Pool</em> = online / linking / refused. <em>Proof every</em> = how often a share should arrive at your speed.<br>"
+            "&bull; <strong>MINE</strong> &ndash; what is my miner doing right now? The dial is <em>guesses / sec</em>. The thin blue inner ring fills with your tries this round (since the last block anywhere; full = 10 minutes of tries) and drains to empty when someone finds a block, because all earlier work is thrown away. <em>Last 60 s</em> is your speed over the last minute, zoomed in around the average: a flat line = healthy. <em>Proofs sent</em> = shares the pool accepted (they prove the miner works; on a solo pool they earn nothing). <em>Pool</em> = online / linking / refused. <em>Proof every</em> = how often a share should arrive at your speed.<br>"
             "&bull; <strong>ODDS</strong> &ndash; how close am I to winning? <em>Closest try / 141T</em>: your best guess next to what a block needs; <em>1 in 4.5T</em> means it would need to be 4.5 trillion times better. The ladder plots every share (gold = your best). <em>Avg wait for block</em> = network difficulty &times; 2<sup>32</sup> &divide; your guesses per second; for Bitcoin it is billions of years, which is why solo mining on a CYD is a lottery ticket, not an income. <em>Odds per block</em> = your chance of winning any one block. <em>Last net block</em>: someone else found a block X ago (about one every 10 minutes); <em>you: N tries</em> is how many guesses your CYD made since.<br>"
             "&bull; <strong>WORLD</strong> &ndash; how does my miner fit into Bitcoin? <em>Your share of all guesses</em>: the long bar is every miner on Earth, the dot is you (computed from the difficulty, so it works offline). <em>Difficulty</em> = how hard the puzzle is; it adjusts so a block is found about every 10 minutes. <em>Block height</em> = blocks so far (read from the pool's job). <em>Next halving</em>: every 210,000 blocks (~4 years) the reward per block is cut in half. Price and fee show when the price service answers; otherwise the line says why. The strip shows time running, chip temperature and blocks won.<br>"
             "<span class='muted'>Aaron Miner is built on the open-source <a href='https://github.com/BitMaker-hub/NerdMiner_v2' target='_blank' rel='noopener'>NerdMiner</a> project and its community forks. Thank you to everyone who built it.</span>"

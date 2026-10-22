@@ -127,14 +127,126 @@ volatile uint32_t valids; // increased if blockhash <= target
 double best_diff = 0.0;
 static portMUX_TYPE s_bestDiffMux = portMUX_INITIALIZER_UNLOCKED;
 
-void updateBestDiff(double diff)
+static uint8_t s_roundBestHash[32]; // little-endian, like the miners' digests
+static bool s_roundBestHashOk = false;
+char g_lastWinnerHashHex[65] = "";  // winning block hash, printed form (leading zeros first)
+
+void updateBestDiff(double diff, const uint8_t *hashLE)
 {
-  if (!(diff > best_diff)) // unlocked look first: improvements are very rare
+  // The round best is never above the all-time best, so one unlocked look at
+  // it covers both (improvements are rare).
+  if (!(diff > g_blockBestDiff) || !(diff < 1e30))
     return;
   portENTER_CRITICAL(&s_bestDiffMux);
+  if (diff > g_blockBestDiff)
+  {
+    g_blockBestDiff = diff; // best hash this network round (since the last block)
+    if (hashLE)
+    {
+      memcpy(s_roundBestHash, hashLE, 32);
+      s_roundBestHashOk = true;
+    }
+  }
   if (diff > best_diff)
     best_diff = diff;
   portEXIT_CRITICAL(&s_bestDiffMux);
+}
+
+double getRoundBest()
+{
+  portENTER_CRITICAL(&s_bestDiffMux);
+  double v = g_blockBestDiff;
+  portEXIT_CRITICAL(&s_bestDiffMux);
+  return v;
+}
+
+// ---- network rounds: one round = the time between two Bitcoin blocks ------
+// When a block is found anywhere, the pool's next job carries its hash as the
+// new prevhash. That hash IS the winner's proof, so its difficulty (same
+// formula as a share: diff1 / hash) is the winning score.
+static RoundRec s_rounds[ROUND_HIST_N];
+static uint8_t s_roundHead = 0, s_roundCount = 0;
+double g_lastWinnerDiff = 0.0;
+volatile uint32_t g_lastWinnerHeight = 0;
+volatile uint32_t g_newBlockMs = 0;  // millis() when the last new block was seen (0 = none since boot)
+volatile bool g_roundPartial = true; // this round began at boot / pool switch, not at a block
+
+// Stratum sends prevhash as 8 32-bit words, each byte-swapped. Undo the swap
+// to get the header's little-endian bytes, then value = sum b[i]*256^i.
+double prevhashDifficulty(const char *hx)
+{
+  if (!hx || strlen(hx) != 64)
+    return 0.0;
+  uint8_t le[32];
+  for (int i = 0; i < 32; i++)
+  {
+    char t[3] = {hx[2 * i], hx[2 * i + 1], 0};
+    uint8_t b = (uint8_t)strtoul(t, nullptr, 16);
+    le[(i & ~3) + 3 - (i & 3)] = b;
+  }
+  double v = 0.0;
+  for (int i = 31; i >= 0; i--)
+    v = v * 256.0 + (double)le[i];
+  for (int i = 0; i < 32; i++) // printed form: most significant byte first
+    snprintf(g_lastWinnerHashHex + 2 * i, 3, "%02x", le[31 - i]);
+  if (!(v > 0.0))
+    return 0.0;
+  return 65535.0 * ldexp(1.0, 208) / v;
+}
+
+// Best hash this round in printed order (most significant byte first).
+bool getRoundBestHash(uint8_t outBE[32])
+{
+  uint8_t t[32];
+  portENTER_CRITICAL(&s_bestDiffMux);
+  bool ok = s_roundBestHashOk;
+  if (ok) memcpy(t, s_roundBestHash, 32);
+  portEXIT_CRITICAL(&s_bestDiffMux);
+  if (ok)
+    for (int i = 0; i < 32; i++) outBE[i] = t[31 - i];
+  return ok;
+}
+
+int getRounds(RoundRec *out, int maxN)
+{
+  int n = 0;
+  portENTER_CRITICAL(&s_bestDiffMux);
+  for (int i = 0; i < s_roundCount && n < maxN; i++)
+    out[n++] = s_rounds[(s_roundHead + ROUND_HIST_N - 1 - i) % ROUND_HIST_N];
+  portEXIT_CRITICAL(&s_bestDiffMux);
+  return n; // newest first
+}
+
+static void noteWinner(const String &prevhash, bool newRound)
+{
+  double wd = prevhashDifficulty(prevhash.c_str());
+  uint32_t jh = getBlockHeightValue(); // height of the block now being mined
+  uint32_t wh = jh > 0 ? jh - 1 : 0;
+  bool ok = wd > 0.0 && (g_networkDifficulty <= 0.0 || wd >= g_networkDifficulty * 0.999);
+  Serial.printf("[ROUND] winner #%u score %.4g (net %.4g) %s\n", (unsigned)wh, wd, g_networkDifficulty, ok ? "ok" : "BELOW NET DIFF?");
+  if (newRound)
+  {
+    RoundRec r;
+    r.height = wh;
+    r.secs = g_lastBlockDurationSec;
+    r.tries = g_lastBlockHashes;
+    r.winner = wd;
+    r.partial = g_roundPartial;
+    portENTER_CRITICAL(&s_bestDiffMux);
+    r.myBest = g_blockBestDiff;
+    g_blockBestDiff = 0.0;
+    s_roundBestHashOk = false; // the strip empties with the inner ring
+    s_rounds[s_roundHead] = r;
+    s_roundHead = (s_roundHead + 1) % ROUND_HIST_N;
+    if (s_roundCount < ROUND_HIST_N)
+      s_roundCount++;
+    portEXIT_CRITICAL(&s_bestDiffMux);
+    g_roundPartial = false;
+    g_newBlockMs = millis();
+    if (!g_newBlockMs) g_newBlockMs = 1;
+  }
+  g_lastWinnerDiff = wd;
+  g_lastWinnerHeight = wh;
 }
 
 // A double is two 32-bit words here: read it under the lock so a write from
@@ -202,8 +314,8 @@ void hashSamplePushDigest(const uint8_t hash[32])
   if (bit <= 224 && bit > 0)
   {
     double d = ldexp(1.0, 224 - bit) / (1.0 + (double)(v & 0xFF) / 256.0);
-    if (d > best_diff && d < 1e16)
-      best_diff = d;
+    if (d < 1e16)
+      updateBestDiff(d, hash); // also the round best
   }
 }
 
@@ -995,6 +1107,7 @@ void runStratumWorker(void *name) {
                                             {
                                               s_activePrevBlockHash = mJob.prev_block_hash;
                                               g_blockStartTimeSec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+                                              noteWinner(mJob.prev_block_hash, false); // the block before we started
                                             }
                                             else if (mJob.prev_block_hash != s_activePrevBlockHash)
                                             {
@@ -1003,8 +1116,8 @@ void runStratumWorker(void *name) {
                                               g_lastBlockHashes = g_currentBlockHashes;
                                               g_currentBlockHashes = 0;
                                               g_blockStartTimeSec = nowSec;
-                                              g_blockBestDiff = 0.0;
                                               s_activePrevBlockHash = mJob.prev_block_hash;
+                                              noteWinner(mJob.prev_block_hash, true); // logs the round, resets the round best
                                               Serial.printf("[EPOCH] New Bitcoin block: %s (Prev: %llu hashes in %u s)\n",
                                                             mJob.prev_block_hash.c_str(), g_lastBlockHashes, g_lastBlockDurationSec);
                                             }
@@ -1271,12 +1384,8 @@ void runStratumWorker(void *name) {
 
       hashes += res->nonce_count;
       g_currentBlockHashes += res->nonce_count;
-      if (res->difficulty > g_blockBestDiff && res->difficulty < 2.0e30)
-      {
-        g_blockBestDiff = res->difficulty;
-      }
       if (res->nonce != 0xFFFFFFFF)
-        updateBestDiff(res->difficulty); // I2C slave results (local miners already did it)
+        updateBestDiff(res->difficulty, res->hash); // I2C slave results (local miners already did it)
       if (res->difficulty > currentPoolDifficulty && job_pool == res->id && res->nonce != 0xFFFFFFFF)
       {
         hashSamplePushDigest(res->hash);
@@ -1372,7 +1481,7 @@ void minerWorkerSw(void * task_id)
         {
           double diff_hash = diff_from_target(hash);
           pushCryptoAuditSample(nonce_n, diff_hash, hash);
-          updateBestDiff(diff_hash);
+          updateBestDiff(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             result->difficulty = diff_hash;
@@ -1748,7 +1857,7 @@ void minerWorkerHw(void * task_id)
               debugPipelinedHwSwMismatch++;
             #endif
             const double cand_diff = confirmed && isSha256Valid(sw_hash) ? diff_from_target(sw_hash) : 0.0;
-            updateBestDiff(cand_diff);
+            updateBestDiff(cand_diff, sw_hash);
             if (cand_diff > job->difficulty)
             {
               // A share: hand it over now, not when the chunk ends (a job
@@ -1847,7 +1956,7 @@ void minerWorkerHw(void * task_id)
           //~5 per second
           double diff_hash = diff_from_target(hash);
           if (isSha256Valid(hash))
-            updateBestDiff(diff_hash);
+            updateBestDiff(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             if (isSha256Valid(hash))
@@ -2405,7 +2514,7 @@ void minerWorkerHw(void * task_id)
           #endif
 
           const double cand_diff = confirmed && isSha256Valid(sw_hash) ? diff_from_target(sw_hash) : 0.0;
-          updateBestDiff(cand_diff);
+          updateBestDiff(cand_diff, sw_hash);
           if (cand_diff > 0.0)
             pushCryptoAuditSample(cand_native_pl, cand_diff, sw_hash);
           if (cand_diff > job->difficulty)
@@ -2498,7 +2607,7 @@ void minerWorkerHw(void * task_id)
           //~5 per second
           double diff_hash = diff_from_target(hash);
           if (isSha256Valid(hash))
-            updateBestDiff(diff_hash);
+            updateBestDiff(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             if (isSha256Valid(hash))
@@ -3059,6 +3168,7 @@ void resetSessionStats() {
     best_diff = 0.0;
     g_currentBlockHashes = 0;
     g_blockBestDiff = 0.0;
+    g_roundPartial = true;
     clearShareHistory();
 }
 
