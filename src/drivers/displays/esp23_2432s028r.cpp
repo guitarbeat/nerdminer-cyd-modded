@@ -264,7 +264,7 @@ static bool ensureWgtReady()
     return true;
 
   const int wantW = 240;
-  int wantH = 90; // covers portrait mine-ring (86) + strip tiles
+  int wantH = 40; // ~19KB; leave heap for WiFi/TLS/HW-SHA (was 90 and starved mining)
   const uint32_t maxBlock = ESP.getMaxAllocHeap();
   if (maxBlock > 1024)
   {
@@ -279,7 +279,7 @@ static bool ensureWgtReady()
       wgtReady = true;
       wgtMaxW = wantW;
       wgtMaxH = wantH;
-      if (wantH < 90)
+      if (wantH < 40)
         Serial.printf("[ui] DMA sprite %dx%d (max block %u)\n", wantW, wantH, maxBlock);
       return true;
     }
@@ -2089,7 +2089,6 @@ void esp32_2432S028R_Init(void)
 
   resetWidgets();
   memset(segLvl, 0xFF, sizeof(segLvl));
-  ensureWgtReady(); // before WiFi/mining fragment the heap
 
 #ifdef CYD_UI_SCREENSHOT
   extern void cydDumpScreens(void);
