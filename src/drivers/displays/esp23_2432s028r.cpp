@@ -230,6 +230,10 @@ public:
     _iheight = _dheight = h;
     _sx = 0; _sy = 0; _sw = w; _sh = h;
     cursor_x = 0; cursor_y = 0;
+    // Clip to the reshaped buffer; the viewport otherwise keeps the
+    // createSprite() size (240 wide / 56 tall) and clips or wraps rows.
+    setViewport(0, 0, w, h);
+    setPivot(w / 2, h / 2);
   }
 
   uint16_t* getBuffer() { return (uint16_t*)_img8; }
@@ -263,8 +267,13 @@ static bool ensureWgtReady()
   if (wgtReady)
     return true;
 
+  // The buffer is reshaped per widget (resize), so what matters is pixel
+  // AREA, not height. Largest widgets: landscape protocol footer 304x44 =
+  // 13376 px, portrait clock/market panels ~228x52 / 124x86 hero. 240x56 =
+  // 13440 px (~26KB) covers every widget in all rotations; the old 240x90
+  // (~43KB) was more than needed.
   const int wantW = 240;
-  int wantH = 40; // ~19KB; leave heap for WiFi/TLS/HW-SHA (was 90 and starved mining)
+  int wantH = 56;
   const uint32_t maxBlock = ESP.getMaxAllocHeap();
   if (maxBlock > 1024)
   {
@@ -279,7 +288,7 @@ static bool ensureWgtReady()
       wgtReady = true;
       wgtMaxW = wantW;
       wgtMaxH = wantH;
-      if (wantH < 40)
+      if (wantH < 56)
         Serial.printf("[ui] DMA sprite %dx%d (max block %u)\n", wantW, wantH, maxBlock);
       return true;
     }
@@ -298,8 +307,18 @@ static bool wBegin(int w, int h, uint16_t bg)
 {
   if (!ensureWgtReady())
     return false;
-  if (w > wgtMaxW || h > wgtMaxH)
+  // Compare area, not each dimension: a 110x76 panel fits a 240x56 buffer.
+  if (w <= 0 || h <= 0 || w * h > wgtMaxW * wgtMaxH)
+  {
+    static uint32_t lastLogged = 0;
+    uint32_t key = ((uint32_t)w << 16) | (uint32_t)h;
+    if (key != lastLogged)
+    {
+      lastLogged = key;
+      Serial.printf("[ui] widget %dx%d exceeds sprite %dx%d, skipped\n", w, h, wgtMaxW, wgtMaxH);
+    }
     return false;
+  }
   wgt.resize(w, h);
   wgt.fillSprite(bg);
   return true;
