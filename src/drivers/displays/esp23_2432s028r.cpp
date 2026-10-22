@@ -50,8 +50,19 @@ extern String readCustomAPName(); // wManager.cpp
 
 OpenFontRender render;
 TFT_eSPI tft = TFT_eSPI(); // pins defined in platformio.ini
+#ifdef CYD_TOUCH_SHARED_SPI
+#if (defined(TFT_RST) && TFT_RST == 12) || defined(TOUCH_CLK) || !defined(TFT_MISO) || TFT_MISO != 12
+#error "shared-bus CYD: GPIO12 must be TFT_MISO (not TFT_RST) and the 2.8in TOUCH_* bus pins unset"
+#endif
+// 2.4" CYD: touch hangs off the display's SPI bus, so use TFT_eSPI's own
+// SPIClass. Both libraries wrap every access in beginTransaction(), whose
+// HAL lock keeps the touch task and the drawing tasks from interleaving.
+TFT_eTouch<TFT_eSPI> touch(tft, ETOUCH_CS, 0xFF, TFT_eSPI::getSPIinstance());
+#else
+// 2.8" CYD: dedicated touch bus on HSPI (25/32/39).
 SPIClass hSPI(HSPI);
 TFT_eTouch<TFT_eSPI> touch(tft, ETOUCH_CS, 0xFF, hSPI);
+#endif
 
 // ---------------------------------------------------------------- palette --
 
@@ -1757,8 +1768,9 @@ void esp32_2432S028R_SetTheme(int idx)
   cAcc = p.meter;
   cAlt = p.meter;
 
-  if (uiLive)
+  if (uiLive && !g_onb)
   {
+    std::lock_guard<std::mutex> lock(g_displayMutex); // called from the web task
     int s = currentDisplayDriver->current_cyclic_screen;
     uiScreen = -1;
     resetWidgets();
@@ -2598,8 +2610,10 @@ void esp32_2432S028R_Init(void)
     tft.writecommand(ILI9341_GAMMASET); // Gamma curve selected
     tft.writedata(1);
   }
+#ifndef CYD_TOUCH_SHARED_SPI
   hSPI.begin(TOUCH_CLK, TOUCH_MISO, TOUCH_MOSI, ETOUCH_CS);
-  touch.init();
+#endif
+  touch.init(); // CS pin only; never re-begins the bus
 
   // Backlight: LEDC channel 0, 5kHz, 8 bit (0-255 duty)
   ledcSetup(0, 5000, 8);
@@ -2612,6 +2626,13 @@ void esp32_2432S028R_Init(void)
   // Touch mapping: the on-device calibration when there is one, else the
   // stock CYD constants (still the start point for calibrating).
   obPrevCal = Settings.touchCalibrated ? calFromSettings() : CAL_DEFAULT;
+  if (abs((int)obPrevCal.x1 - (int)obPrevCal.x0) < 500 || abs((int)obPrevCal.y1 - (int)obPrevCal.y0) < 500)
+  {
+    // garbage/zeroed calibration would divide by zero in TFT_eTouch::transform()
+    Serial.println("CYD touch: stored calibration invalid, using defaults and asking again");
+    obPrevCal = CAL_DEFAULT;
+    Settings.touchCalibrated = false;
+  }
   touch.setCalibration(obPrevCal);
   Serial.printf("CYD touch: %s {%u,%u,%u,%u,%u}\n", Settings.touchCalibrated ? "calibrated" : "default",
                 obPrevCal.x0, obPrevCal.x1, obPrevCal.y0, obPrevCal.y1, obPrevCal.rel_rotation);
@@ -2701,8 +2722,9 @@ void esp32_2432S028R_AlternateRotation(void)
   int nextRot = (tft.getRotation() + 1) % 4;
   tft.setRotation(nextRot);
   persistRotation(nextRot);
-  if (uiLive)
+  if (uiLive && !g_onb)
   {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
     int s = currentDisplayDriver->current_cyclic_screen;
     uiScreen = -1;
     resetWidgets();
@@ -2871,8 +2893,12 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
 
   // Screen changed by touch or the boot button: draw the new page right away
   // from the last values it showed; the next data tick refreshes them.
-  if (uiLive && currentDisplayDriver->current_cyclic_screen != uiScreen)
+  // Under the display mutex: a web screenshot flips shotOn while it renders,
+  // and an unlocked repaint here would land in the screenshot sprite instead
+  // of the panel (the tap "did nothing" until the next data tick).
+  if (!g_onb && uiLive && currentDisplayDriver->current_cyclic_screen != uiScreen)
   {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
     int s = currentDisplayDriver->current_cyclic_screen;
     ensureChrome(s);
     repaintCached(s);
