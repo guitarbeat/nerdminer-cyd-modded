@@ -448,11 +448,14 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 /* Tabs: one scrolling row, never wraps */
 .console-tabs{display:flex;flex-wrap:nowrap;gap:2px;border-bottom:1px solid var(--card-border);margin-bottom:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .console-tabs::-webkit-scrollbar{display:none}
-.tab-btn{flex:0 0 auto;padding:8px 12px;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
+.tab-btn{flex:1 1 0;min-width:0;text-align:center;padding:8px 12px;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
 .tab-btn:hover{color:var(--text)}
 .tab-btn.active{color:var(--text);border-bottom-color:var(--amber)}
 .tab-pane{display:none}
 .tab-pane.active{display:flex;flex-direction:column;gap:12px}
+.settings-sec{display:flex;flex-direction:column;gap:12px}
+.settings-sec+.settings-sec{margin-top:14px}
+.settings-h{font-size:16px;font-weight:600;color:var(--text);margin:4px 0 0}
 
 /* Overview */
 .overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}
@@ -541,8 +544,7 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 .theme-card p{font-size:12px;color:var(--muted);line-height:1.35}
 
 /* One primary action: Save. Everything else is bordered and quiet. */
-.actions{margin:16px 0 24px;display:flex;flex-direction:column;gap:8px}
-.actions[hidden]{display:none}
+.actions{position:sticky;bottom:0;z-index:5;margin:16px 0 24px;padding:10px 0;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
 .btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:11px 16px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;width:100%;min-height:42px}
 .btn-save:hover{opacity:.92}
 .btn-save:disabled{opacity:.6;cursor:wait}
@@ -590,11 +592,11 @@ button:focus-visible,a:focus-visible,.theme-card:focus-visible,summary:focus-vis
 )rawcss";
 
 static const char DASH_JS[] PROGMEM = R"rawjs(
-const SETTINGS_TABS=['stratum','display','system'];
+const TAB_ALIAS={stratum:'settings',display:'settings',system:'settings',pow:'learn'};
 function switchTab(tId){
+tId=TAB_ALIAS[tId]||tId;if(!document.getElementById('pane-'+tId)||!document.getElementById('tbtn-'+tId))tId='telemetry';
 document.querySelectorAll('.tab-btn').forEach(b=>{const on=b.id==='tbtn-'+tId;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
 document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+tId));
-const a=document.getElementById('form-actions');if(a)a.hidden=SETTINGS_TABS.indexOf(tId)<0;
 try{localStorage.setItem('cyd_tab',tId);}catch(e){}
 }
 let toastTimer=null;
@@ -866,7 +868,7 @@ function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN
 function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}
 function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}
 document.getElementById('cfg-form').addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.tagName==='INPUT'&&!e.target.name)e.preventDefault();});
-(function(){let t='telemetry';try{const l=localStorage.getItem('cyd_tab');if(l&&document.getElementById('tbtn-'+l))t=l;}catch(e){}switchTab(t);})();
+(function(){let t='telemetry';try{const l=localStorage.getItem('cyd_tab');if(l)t=l;}catch(e){}switchTab(t);})();
 )rawjs";
 
 // The settings as the page should show them: what is in use, or what was
@@ -954,10 +956,8 @@ static void handleRoot()
             "<main class='console-main'>"
             "<nav class='console-tabs' role='tablist'>"
             "<button type='button' class='tab-btn active' id='tbtn-telemetry' onclick=\"switchTab('telemetry')\">Overview</button>"
-            "<button type='button' class='tab-btn' id='tbtn-stratum' onclick=\"switchTab('stratum')\">Pool &amp; wallet</button>"
-            "<button type='button' class='tab-btn' id='tbtn-display' onclick=\"switchTab('display')\">Display</button>"
-            "<button type='button' class='tab-btn' id='tbtn-pow' onclick=\"switchTab('pow')\">Proof of work</button>"
-            "<button type='button' class='tab-btn' id='tbtn-system' onclick=\"switchTab('system')\">System</button>"
+            "<button type='button' class='tab-btn' id='tbtn-settings' onclick=\"switchTab('settings')\">Settings</button>"
+            "<button type='button' class='tab-btn' id='tbtn-learn' onclick=\"switchTab('learn')\">Learn</button>"
             "</nav>");
 
   page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
@@ -1014,8 +1014,10 @@ static void handleRoot()
             "</div>"
             "</section>");
 
-  // Tab 2: Pool & wallet
-  page += F("<section class='tab-pane' id='pane-stratum'>");
+  // Tab 2: Settings -- one form pane: Wallet & pool, Display, System
+  page += F("<section class='tab-pane' id='pane-settings'>"
+            "<section class='settings-sec' id='pane-stratum'>"
+            "<h2 class='settings-h'>Wallet &amp; pool</h2>");
 
   // Wallet: the one setting that decides where a block reward goes
   page += F("<div class='cfg-card'>"
@@ -1101,8 +1103,9 @@ static void handleRoot()
             "</div></details>"
             "</div></div>");
 
-  page += F("</section>"
-            "<section class='tab-pane' id='pane-display'>");
+  page += F("</section>" // closes pane-stratum
+            "<section class='settings-sec' id='pane-display'>"
+            "<h2 class='settings-h'>Display</h2>");
 
   // Display
   page += F("<div class='cfg-card'>"
@@ -1276,8 +1279,102 @@ static void handleRoot()
   page += F("</div></div>" // closes Display card
             "</section>"); // closes pane-display
 
-  // Tab 4: Proof of work
-  page += F("<section class='tab-pane' id='pane-pow'>"
+
+  page += F("<section class='settings-sec' id='pane-system'>"
+            "<h2 class='settings-h'>System</h2>");
+
+  // Clock and data
+  page += F("<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'>"
+            "<div class='cfg-card-title'>Clock and data</div>"
+            "</div>"
+            "<div class='cfg-card-body'>"
+            "<div class='form-grid-3'>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='tz-select'>Timezone</label>"
+            "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
+            "<option value=''>Pick a timezone…</option>"
+            "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
+            "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
+            "<option value='-6'>UTC-6 (US Central / CST)</option>"
+            "<option value='-5'>UTC-5 (US Eastern / EST)</option>"
+            "<option value='-4'>UTC-4 (Atlantic / AST)</option>"
+            "<option value='0'>UTC+0 (London / GMT)</option>"
+            "<option value='1'>UTC+1 (Central Europe / CET)</option>"
+            "<option value='2'>UTC+2 (Eastern Europe / EET)</option>"
+            "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
+            "<option value='9'>UTC+9 (Japan, Korea)</option>"
+            "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
+            "</select></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-tz'>UTC offset (hours)</label>"
+            "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
+  page += String(Settings.Timezone) + F("'></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-currency'>Currency</label>"
+            "<select name='currency' id='f-currency' class='form-control'>");
+  for (int i = 0; i < kCurrencyCount; i++)
+  {
+    page += "<option value='" + String(kCurrencies[i].code) + "'";
+    if (Settings.Currency.equalsIgnoreCase(kCurrencies[i].code))
+      page += " selected";
+    page += ">" + String(kCurrencies[i].label) + "</option>";
+  }
+  page += F("</select></div></div>"
+            "<div class='form-group'>"
+            "<label class='form-label' for='f-mempool'>Mempool API</label>"
+            "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
+  page += htmlEscape(Settings.MempoolHost) + F("'>"
+            "<span class='form-hint'>Used for block height, fees and difficulty, e.g. <code>https://mempool.space</code> or a local node like <code>http://umbrel.local:3006</code>.</span>"
+            "</div>"
+            "<div class='form-group'>"
+            "<label class='form-check'>"
+            "<input type='checkbox' name='savestats'");
+  if (Settings.saveStats) page += F(" checked");
+  page += F("> <span>Keep lifetime hashes and shares across reboots (stored in flash)</span></label>"
+            "</div></div></div>"
+            "<div class='cfg-card'>"
+            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Firmware update</div></div>"
+            "<div class='cfg-card-body'>"
+            "<span class='form-hint'>Upload a <code>firmware.bin</code> over Wi-Fi. The miner flashes it and reboots.</span>"
+            "<div class='ota-row'>"
+            "<input type='file' id='ota-file' class='file-input' accept='.bin'>"
+            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload and flash</button>"
+            "</div>"
+            "<div class='ota-progress-box' id='ota-progress-box'>"
+            "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
+            "<div class='ota-status' id='ota-status'>Ready</div>"
+            "</div>"
+            "</div></div>"
+            "<details class='edu-acc'>"
+            "<summary class='edu-sum'>Touch and button controls</summary>"
+            "<div class='edu-body'>"
+            "<div class='guide-grid'>"
+            "<div class='guide-card'>"
+            "<div class='guide-title'>Touch</div>"
+            "<div class='guide-row'><span class='guide-key'>Top-left logo</span><span class='guide-val'>Next accent color</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Top-right corner</span><span class='guide-val'>Backlight on/off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Center</span><span class='guide-val'>Next screen</span></div>"
+            "</div>"
+            "<div class='guide-card'>"
+            "<div class='guide-title'>BOOT button</div>"
+            "<div class='guide-row'><span class='guide-key'>1 tap</span><span class='guide-val'>Next screen</span></div>"
+            "<div class='guide-row'><span class='guide-key'>2 taps</span><span class='guide-val'>Rotate 90&deg;</span></div>"
+            "<div class='guide-row'><span class='guide-key'>3 taps</span><span class='guide-val'>Backlight on/off</span></div>"
+            "<div class='guide-row'><span class='guide-key'>Hold 5 s</span><span class='guide-val'>Factory reset and reboot</span></div>"
+            "</div></div>"
+            "</div></details>"
+            "</section>"); // closes pane-system
+
+  page += F("<div class='actions' id='form-actions'>"
+            "<button type='submit' class='btn-save' id='btn-save'>Save settings</button>"
+            "<button type='button' class='btn-restart' id='btn-reboot' onclick='rebootDevice()'>Reboot without saving</button>"
+            "</div>"
+            "</section>"); // closes pane-settings
+
+  // Tab 3: Learn
+  page += F("<section class='tab-pane' id='pane-learn'>");
+  page += F("<section class='settings-sec' id='pane-pow'>"
             "<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
             "<div class='cfg-card-title'>Proof-of-work simulator</div>"
@@ -1376,98 +1473,9 @@ static void handleRoot()
             "&bull; <strong>Satoshi's Gambler's Ruin Finality:</strong> In Section 11 of the 2008 Whitepaper, Satoshi modeled double-spend races against a 10% hash attacker. After <strong>6 confirmations (~1 hour)</strong>, catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>, establishing 6 confirmations as the worldwide benchmark for irreversible settlement."
             "</div></details>"
             "</section>"); // closes pane-pow
+  page += F("</section>"); // closes pane-learn
 
-  // Tab 5: System
-  page += F("<section class='tab-pane' id='pane-system'>");
-
-  // Clock and data
-  page += F("<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>Clock and data</div>"
-            "</div>"
-            "<div class='cfg-card-body'>"
-            "<div class='form-grid-3'>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='tz-select'>Timezone</label>"
-            "<select id='tz-select' onchange='applyTz(this.value)' class='form-control'>"
-            "<option value=''>Pick a timezone…</option>"
-            "<option value='-8'>UTC-8 (US Pacific / PST)</option>"
-            "<option value='-7'>UTC-7 (US Mountain / MST)</option>"
-            "<option value='-6'>UTC-6 (US Central / CST)</option>"
-            "<option value='-5'>UTC-5 (US Eastern / EST)</option>"
-            "<option value='-4'>UTC-4 (Atlantic / AST)</option>"
-            "<option value='0'>UTC+0 (London / GMT)</option>"
-            "<option value='1'>UTC+1 (Central Europe / CET)</option>"
-            "<option value='2'>UTC+2 (Eastern Europe / EET)</option>"
-            "<option value='8'>UTC+8 (China, Singapore, Perth)</option>"
-            "<option value='9'>UTC+9 (Japan, Korea)</option>"
-            "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
-            "</select></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-tz'>UTC offset (hours)</label>"
-            "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
-  page += String(Settings.Timezone) + F("'></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-currency'>Currency</label>"
-            "<select name='currency' id='f-currency' class='form-control'>");
-  for (int i = 0; i < kCurrencyCount; i++)
-  {
-    page += "<option value='" + String(kCurrencies[i].code) + "'";
-    if (Settings.Currency.equalsIgnoreCase(kCurrencies[i].code))
-      page += " selected";
-    page += ">" + String(kCurrencies[i].label) + "</option>";
-  }
-  page += F("</select></div></div>"
-            "<div class='form-group'>"
-            "<label class='form-label' for='f-mempool'>Mempool API</label>"
-            "<input type='text' id='f-mempool' name='mempool' class='form-control' maxlength='80' placeholder='" DEFAULT_MEMPOOLHOST "' value='");
-  page += htmlEscape(Settings.MempoolHost) + F("'>"
-            "<span class='form-hint'>Used for block height, fees and difficulty, e.g. <code>https://mempool.space</code> or a local node like <code>http://umbrel.local:3006</code>.</span>"
-            "</div>"
-            "<div class='form-group'>"
-            "<label class='form-check'>"
-            "<input type='checkbox' name='savestats'");
-  if (Settings.saveStats) page += F(" checked");
-  page += F("> <span>Keep lifetime hashes and shares across reboots (stored in flash)</span></label>"
-            "</div></div></div>"
-            "<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Firmware update</div></div>"
-            "<div class='cfg-card-body'>"
-            "<span class='form-hint'>Upload a <code>firmware.bin</code> over Wi-Fi. The miner flashes it and reboots.</span>"
-            "<div class='ota-row'>"
-            "<input type='file' id='ota-file' class='file-input' accept='.bin'>"
-            "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload and flash</button>"
-            "</div>"
-            "<div class='ota-progress-box' id='ota-progress-box'>"
-            "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
-            "<div class='ota-status' id='ota-status'>Ready</div>"
-            "</div>"
-            "</div></div>"
-            "<details class='edu-acc'>"
-            "<summary class='edu-sum'>Touch and button controls</summary>"
-            "<div class='edu-body'>"
-            "<div class='guide-grid'>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>Touch</div>"
-            "<div class='guide-row'><span class='guide-key'>Top-left logo</span><span class='guide-val'>Next accent color</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Top-right corner</span><span class='guide-val'>Backlight on/off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Center</span><span class='guide-val'>Next screen</span></div>"
-            "</div>"
-            "<div class='guide-card'>"
-            "<div class='guide-title'>BOOT button</div>"
-            "<div class='guide-row'><span class='guide-key'>1 tap</span><span class='guide-val'>Next screen</span></div>"
-            "<div class='guide-row'><span class='guide-key'>2 taps</span><span class='guide-val'>Rotate 90&deg;</span></div>"
-            "<div class='guide-row'><span class='guide-key'>3 taps</span><span class='guide-val'>Backlight on/off</span></div>"
-            "<div class='guide-row'><span class='guide-key'>Hold 5 s</span><span class='guide-val'>Factory reset and reboot</span></div>"
-            "</div></div>"
-            "</div></details>"
-            "</section>"); // closes pane-system
-
-  page += F("<div class='actions' id='form-actions' hidden>"
-            "<button type='submit' class='btn-save' id='btn-save'>Save settings</button>"
-            "<button type='button' class='btn-restart' id='btn-reboot' onclick='rebootDevice()'>Reboot without saving</button>"
-            "</div>"
-            "</form>"
+  page += F("</form>"
             "</main>"
             "</div>"  // closes console-layout
             "</div>"  // closes container
