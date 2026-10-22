@@ -198,6 +198,7 @@ void selectPoolStats(const String &host, int port); // stratum task, before subs
 void getActivePool(char *key, size_t keyLen, const char **coin);
 int getPoolStatsTable(PoolStatSummary *out, int max);
 const char *poolCoinLabel(const char *key); // "BTC", "EMB", "POL", "FXTC"...
+void getPoolError(char *out, size_t n); // last pool error ("24: No EMB payout address..."), "" = none
 void poolShortName(const char *key, char *out, size_t n); // "public-pool", "Shears"
 
 // ---------------------------------------------------------------------------

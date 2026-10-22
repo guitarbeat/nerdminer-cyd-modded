@@ -318,6 +318,49 @@ static uint8_t s_shareHead = 0, s_shareCount = 0; // next write slot, entries us
 static volatile uint32_t s_shareSeq = 0;
 static portMUX_TYPE s_shareMux = portMUX_INITIALIZER_UNLOCKED;
 static void saveShareHistory(void); // NVS, below
+
+// Last error the pool answered outside a share (authorize refused, ...),
+// shown on /api/stats and the screens when no job arrives.
+static char s_poolError[96] = "";
+static portMUX_TYPE s_poolErrMux = portMUX_INITIALIZER_UNLOCKED;
+static void notePoolError(const String &line)
+{
+  StaticJsonDocument<512> j;
+  if (deserializeJson(j, line))
+    return;
+  JsonVariant e = j["error"];
+  if (e.isNull())
+    return;
+  char msg[96];
+  if (e.is<JsonArray>() && e.size() >= 2)
+    snprintf(msg, sizeof(msg), "%d: %s", e[0].as<int>(), e[1].as<const char *>() ? e[1].as<const char *>() : "?");
+  else if (e.is<const char *>())
+    snprintf(msg, sizeof(msg), "%s", e.as<const char *>());
+  else
+    return;
+  for (char *c = msg; *c; c++) // ASCII only (screen font, JSON)
+    if ((unsigned char)*c < 32 || (unsigned char)*c > 126 || *c == '"' || *c == '\\')
+      *c = ' ';
+  portENTER_CRITICAL(&s_poolErrMux);
+  strcpy(s_poolError, msg);
+  portEXIT_CRITICAL(&s_poolErrMux);
+  Serial.printf("[STRATUM] Pool error: %s\n", msg);
+}
+static void clearPoolError(void)
+{
+  if (!s_poolError[0])
+    return;
+  portENTER_CRITICAL(&s_poolErrMux);
+  s_poolError[0] = 0;
+  portEXIT_CRITICAL(&s_poolErrMux);
+}
+void getPoolError(char *out, size_t n)
+{
+  portENTER_CRITICAL(&s_poolErrMux);
+  strncpy(out, s_poolError, n - 1);
+  portEXIT_CRITICAL(&s_poolErrMux);
+  out[n - 1] = 0;
+}
 static void loadShareHistory(void);
 
 static void recordShare(double diff, bool accepted)
@@ -427,6 +470,8 @@ static bool takePoolChange(void)
   s_poolChangePending = false;
   if (!mainChanged && !(s_onBackup && backupChanged))
     return false;
+  if (mainChanged)
+    s_poolError[0] = 0;
   if (mainChanged)
     g_networkDifficulty = 0.0; // new pool may mine another chain: wait for its first job's nbits
   s_onBackup = s_onBackup && !mainChanged && backupPoolSet();
@@ -916,6 +961,7 @@ void runStratumWorker(void *name) {
       {
           case MINING_NOTIFY:         if(parse_mining_notify(line, mJob))
                                       {
+                                          clearPoolError();
                                           // The old job keeps mining while the new one is prepared below
                                           // (calculateMiningData prints a lot to the UART, which blocks for
                                           // hundreds of ms); the queues are swapped atomically just before
@@ -1115,6 +1161,8 @@ void runStratumWorker(void *name) {
           case STRATUM_PARSE_ERROR:   {
                                         unsigned long id = parse_extract_id(line);
                                         auto itt = s_submition_map.find(id);
+                                        if (itt == s_submition_map.end())
+                                          notePoolError(line); // e.g. authorize refused: no jobs will come
                                         if (itt != s_submition_map.end())
                                         {
                                           s_sharesRejected++;

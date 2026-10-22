@@ -130,6 +130,9 @@ static String buildStatsJson(const mining_data &d)
     const char *coin = "BTC";
     getActivePool(key, sizeof(key), &coin);
     json += ",\"pool\":\"" + htmlEscape(String(key)) + "\",\"coin\":\"" + String(coin) + "\"";
+    char perr[96];
+    getPoolError(perr, sizeof(perr));
+    json += ",\"pool_error\":\"" + String(perr) + "\"";
     static PoolStatSummary tab[POOLSTAT_N];
     int n = getPoolStatsTable(tab, POOLSTAT_N);
     json += ",\"pool_stats\":[";
@@ -788,6 +791,7 @@ if(d.free_heap){const e=document.getElementById('st-heap');if(e)e.textContent=Ma
 if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}
 const txt=document.getElementById('st-txt');if(txt){
 if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
+else if(d.pool_error){txt.className='txt-amber';txt.textContent='Pool refused: '+d.pool_error;}
 else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
 else{txt.className='txt-gray';txt.textContent='Idle';}}
 if(!netKnown)['dyn-netdiff','dyn-netpct','dyn-dayodds','dyn-yrodds','dyn-avgwait','dyn-netpow','dyn-nethr'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='--';});

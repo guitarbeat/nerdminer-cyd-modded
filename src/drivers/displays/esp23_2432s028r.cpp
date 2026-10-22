@@ -153,8 +153,8 @@ static inline bool isPortrait()
 
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
 static inline int gCX() { return isPortrait() ? 120 : 100; }
-static inline int gCY() { return isPortrait() ? 110 : 116; }
-static inline int gR()  { return isPortrait() ? 98 : 86; }
+static inline int gCY() { return isPortrait() ? 136 : 116; }
+static inline int gR()  { return isPortrait() ? 98 : 86; }  // portrait top edge y=38, clear of the status bar
 static inline int gRI() { return isPortrait() ? 84 : 74; }
 
 // Hashrate ring
@@ -867,6 +867,13 @@ static void mineStripGeom(int &x, int &y, int &w, int &h)
   else { x = 8; y = STRIP_Y; w = 304; h = STRIP_H; }
 }
 
+// Portrait mining layout (condensed): ring cy=136 r=98 (y 38..~210),
+// cards y=212..276 (2 rows of 30), bottom row y=280..310.
+#define MC_CARD_Y0 212
+#define MC_CARD_H 30
+#define MC_STRIP_Y 280
+#define MC_STRIP_H 30
+
 static void chromeMine(TFT_eSPI &d)
 {
   if (!shotOn)
@@ -874,16 +881,13 @@ static void chromeMine(TFT_eSPI &d)
   gaugeDraw(d, gaugeShown);
   if (isPortrait())
   {
-    // 2x2 Bento Grid panels (6px corner radius, matching other cards)
-    panel(d, 6, 172, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
-    panel(d, 122, 172, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
-    panel(d, 6, 218, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
-    panel(d, 122, 218, 112, 42, 6, C_PANEL, C_EDGE, C_BG);
-    // Bottom 3-cell strip
-    panel(d, 6, 264, 228, 50, 8, C_PANEL, C_EDGE, C_BG);
-    int vy = dY(264);
+    // Compact 2x2 cards (one line each: label left, value right) and one
+    // bottom row, so the ring gets the room. Cards are drawn whole by
+    // drawMineCardRow; only the strip frame is static.
+    panel(d, 6, MC_STRIP_Y, 228, MC_STRIP_H, 6, C_PANEL, C_EDGE, C_BG);
+    int vy = dY(MC_STRIP_Y);
     for (int i = 1; i < 3; i++)
-      d.drawFastVLine(6 + (228 * i) / 3, vy + 8, 34, C_EDGE);
+      d.drawFastVLine(6 + (228 * i) / 3, vy + 6, MC_STRIP_H - 12, C_EDGE);
   }
   else
   {
@@ -935,13 +939,30 @@ static void drawMineCard(int id, int x, int y, int w, int h, const char *label, 
   done(id, k);
 }
 
+static void drawMineCardRow(int id, int x, int y, int w, int h, const char *label, const char *value,
+                            uint16_t valCol)
+{
+  char k[64];
+  snprintf(k, sizeof(k), "mr|%s|%s|%u", label, value, valCol);
+  if (!need(id, k))
+    return;
+  if (!wBegin(w, h, C_BG))
+    return;
+  panel(wgt, 0, 0, w, h, 6, C_PANEL, C_EDGE, C_BG);
+  text(wgt, label, 8, (h - 9) / 2, 9, C_DIM, C_PANEL);
+  unsigned vs = textW(value, 15) > w - 16 - textW(label, 9) - 6 ? 13 : 15;
+  text(wgt, value, w - 8, (h - vs) / 2, vs, valCol, C_PANEL, Align::TopRight);
+  wEnd(x, y);
+  done(id, k);
+}
+
 static void drawMineStrip(const StripV &s)
 {
   const bool P = isPortrait();
   int x = P ? 6 : 8;
-  int y = P ? 264 : STRIP_Y;
+  int y = P ? MC_STRIP_Y : STRIP_Y;
   int w = P ? 228 : 304;
-  int h = P ? 50 : STRIP_H;
+  int h = P ? MC_STRIP_H : STRIP_H;
   int cw = w / 3 - 4, ch = h - 6;
   for (int i = 0; i < 3; i++)
   {
@@ -951,10 +972,18 @@ static void drawMineStrip(const StripV &s)
     if (!wBegin(cw, ch, C_PANEL))
       continue;
     int c = cw / 2;
-    unsigned vs = P ? 16 : 14, ls = 10;
     uint16_t vCol = (i == 2 ? C_WARN : C_TEXT);
-    text(wgt, s.v[i].c_str(), c, P ? 7 : 5, vs, vCol, C_PANEL, Align::TopCenter);
-    text(wgt, s.l[i].c_str(), c, P ? 27 : 21, ls, C_DIM, C_PANEL, Align::TopCenter);
+    if (P)
+    { // one line: short label left, value right
+      const char *lab = s.l[i] == "BLK TIME" ? "BLK" : s.l[i] == "UPTIME" ? "UP" : s.l[i].c_str();
+      text(wgt, lab, 3, (ch - 9) / 2, 9, C_DIM, C_PANEL);
+      text(wgt, s.v[i].c_str(), cw - 3, (ch - 13) / 2, 13, vCol, C_PANEL, Align::TopRight);
+    }
+    else
+    {
+      text(wgt, s.v[i].c_str(), c, 5, 14, vCol, C_PANEL, Align::TopCenter);
+      text(wgt, s.l[i].c_str(), c, 21, 10, C_DIM, C_PANEL, Align::TopCenter);
+    }
     wEnd(x + (w * i) / 3 + 2, y + 3);
     done(W_P0 + i, k);
   }
@@ -996,10 +1025,11 @@ static void paintMine(const MineV &m)
   if (P)
   {
     // 2x2 Bento Grid: SHARES, BEST DIFF, THIS BLOCK, SESSION
-    drawMineCard(W_T0, 6, 172, 112, 42, "SHARES", m.shares.c_str(), shareCol);
-    drawMineCard(W_T1, 122, 172, 112, 42, "BEST DIFF", m.best.c_str(), C_WARN);
-    drawMineCard(W_T2, 6, 218, 112, 42, "THIS BLOCK", m.blockHashes.c_str(), C_TEXT);
-    drawMineCard(W_T3, 122, 218, 112, 42, "SESSION", m.total.c_str(), C_TEXT);
+    const int y1 = MC_CARD_Y0 + MC_CARD_H + 4;
+    drawMineCardRow(W_T0, 6, MC_CARD_Y0, 112, MC_CARD_H, "SHARES", m.shares.c_str(), shareCol);
+    drawMineCardRow(W_T1, 122, MC_CARD_Y0, 112, MC_CARD_H, "BEST", m.best.c_str(), C_WARN);
+    drawMineCardRow(W_T2, 6, y1, 112, MC_CARD_H, "BLOCK", m.blockHashes.c_str(), C_TEXT);
+    drawMineCardRow(W_T3, 122, y1, 112, MC_CARD_H, "SESSION", m.total.c_str(), C_TEXT);
   }
   else
   {
@@ -1573,7 +1603,9 @@ static void paintArchBody(const ArchitectureV &av)
 
   // ---- Top: closest share readout -------------------------------------
   char tkey[96];
-  snprintf(tkey, sizeof(tkey), "%s|%s|%s|%s|%d", bestS, netS, ordS, av.coin, P ? 1 : 0);
+  char perrK[24];
+  getPoolError(perrK, sizeof(perrK));
+  snprintf(tkey, sizeof(tkey), "%s|%s|%s|%s|%s|%d", bestS, netS, ordS, av.coin, perrK, P ? 1 : 0);
   if (need(W_ARCH_TOP, tkey) && wBegin(g.topW, g.topH, C_BG))
   {
     panel(wgt, 0, 0, g.topW, g.topH, 6, C_PANEL, C_EDGE, C_BG);
@@ -1592,8 +1624,18 @@ static void paintArchBody(const ArchitectureV &av)
     }
     else
     {
-      snprintf(l1, sizeof(l1), netKnown ? "no shares yet" : "no job from pool");
+      char perr[96];
+      getPoolError(perr, sizeof(perr));
+      snprintf(l1, sizeof(l1), netKnown ? "no shares yet" : (perr[0] ? "pool refused login" : "no job from pool"));
       l2[0] = 0;
+      if (!netKnown && perr[0])
+      { // e.g. "24: No EMB payout address on this account" -> after the code
+        const char *m = strstr(perr, ": ");
+        snprintf(l2, sizeof(l2), "%.31s", m ? m + 2 : perr);
+        char *tail = strstr(l2, " on this a");
+        if (tail)
+          *tail = 0; // "No EMB payout address"
+      }
     }
     text(wgt, l1, g.topW - 8, P ? 18 : 16, 12, C_TEXT, C_PANEL, Align::TopRight);
     if (l2[0])
