@@ -398,7 +398,9 @@ void init_WifiManager()
         Serial.println(Settings.Timezone);
 
         #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
-        Settings.invertColors = (strncmp(invertColors.getValue(), "T", 1) == 0);
+        // The portal field defaults to "T" whether or not the box is ticked, so
+        // only trust it when the form was actually submitted.
+        if (shouldSaveConfig) Settings.invertColors = (strncmp(invertColors.getValue(), "T", 1) == 0);
         if (shouldSaveConfig) Settings.flipDisplay = (strncmp(flipDisplay.getValue(), "T", 1) == 0);
         Serial.print("Invert Colors: ");
         Serial.println(Settings.invertColors);        
@@ -445,7 +447,7 @@ void init_WifiManager()
     Serial.println(Settings.Timezone);
 
     #ifdef ESP32_2432S028R
-    Settings.invertColors = (strncmp(invertColors.getValue(), "T", 1) == 0);
+    if (shouldSaveConfig) Settings.invertColors = (strncmp(invertColors.getValue(), "T", 1) == 0);
     if (shouldSaveConfig) Settings.flipDisplay = (strncmp(flipDisplay.getValue(), "T", 1) == 0);
     Serial.print("Invert Colors: ");
     Serial.println(Settings.invertColors);
