@@ -159,10 +159,10 @@ static inline bool isPortrait()
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
 // Three layers: outer = speed, middle = best hash digits, inner = its zeros.
 static inline int gCX() { return isPortrait() ? 120 : 104; }
-static inline int gCY() { return isPortrait() ? 150 : 134; }
-static inline int gR()  { return isPortrait() ? 112 : 100; } // top edge y=38 / 34, clear of the status bar
-static inline int gRI() { return isPortrait() ? 100 : 88; }
-static inline int hexR() { return isPortrait() ? 91 : 79; }  // middle ring: centres of the hex cells
+static inline int gCY() { return isPortrait() ? 130 : 134; } // portrait dial shrunk (was 150/112) for a taller bottom panel
+static inline int gR()  { return isPortrait() ? 92 : 100; } // top edge y=38 / 34, clear of the status bar
+static inline int gRI() { return isPortrait() ? 82 : 88; }
+static inline int hexR() { return isPortrait() ? 74 : 79; }  // middle ring: centres of the hex cells
 #define HEX_N 20
 
 // Hashrate ring
@@ -190,10 +190,9 @@ static float roundShown = 0;
 static uint8_t rndLvl[G_SEGS];
 static char hexShown[HEX_N]; // middle ring: char drawn per cell (0 = redraw)
 static bool rndDrain = false;  // a new block: drain the inner ring to 0 first
-// Screen 0 colors: orange = speed, blue = guesses this round, magenta = my
-// best hash (its zeros), teal = zeros needed / the winners.
-#define C_ROUND 0x0656 // teal: inner zeros ring and winner markers
-#define C_GUESS 0x441F // blue: guesses this round
+// Screen 0 colors: orange = speed, blue (C_GUESS) = guesses this round (inner
+// ring + counter), magenta = my best hash (its leading zeros).
+#define C_GUESS 0x3CDF // blue (58,154,255): inner ring and the guesses-this-round counter
 #define C_BEST 0xFA99  // magenta: my best hash this round
 static unsigned long shareFlashUntil = 0;
 static uint32_t lastShares = 0;
@@ -249,6 +248,8 @@ enum WidgetId
   W_RND_A, // MINE: small round lines around the hero
   W_RND_B,
   W_RND_C,
+  W_MP_REC, // MINE panel: zero records
+  W_MP_GSS, // MINE panel: guesses this round
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -880,17 +881,17 @@ static int winnerZeros()
 // Angle (drawArc convention: 0 = 6 o'clock, clockwise) of middle/inner cell i.
 static inline float hexAng(int i) { return 45.0f + (i + 0.5f) * (270.0f / HEX_N); }
 
-// Inner ring (thin, 20 segments under the 20 hex cells): v = leading hex
-// zeros of the best hash this round. Segments up to the last winner's zeros
-// (what a block needs) show a dim track; lit ones are teal.
-static inline int rR()  { return isPortrait() ? 82 : 70; }
-static inline int rRI() { return isPortrait() ? 78 : 66; }
+// Inner ring (thin, 20 segments under the 20 hex cells): v = guesses this
+// round in 20ths of a typical 10-minute block's worth at the average speed
+// (0..20, capped full). Dim blue track, lit segments blue.
+static inline int rR()  { return isPortrait() ? 66 : 70; }
+static inline int rRI() { return isPortrait() ? 62 : 66; }
 static void roundRingDraw(TFT_eSPI &d, float v, int need)
 {
   if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
   if (!(v > 0)) v = 0;
-  if (need < 1 || need > HEX_N) need = HEX_N;
-  const uint16_t trk = mix565(C_BG, C_ROUND, 60);
+  need = HEX_N; // the whole track is shown
+  const uint16_t trk = mix565(C_BG, C_GUESS, 60);
   int cy = dY(G_CY);
   for (int i = 0; i < HEX_N; i++)
   {
@@ -899,7 +900,7 @@ static void roundRingDraw(TFT_eSPI &d, float v, int need)
     if (lvl == 0 && i >= need) lvl = 9; // past what a block needs: no track
     if (!shotOn && lvl == rndLvl[i])
       continue;
-    uint16_t col = lvl == 9 ? C_BG : lvl == 0 ? trk : lvl < 4 ? mix565(trk, C_ROUND, lvl * 64) : C_ROUND;
+    uint16_t col = lvl == 9 ? C_BG : lvl == 0 ? trk : lvl < 4 ? mix565(trk, C_GUESS, lvl * 64) : C_GUESS;
     const float step = 270.0f / HEX_N;
     int a0 = (int)(45.0f + i * step + 1.0f);
     d.drawArc(G_CX, cy, rR(), rRI(), a0, (int)(45.0f + (i + 1) * step - 1.0f), col, C_BG, true);
@@ -1257,13 +1258,25 @@ struct MineV
   String rA, rB, rC; // small round lines (above / below the hero)
   String bestHex;    // first 20 hex digits of the best hash this round ("" = none yet)
   int winZ = 0;      // leading hex zeros of the last winning block hash
+  String guesses;    // guesses this round (resets at a new block)
   uint16_t rACol = 0, rBCol = 0;
   uint16_t jobCol = 0, jobICol = 0, jobIcon = 0, okCol = 0;
   float kh = 0;
   bool flash = false;
 };
 
-static Rect mineChartRect() { return isPortrait() ? Rect{6, 232, 228, 86} : Rect{208, 30, 108, 208}; }
+// Bottom panel (option 2 "record timeline"): the last minute of speed over
+// its average, then the zero records of this round and the round's guesses.
+//   Portrait : 6,197 228x121 - speed on top, records (2/3) | guesses (1/3)
+//   Landscape: 208,30 108x208 - speed / records / guesses stacked
+static Rect mineChartRect() { return isPortrait() ? Rect{6, 197, 228, 121} : Rect{208, 30, 108, 208}; }
+struct MinePanelG { Rect spd, rec, gss; int sepY, sep2Y, divX; };
+static MinePanelG minePanelG()
+{
+  if (isPortrait())
+    return {Rect{8, 199, 224, 54}, Rect{8, 259, 148, 57}, Rect{160, 259, 72, 57}, 256, -1, 158};
+  return {Rect{210, 32, 104, 71}, Rect{210, 108, 104, 62}, Rect{210, 175, 104, 61}, 105, 172, -1};
+}
 
 static void chromeMine(TFT_eSPI &d)
 {
@@ -1272,29 +1285,27 @@ static void chromeMine(TFT_eSPI &d)
   gaugeDraw(d, gaugeShown);
   roundRingDraw(d, roundShown, winnerZeros());
   const Rect c = mineChartRect();
-  panel(d, c.x, c.y, c.w, c.h, 6, C_PANEL, C_EDGE, C_BG);
+  const MinePanelG g = minePanelG();
+  panel(d, c.x, c.y, c.w, c.h, 6, C_BG, C_EDGE, C_BG); // black inside, thin gray border
+  d.drawFastHLine(c.x + 6, dY(g.sepY), c.w - 12, C_EDGE);
+  if (g.sep2Y > 0) d.drawFastHLine(c.x + 6, dY(g.sep2Y), c.w - 12, C_EDGE);
+  if (g.divX > 0) d.drawFastVLine(g.divX, dY(g.rec.y + 3), g.rec.h - 8, C_EDGE);
 }
 
-
-// Best leading hex zeros this round, sampled once a second (display side,
-// from the round best hash the miners already keep). A step up when a better
-// hash turns up; back to 0 when a new block starts a new round.
-#define ZH_N 64
-#define ZH_SPAN_MS (30UL * 60UL * 1000UL) // the chart shows at most the last 30 min
-#define ZH_MIN_MS (10UL * 60UL * 1000UL)  // ...and at least 10 min (a fresh boot)
-static uint32_t zhT[ZH_N];
-static uint8_t zhZ[ZH_N];
-static uint8_t zhHead = 0, zhCount = 0;
-static int zhLast = -1;
-static uint32_t zhEpoch = 0;
-// Winner markers (teal): the winning block's zeros, at the time it arrived.
-#define ZW_N 8
-#define ZH_HOLD_MS 5000UL // keep the finished round on screen as long as the banner
-static uint32_t zwT[ZW_N];
-static uint8_t zwZ[ZW_N];
-static uint8_t zwHead = 0, zwCount = 0;
-static uint32_t zhHoldUntil = 0; // != 0: the finished round is being held
-static int winnerZeros();
+// ---- data, sampled once a second on any screen (display task, no I/O) ----
+// Speed: 60 x 1 s samples (0.1 KH/s units) from the miner's KH counter.
+// Records: the last 3 times my best leading-zero count this round went UP.
+extern uint32_t totalKHashes;
+#define HR_N 60
+static uint16_t hrS[HR_N];
+static uint8_t hrHead = 0, hrCount = 0;
+static uint32_t hrEpoch = 0;
+#define REC_N 3
+static uint32_t recT[REC_N];
+static uint8_t recZ[REC_N];
+static uint8_t recHead = 0, recCount = 0;
+static int recBest = 0;      // best zeros seen this round (0 = none yet)
+static uint32_t recEpoch = 0; // bumps on a new record or a new round
 static int bestZerosNow()
 {
   uint8_t bh[32];
@@ -1308,128 +1319,202 @@ static int bestZerosNow()
   }
   return z;
 }
-static void zerosSample()
+static void panelSample()
 {
-  static uint32_t lastMs = 0, lastBlk = 0;
+  static uint32_t lastMs = 0, lastKh = 0, lastBlk = 0;
   const uint32_t now = millis();
-  if (lastMs && now - lastMs < 1000UL) return;
-  lastMs = now;
-  auto push = [&](int z) {
-    zhT[zhHead] = now;
-    zhZ[zhHead] = (uint8_t)z;
-    zhHead = (zhHead + 1) % ZH_N;
-    if (zhCount < ZH_N) zhCount++;
-    zhLast = z;
-    zhEpoch++;
-  };
-  const int z = bestZerosNow();
-  if (zhLast < 0)
-    push(0); // the first round starts (at boot) from nothing
+  // speed: one sample each time the miner's KH counter ticks (about 1 Hz)
+  const uint32_t kh = totalKHashes;
+  if (kh != lastKh)
+  {
+    const uint32_t dt = now - lastMs;
+    if (lastMs && kh > lastKh && dt >= 500UL && dt <= 5000UL)
+    {
+      uint32_t v = (uint32_t)(((uint64_t)(kh - lastKh) * 10000ULL) / dt); // 0.1 KH/s
+      hrS[hrHead] = v > 65535 ? 65535 : (uint16_t)v;
+      hrHead = (hrHead + 1) % HR_N;
+      if (hrCount < HR_N) hrCount++;
+      hrEpoch++;
+    }
+    lastKh = kh;
+    lastMs = now;
+  }
+  // a new block (the prev-block hash changed): the round starts over
   const uint32_t nb = g_newBlockMs;
   if (nb != lastBlk)
-  { // a new block: mark the winner's zeros (teal) and hold the finished round
-    if (nb)
-    {
-      zwT[zwHead] = now;
-      zwZ[zwHead] = (uint8_t)winnerZeros();
-      zwHead = (zwHead + 1) % ZW_N;
-      if (zwCount < ZW_N) zwCount++;
-      zhHoldUntil = now + ZH_HOLD_MS;
-      if (!zhHoldUntil) zhHoldUntil = 1;
-      zhEpoch++;
-    }
-    lastBlk = nb;
-  }
-  if (zhHoldUntil)
   {
-    if ((int32_t)(now - zhHoldUntil) < 0)
-      return; // still comparing: staircase frozen at the round's best
-    zhHoldUntil = 0;
-    if (zhLast > 0)
-      push(0); // then the round restarts from nothing (the sawtooth drop)
+    lastBlk = nb;
+    recCount = 0;
+    recHead = 0;
+    recBest = 0;
+    recEpoch++;
   }
-  if (z != zhLast)
-    push(z);
+  const int z = bestZerosNow();
+  if (z > recBest)
+  { // strictly better than this round's best so far: a record
+    recBest = z;
+    recT[recHead] = now;
+    recZ[recHead] = (uint8_t)z;
+    recHead = (recHead + 1) % REC_N;
+    if (recCount < REC_N) recCount++;
+    recEpoch++;
+  }
 }
 
-static void drawZerosChart(const Rect &r, int winZ)
+// Guesses this round / what a typical 10-minute block takes at the average
+// speed (last 60 s; the dial reading until samples exist). 1.0 = one block's worth.
+static float roundRatio(float khFallback)
+{
+  uint32_t sum = 0;
+  for (int i = 0; i < hrCount; i++) sum += hrS[i];
+  const float kh = hrCount ? (float)sum / hrCount / 10.0f : khFallback;
+  if (!(kh > 1.0f)) return 0.0f;
+  return (float)((double)g_currentBlockHashes / ((double)kh * 1000.0 * 600.0));
+}
+static float roundFill(float khFallback)
+{
+  const float r = roundRatio(khFallback);
+  return r >= 1.0f ? (float)HEX_N : r * HEX_N;
+}
+
+static void fmtAge(uint32_t s, char *b, size_t n)
+{
+  if (s < 3) snprintf(b, n, "now");
+  else if (s < 60) snprintf(b, n, "%lus", (unsigned long)s);
+  else if (s < 3600) snprintf(b, n, "%lum", (unsigned long)(s / 60));
+  else snprintf(b, n, "%luh", (unsigned long)(s / 3600));
+}
+
+static void drawSpeedPanel(const Rect &r, float khNow)
+{
+  const bool P = isPortrait();
+  char k[48];
+  snprintf(k, sizeof(k), "s|%lu|%d|%d", (unsigned long)hrEpoch, (int)(khNow + 0.5f), P ? 1 : 0);
+  if (!need(W_CHART, k))
+    return;
+  // average over what we have
+  uint32_t sum = 0;
+  for (int i = 0; i < hrCount; i++) sum += hrS[i];
+  const float avg = hrCount ? (float)sum / hrCount : 0.0f; // 0.1 KH/s
+  const int x0 = r.x + 4, x1 = r.x + r.w - 5;
+  const int pTop = r.y + (P ? 19 : 29), pBot = r.y + (P ? 41 : 55); // plot band (+11% .. -11%)
+  const int mid = (pTop + pBot) / 2;
+  banded(r.x, r.y, r.w, r.h, C_BG, [&] {
+    TFT_eSPI &d = out();
+    d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
+    char t[24];
+    text(d, "HASH RATE", x0, dY(r.y + (P ? 1 : 0)), P ? 9 : 8, C_DIM, C_BG);
+    snprintf(t, sizeof(t), "%d KH/s", (int)(khNow + 0.5f));
+    if (P) text(d, t, x0 + textW("HASH RATE", 9) + 8, dY(r.y - 3), 15, C_METER, C_BG);
+    else text(d, t, x0, dY(r.y + 9), 14, C_METER, C_BG);
+    text(d, "+11%", x1, dY(P ? r.y + 1 : pTop - 10), 8, C_METER, C_BG, Align::TopRight);
+    text(d, "-11%", x1, dY(pBot + 2), 8, C_METER, C_BG, Align::TopRight);
+    const uint16_t guide = mix565(C_BG, C_EDGE, 200);
+    for (int x = x0; x <= x1; x += 4) // faint +/-11% guides
+    {
+      d.drawPixel(x, dY(pTop), guide);
+      d.drawPixel(x, dY(pBot), guide);
+    }
+    if (hrCount < 2)
+    {
+      caption(d, "collecting...", x0, dY(mid - 5), x1 - x0, Align::TopLeft, C_BG);
+      return;
+    }
+    for (int x = x0; x <= x1; x += 6) // dashed average (0%)
+      d.drawFastHLine(x, dY(mid), 3, mix565(C_BG, C_METER, 150));
+    snprintf(t, sizeof(t), "AVG %d KH/s", (int)(avg / 10.0f + 0.5f));
+    text(d, t, x0, dY(pBot + 2), 8, C_METER, C_BG);
+    // oldest .. newest across the full width; +/-11% of the average fills the band
+    const int n = hrCount, half = (pBot - pTop) / 2;
+    auto Y = [&](uint16_t v) {
+      float f = avg > 0 ? ((float)v - avg) / avg / 0.11f : 0.0f;
+      if (f > 1) f = 1;
+      if (f < -1) f = -1;
+      return mid - (int)lroundf(f * half);
+    };
+    const int span = HR_N - 1; // fixed 60 s axis: a short history grows from the right
+    int px = -1, py = 0;
+    for (int i = 0; i < n; i++)
+    {
+      const int idx = (hrHead + HR_N - n + i) % HR_N;
+      const int x = x1 - (int)((long)(n - 1 - i) * (x1 - x0) / span);
+      const int y = Y(hrS[idx]);
+      if (px >= 0) d.drawLine(px, dY(py), x, dY(y), C_METER);
+      px = x;
+      py = y;
+    }
+  });
+  done(W_CHART, k);
+}
+
+static void diamond(TFT_eSPI &d, int x, int y, int s, uint16_t c)
+{
+  d.fillTriangle(x - s, dY(y), x + s, dY(y), x, dY(y - s), c);
+  d.fillTriangle(x - s, dY(y), x + s, dY(y), x, dY(y + s), c);
+}
+
+static void drawRecordsPanel(const Rect &r)
 {
   const bool P = isPortrait();
   const uint32_t now = millis();
-  uint32_t span = ZH_MIN_MS;
-  if (zhCount)
+  char ages[REC_N][8];
+  String k = "r|" + String(recEpoch) + (P ? "|P" : "|L");
+  for (int i = 0; i < recCount; i++)
   {
-    const uint32_t old = now - zhT[(zhHead + ZH_N - zhCount) % ZH_N];
-    span = old < ZH_MIN_MS ? ZH_MIN_MS : (old > ZH_SPAN_MS ? ZH_SPAN_MS : (old / 60000UL + 1) * 60000UL);
+    const int idx = (recHead + REC_N - recCount + i) % REC_N;
+    fmtAge((now - recT[idx]) / 1000UL, ages[i], sizeof(ages[i]));
+    k += "|";
+    k += ages[i];
   }
-  char k[56];
-  snprintf(k, sizeof(k), "z|%lu|%d|%d|%lu|%lu", (unsigned long)zhEpoch, winZ, P ? 1 : 0, (unsigned long)(now / 5000UL), (unsigned long)span);
-  if (!need(W_CHART, k))
+  if (!need(W_MP_REC, k))
     return;
-  const int px = r.x + 8, W = r.w - 16, py = r.y + 4, H = r.h - 8;
-  banded(r.x + 2, r.y + 2, r.w - 4, r.h - 4, C_PANEL, [&] {
+  const int x0 = r.x + 4, x1 = r.x + r.w - 5;
+  const int numY = r.y + (P ? 9 : 16), railY = r.y + (P ? 35 : 38), ageY = railY + (P ? 5 : 4);
+  banded(r.x, r.y, r.w, r.h, C_BG, [&] {
     TFT_eSPI &d = out();
-    d.fillRect(r.x + 2, dY(r.y + 2), r.w - 4, r.h - 4, C_PANEL);
-    text(d, P ? "YOUR BEST ZEROS" : "YOUR BEST", px, dY(py), 9, C_DIM, C_PANEL);
-    if (!P) text(d, "ZEROS", px, dY(py + 11), 9, C_DIM, C_PANEL);
-    char t[24];
-    snprintf(t, sizeof(t), "%d", zhLast > 0 ? zhLast : 0);
-    text(d, t, px + W, dY(P ? py - 3 : py + 22), 24, C_BEST, C_PANEL, Align::TopRight);
-    const int top = py + (P ? 26 : 52), bot = py + H - 14;
-    const int zMax = 20;
-    auto Yz = [&](int z) { if (z > zMax) z = zMax; return bot - (z * (bot - top)) / zMax; };
-    auto Xt = [&](uint32_t tm) -> int {
-      uint32_t age = now - tm;
-      if (age > span) age = span;
-      return px + W - 1 - (int)((uint64_t)age * (W - 1) / span);
-    };
-    d.drawFastHLine(px, dY(bot), W, C_EDGE);
-    // the bar a block must clear: the last winner's zeros
-    if (winZ > 0)
+    d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
+    caption(d, "NEW ZERO RECORDS", x0, dY(r.y - 1), x1 - x0, Align::TopLeft, C_BG, C_DIM);
+    // rail with end ticks
+    const uint16_t rail = mix565(C_BG, C_DIM, 120);
+    d.drawFastHLine(x0 + 2, dY(railY), x1 - x0 - 4, rail);
+    d.drawFastVLine(x0 + 2, dY(railY - 3), 7, rail);
+    d.drawFastVLine(x1 - 2, dY(railY - 3), 7, rail);
+    if (!recCount)
     {
-      const int wy = Yz(winZ);
-      for (int x = px; x < px + W; x += 6)
-        d.drawFastHLine(x, dY(wy), 3, C_BAD);
-      snprintf(t, sizeof(t), "target ~%d", winZ);
-      text(d, t, px, dY(wy + 2), 8, C_BAD, C_PANEL);
+      caption(d, "waiting for first record", (x0 + x1) / 2, dY(numY + 2), x1 - x0, Align::TopCenter, C_BG);
+      return;
     }
-    // winner markers: where the block that ended each round landed (teal)
-    for (int i = 0; i < zwCount; i++)
+    // 3 evenly spaced slots, oldest left; fewer records fill from the left
+    for (int i = 0; i < recCount; i++)
     {
-      const int idx = (zwHead + ZW_N - zwCount + i) % ZW_N;
-      if (now - zwT[idx] > span) continue;
-      const int x = Xt(zwT[idx]), y = Yz(zwZ[idx]);
-      d.drawFastVLine(x, dY(y), bot - y, mix565(C_PANEL, C_ROUND, 110));
-      d.fillCircle(x, dY(y), 3, C_ROUND);
+      const int idx = (recHead + REC_N - recCount + i) % REC_N;
+      const int cx = x0 + ((x1 - x0) * (2 * i + 1)) / (2 * REC_N);
+      char t[8];
+      snprintf(t, sizeof(t), "%d", recZ[idx]);
+      text(d, t, cx, dY(numY), P ? 17 : 14, C_BEST, C_BG, Align::TopCenter);
+      diamond(d, cx, railY, P ? 5 : 4, C_BEST);
+      text(d, ages[i], cx, dY(ageY), P ? 10 : 8, C_DIM, C_BG, Align::TopCenter);
     }
-    // staircase, oldest to newest
-    int prevX = px, prevY = bot;
-    bool any = false;
-    for (int i = 0; i < zhCount; i++)
-    {
-      const int idx = (zhHead + ZH_N - zhCount + i) % ZH_N;
-      const int x = Xt(zhT[idx]), y = Yz(zhZ[idx]);
-      if (any)
-      {
-        d.drawFastHLine(prevX, dY(prevY), x - prevX + 1, C_BEST); // flat until it changes
-        d.drawFastHLine(prevX, dY(prevY) - 1, x - prevX + 1, C_BEST);
-        d.drawFastVLine(x, dY(y < prevY ? y : prevY), abs(y - prevY) + 1, C_BEST);
-      }
-      prevX = x;
-      prevY = y;
-      any = true;
-    }
-    if (any)
-    {
-      d.drawFastHLine(prevX, dY(prevY), px + W - prevX, C_BEST);
-      d.drawFastHLine(prevX, dY(prevY) - 1, px + W - prevX, C_BEST);
-      d.fillCircle(px + W - 1, dY(prevY), 2, C_BEST);
-    }
-    snprintf(t, sizeof(t), "%lu min ago", (unsigned long)(span / 60000UL));
-    caption(d, t, px, dY(bot + 2), W - 24);
-    caption(d, "now", px + W, dY(bot + 2), 24, Align::TopRight);
   });
-  done(W_CHART, k);
+  done(W_MP_REC, k);
+}
+
+static void drawGuessesPanel(const Rect &r, const String &g)
+{
+  const bool P = isPortrait();
+  String k = "g|" + g + (P ? "|P" : "|L");
+  if (!need(W_MP_GSS, k))
+    return;
+  banded(r.x, r.y, r.w, r.h, C_BG, [&] {
+    TFT_eSPI &d = out();
+    d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
+    unsigned sz = 24;
+    while (sz > 10 && textW(g.c_str(), sz) > r.w - 6) sz--;
+    const int cx = r.x + r.w / 2;
+    text(d, g.c_str(), cx, dY(r.y + 8), sz, C_GUESS, C_BG, Align::TopCenter);
+    text(d, "GUESSES", cx, dY(r.y + 38), 9, C_DIM, C_BG, Align::TopCenter);
+  });
+  done(W_MP_GSS, k);
 }
 
 static void paintMine(const MineV &m)
@@ -1441,31 +1526,38 @@ static void paintMine(const MineV &m)
   }
   const bool P = isPortrait();
   // Hero inside the ring: what the number is / value / unit in words.
-  const int hw = P ? 124 : 104, hh = P ? 80 : 72; // corners stay clear of the inner ring
+  const int hw = P ? 96 : 100, hh = P ? 56 : 62; // corners stay clear of the inner ring
   String k = m.hash + "|" + (P ? "P" : "L");
   if (need(W_HERO, k) && wBegin(hw, hh, C_BG))
   {
     int c = hw / 2;
-    unsigned sz = P ? (m.hash.length() <= 5 ? 42 : 36) : (m.hash.length() <= 5 ? 36 : 30);
-    text(wgt, m.hash.c_str(), c, P ? 8 : 6, sz, C_TEXT, C_BG, Align::TopCenter);
-    text(wgt, "KH/s", c, P ? 56 : 48, P ? 14 : 12, C_METER, C_BG, Align::TopCenter);
-    wEnd(G_CX - c, G_CY - (P ? 38 : 34));
+    unsigned sz = P ? (m.hash.length() <= 5 ? 34 : 30) : (m.hash.length() <= 5 ? 36 : 30);
+    text(wgt, m.hash.c_str(), c, 0, sz, C_TEXT, C_BG, Align::TopCenter);
+    text(wgt, "KH/s", c, P ? 38 : 42, 12, C_METER, C_BG, Align::TopCenter);
+    wEnd(G_CX - c, G_CY - (P ? 36 : 40));
     done(W_HERO, k);
   }
   // Small muted round lines: one above the hero, two below (inside the rings).
-  auto line = [&](int id, const String &s, int dy, int w, unsigned sz, uint16_t col) {
+  auto line = [&](int id, const String &s, int dy, int w, int h, unsigned sz, uint16_t col, bool bold) {
     String kk = s + "|" + String(col) + (P ? "|P" : "|L");
-    if (!need(id, kk) || !wBegin(w, 11, C_BG))
+    if (!need(id, kk) || !wBegin(w, h, C_BG))
       return;
-    while (sz > 8 && textW(s.c_str(), sz) > w - 2) sz--;
-    text(wgt, s.c_str(), w / 2, 0, sz, col, C_BG, Align::TopCenter);
+    while (sz > 8 && textW(s.c_str(), sz) + (bold ? 1 : 0) > w - 2) sz--;
+    const int y = h > 11 ? -1 : 0;
+    text(wgt, s.c_str(), w / 2, y, sz, col, C_BG, Align::TopCenter);
+    if (bold) // a second pass 1 px right: a bolder stroke from the one font weight
+      text(wgt, s.c_str(), w / 2 + 1, y, sz, col, C_BG, Align::TopCenter);
     wEnd(G_CX - w / 2, G_CY + dy);
     done(id, kk);
   };
-  line(W_RND_A, m.rA, P ? -50 : -46, P ? 112 : 92, 9, m.rACol);
-  line(W_RND_B, m.rB, P ? 44 : 40, P ? 104 : 86, 9, m.rBCol);
+  // line A: the 5 s "BLOCK # WON" news (guesses moved to the bottom panel)
+  line(W_RND_A, m.rA, P ? 21 : 24, P ? 88 : 88, 14, P ? 13 : 12, m.rACol, true);
+  line(W_RND_B, m.rB, P ? 36 : 40, P ? 70 : 86, 11, 9, m.rBCol, false);
   hexRingDraw(m.bestHex);
-  drawZerosChart(mineChartRect(), m.winZ);
+  const MinePanelG g = minePanelG();
+  drawSpeedPanel(g.spd, m.kh);
+  drawRecordsPanel(g.rec);
+  drawGuessesPanel(g.gss, m.guesses);
 }
 
 static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
@@ -1509,6 +1601,7 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
   }
   m.every = fmtEvery(getPoolDifficulty(), m.kh);
   m.flash = millis() < shareFlashUntil;
+  m.guesses = fmtCount((double)g_currentBlockHashes);
   // this network round (since the last block anywhere)
   const bool P = isPortrait();
   char wb[24];
@@ -1526,11 +1619,21 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
   }
   else
   {
-    const String t = fmtCount((double)g_currentBlockHashes);
-    m.rA = t + " guesses"; // this round
+    // guesses this round now live in the bottom panel (same teal); the dial
+    // center keeps only the speed so the number is not shown twice
+    m.rA = "";
     m.rACol = C_GUESS;
-    m.rB = ""; // the best zeros count lives beside the chart title
-    m.rBCol = C_DIM;
+    // a long round: the inner ring stays full; say how many typical blocks' worth
+    const float rr = roundRatio(m.kh);
+    if (rr >= 1.05f)
+    {
+      char ob[16];
+      snprintf(ob, sizeof(ob), "%.1fx usual", rr);
+      m.rB = ob;
+    }
+    else
+      m.rB = "";
+    m.rBCol = C_GUESS;
     m.rC = "";
   }
   {
@@ -2318,7 +2421,7 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   float kh = data.currentHashRate.toFloat();
   noteHashrate(kh);
   gaugeTarget = constrain(kh / G_MAX_KH, 0.0f, 1.0f);
-  roundTarget = (float)bestZerosNow(); // inner ring = zeros of the best hash this round
+  roundTarget = roundFill(kh); // inner ring = guesses this round vs a typical 10-min block
   uint32_t sh = data.completedShares.toInt();
   if (sh > lastShares && lastShares != 0)
     shareFlashUntil = millis() + 1500;
@@ -3071,7 +3174,7 @@ void esp32_2432S028R_AnimateCurrentScreen(unsigned long frame)
 {
   if (g_onb)
     return;
-  zerosSample(); // 1 Hz, any screen: the MINE zeros staircase keeps its history
+  panelSample(); // any screen: the MINE panel keeps its speed history and records
   if (!uiLive || uiScreen < 0)
     return;
   if (!g_displayMutex.try_lock())
@@ -3480,7 +3583,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       m.hdr = liveHeader(getTime());
       paintMine(m);
       gaugeDraw(out(), gaugeShown > 0.0f ? gaugeShown : 0.84f);
-      roundRingDraw(out(), roundShown > 0.001f ? roundShown : (float)bestZerosNow(), winnerZeros());
+      roundRingDraw(out(), roundShown > 0.001f ? roundShown : roundFill(getCurrentHashRate(0).toFloat()), winnerZeros());
     }
     else if (targetScr == SCR_ODDS)
     {
