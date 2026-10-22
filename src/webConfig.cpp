@@ -808,8 +808,8 @@ static void handleRoot()
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
             "<meta name='theme-color' content='#0b0d12'>"
             "<title>NerdMiner</title>"
-            "<link rel='stylesheet' href='/dash.css'>"
-            "<link rel='stylesheet' href='/cyd-twin.css'></head><body>"
+            "<link rel='stylesheet' href='/dash.css?v=" FW_GIT "'>"
+            "<link rel='stylesheet' href='/cyd-twin.css?v=" FW_GIT "'></head><body>"
             "<div class='container'>"
             "<header>"
             "<div class='brand'>"
@@ -1399,8 +1399,8 @@ static void handleRoot()
             "<h3 style='margin-bottom:6px'>Restarting</h3>"
             "<p>Reconnecting in <span id='cd'>8</span> s</p>"
             "</div>"
-            "<script src='/cyd-twin.js'></script>"
-            "<script src='/dash.js'></script>");
+            "<script src='/cyd-twin.js?v=" FW_GIT "'></script>"
+            "<script src='/dash.js?v=" FW_GIT "'></script>");
   page += F("<script>const initStats=");
   page += buildStatsJson(d);
   page += F(";updateStats(initStats);setInterval(pollStats,3000);</script></body></html>");
