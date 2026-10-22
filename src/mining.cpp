@@ -1023,6 +1023,7 @@ void runStratumWorker(void *name) {
                                         {
                                           const bool accepted = parse_extract_result(line);
                                           if (accepted)
+                                          {
                                             s_sharesAccepted++;
                                             g_acceptedShares++;
                                           } else {

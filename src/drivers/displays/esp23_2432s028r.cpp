@@ -253,18 +253,53 @@ static void resetWidgets()
     wkey[i] = "\x01";
 }
 
+static int wgtMaxW = 0, wgtMaxH = 0;
+static bool wgtAllocFailedLogged = false;
+
+// Allocate the persistent DMA scratch sprite as early as possible (Init),
+// before WiFi/TLS fragment the heap. Mine-ring widgets need up to ~86px tall.
+static bool ensureWgtReady()
+{
+  if (wgtReady)
+    return true;
+
+  const int wantW = 240;
+  int wantH = 90; // covers portrait mine-ring (86) + strip tiles
+  const uint32_t maxBlock = ESP.getMaxAllocHeap();
+  if (maxBlock > 1024)
+  {
+    int fitH = (int)((maxBlock - 512) / (wantW * 2));
+    if (fitH > 0 && fitH < wantH)
+      wantH = fitH;
+  }
+  while (wantH >= 16)
+  {
+    if (wgt.initPersistent(wantW, wantH))
+    {
+      wgtReady = true;
+      wgtMaxW = wantW;
+      wgtMaxH = wantH;
+      if (wantH < 90)
+        Serial.printf("[ui] DMA sprite %dx%d (max block %u)\n", wantW, wantH, maxBlock);
+      return true;
+    }
+    wantH -= 8;
+  }
+  if (!wgtAllocFailedLogged)
+  {
+    wgtAllocFailedLogged = true;
+    Serial.printf("[ui] persistent DMA sprite alloc failed (free %u, max block %u)\n",
+                  ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  }
+  return false;
+}
+
 static bool wBegin(int w, int h, uint16_t bg)
 {
-  if (!wgtReady)
-  {
-    wgtReady = wgt.initPersistent(240, 80);
-    if (!wgtReady)
-    {
-      Serial.printf("[ui] persistent DMA sprite 240x80 alloc failed (free %u, max block %u)\n",
-                    ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-      return false;
-    }
-  }
+  if (!ensureWgtReady())
+    return false;
+  if (w > wgtMaxW || h > wgtMaxH)
+    return false;
   wgt.resize(w, h);
   wgt.fillSprite(bg);
   return true;
@@ -2054,6 +2089,7 @@ void esp32_2432S028R_Init(void)
 
   resetWidgets();
   memset(segLvl, 0xFF, sizeof(segLvl));
+  ensureWgtReady(); // before WiFi/mining fragment the heap
 
 #ifdef CYD_UI_SCREENSHOT
   extern void cydDumpScreens(void);
