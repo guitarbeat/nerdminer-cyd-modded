@@ -265,7 +265,6 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
         <span class='cyd-live-dot' title='On the device now'></span>Mine
       </button>
       <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>Odds</button>
-      <button type='button' class='cyd-tab-btn' id='ctab-2' onclick='cydSelectTab(2)'>World</button>
     </div>
     <div class='cyd-ctrls'>
       <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous screen'>&larr; Prev</button>
@@ -287,7 +286,7 @@ let cydTabSynced = false;    // first stats: line the tabs up with the device
 let cydIsLoading = false;
 let cydPendingRefresh = false;
 
-const CYD_SCREEN_NAMES = ['Mine', 'Odds', 'World'];
+const CYD_SCREEN_NAMES = ['Mine', 'Odds'];
 const CYD_SCREEN_COUNT = CYD_SCREEN_NAMES.length;
 
 function cydGetScreenUrl(screenIdx) {

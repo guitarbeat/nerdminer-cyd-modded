@@ -68,6 +68,9 @@ uint32_t templates = 0;
 uint32_t hashes = 0;
 uint32_t Mhashes = 0;
 uint32_t totalKHashes = 0;
+// the stats tick that last set totalKHashes, published as a consistent pair
+// (seq is odd while writing) so the display can turn it into an exact rate
+volatile uint32_t g_khTickSeq = 0, g_khTickKh = 0, g_khTickMs = 0;
 uint32_t elapsedKHs = 0;
 uint64_t upTime = 0;
 
@@ -2876,6 +2879,20 @@ const char *poolCoinLabel(const char *key)
   return "BTC";
 }
 
+// Target seconds between blocks for the active coin (what one "round" should
+// last). Used for the inner ring's full point, /api/stats round_expected and
+// network hashrate from difficulty.
+uint32_t blockTargetSecs()
+{
+  char key[64];
+  const char *coin = "BTC";
+  getActivePool(key, sizeof(key), &coin);
+  if (!strcmp(coin, "POL")) return 60;   // Polcoin
+  if (!strcmp(coin, "FXTC")) return 60;  // Fixed Trade Coin
+  if (!strcmp(coin, "EMB")) return 1200; // Embargocoin: 20 min per its 2014 launch spec (best available source)
+  return 600;                            // BTC, and the fallback for unknown coins
+}
+
 void poolShortName(const char *key, char *out, size_t n)
 {
   char host[64];
@@ -3305,6 +3322,10 @@ void runMonitor(void *name)
       unsigned long currentKHashes = (Mhashes * 1000) + hashes / 1000;
       elapsedKHs = currentKHashes - totalKHashes;
       totalKHashes = currentKHashes;
+      g_khTickSeq++;
+      g_khTickKh = currentKHashes;
+      g_khTickMs = now_millis;
+      g_khTickSeq++;
       statusRateSample(currentKHashes, now_millis);
 
       uptime_frac += mElapsed;

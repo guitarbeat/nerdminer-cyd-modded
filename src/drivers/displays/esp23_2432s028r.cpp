@@ -136,8 +136,15 @@ static uint16_t mix565(uint16_t a, uint16_t b, uint8_t t)
 
 #define SCR_MINE 0  // what is my miner doing?
 #define SCR_ODDS 1  // how close am I to winning?
+// The WORLD page was retired from the CYD (its numbers live on the web
+// dashboard); set CYD_WORLD_SCREEN 1 to build it back in.
+#define CYD_WORLD_SCREEN 0
+#if CYD_WORLD_SCREEN
 #define SCR_WORLD 2 // how do I fit into Bitcoin?
 #define SCR_COUNT 3
+#else
+#define SCR_COUNT 2
+#endif
 
 extern volatile uint32_t g_stratumPing;
 extern double g_networkDifficulty;
@@ -158,11 +165,20 @@ static inline bool isPortrait()
 
 // Mine ring owns most of the upper screen (portrait) / left column (landscape).
 // Three layers: outer = speed, middle = best hash digits, inner = its zeros.
+// Half-circle dial: the rings sweep 180 degrees over the top, left to right,
+// around (gCX, gCY); nothing is drawn below gCY, so the big number sits in the
+// dome and the toasts / panels use the full width underneath.
 static inline int gCX() { return isPortrait() ? 120 : 104; }
-static inline int gCY() { return isPortrait() ? 130 : 134; } // portrait dial shrunk (was 150/112) for a taller bottom panel
-static inline int gR()  { return isPortrait() ? 92 : 100; } // top edge y=38 / 34, clear of the status bar
-static inline int gRI() { return isPortrait() ? 82 : 88; }
-static inline int hexR() { return isPortrait() ? 74 : 79; }  // middle ring: centres of the hex cells
+// The arc rises into the top bar, between the trophy badge and the clock.
+// Portrait: top edge y=9; at the badge's bottom (y=27) the outer ring spans
+// x 60..180 (badge ends x=54) and at the clock's bottom (y=22) it ends at
+// x=171 (clock widget starts x=174). Landscape: the badge sits close to the
+// dial's centre column, so the top stops at y=17 (outer ring x>=60 at y=27,
+// badge ends x=56); the clock is far right, beyond the dial.
+static inline int gCY() { return isPortrait() ? 117 : 117; }
+static inline int gR()  { return isPortrait() ? 108 : 100; }
+static inline int gRI() { return isPortrait() ? 97 : 88; }
+static inline int hexR() { return isPortrait() ? 87 : 79; }  // middle ring: centres of the hex cells
 #define HEX_N 20
 
 // Hashrate ring
@@ -863,8 +879,8 @@ static void gaugeDraw(TFT_eSPI &d, float v)
     uint16_t mCol = (i >= 27) ? C_BAD : (i >= 24 ? C_WARN : C_METER);
     uint16_t tCol = (i >= 27) ? mix565(C_BAD, C_BG, 64) : mix565(C_BG, C_METER, 56); // all orange: no theme (blue) track
     uint16_t col = lvl == 0 ? tCol : (lvl == 4 ? mCol : mix565(tCol, mCol, lvl * 64));
-    int a0 = 45 + i * 9; // 270 degree sweep, gap at 6 o'clock
-    d.drawArc(G_CX, cy, G_R, G_RI, a0, a0 + 7, col, C_BG, true);
+    int a0 = 90 + i * 6; // 180 degree sweep: 9 o'clock over the top to 3 o'clock
+    d.drawArc(G_CX, cy, G_R, G_RI, a0, a0 + 5, col, C_BG, true);
     if (!shotOn)
       segLvl[i] = lvl;
   }
@@ -879,13 +895,13 @@ static int winnerZeros()
 }
 
 // Angle (drawArc convention: 0 = 6 o'clock, clockwise) of middle/inner cell i.
-static inline float hexAng(int i) { return 45.0f + (i + 0.5f) * (270.0f / HEX_N); }
+static inline float hexAng(int i) { return 90.0f + (i + 0.5f) * (180.0f / HEX_N); }
 
 // Inner ring (thin, 20 segments under the 20 hex cells): v = guesses this
-// round in 20ths of a typical 10-minute block's worth at the average speed
+// round in 20ths of a typical block's worth (coin's block time) at the average speed
 // (0..20, capped full). Dim blue track, lit segments blue.
-static inline int rR()  { return isPortrait() ? 66 : 70; }
-static inline int rRI() { return isPortrait() ? 62 : 66; }
+static inline int rR()  { return isPortrait() ? 78 : 70; }
+static inline int rRI() { return isPortrait() ? 73 : 66; }
 static void roundRingDraw(TFT_eSPI &d, float v, int need)
 {
   if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
@@ -901,9 +917,9 @@ static void roundRingDraw(TFT_eSPI &d, float v, int need)
     if (!shotOn && lvl == rndLvl[i])
       continue;
     uint16_t col = lvl == 9 ? C_BG : lvl == 0 ? trk : lvl < 4 ? mix565(trk, C_GUESS, lvl * 64) : C_GUESS;
-    const float step = 270.0f / HEX_N;
-    int a0 = (int)(45.0f + i * step + 1.0f);
-    d.drawArc(G_CX, cy, rR(), rRI(), a0, (int)(45.0f + (i + 1) * step - 1.0f), col, C_BG, true);
+    const float step = 180.0f / HEX_N;
+    int a0 = (int)(90.0f + i * step + 1.0f);
+    d.drawArc(G_CX, cy, rR(), rRI(), a0, (int)(90.0f + (i + 1) * step - 1.0f), col, C_BG, true);
     if (!shotOn)
       rndLvl[i] = lvl;
   }
@@ -957,26 +973,15 @@ struct HdrV
   int screen; // current screen index (0-3) for nav dots
 };
 
-// "EMB - Shears" (ASCII only: the TFT font has no middle dot); just the
-// ticker if the full label is wider than maxW at this font size.
-static void coinLabel(char *lab, size_t n, int maxW, unsigned size)
-{
-  char key[64], shortName[24];
-  const char *coin = "BTC";
-  getActivePool(key, sizeof(key), &coin);
-  poolShortName(key, shortName, sizeof(shortName));
-  snprintf(lab, n, "%s - %s", coin, shortName);
-  if (textW(lab, size) > maxW)
-    snprintf(lab, n, "%s", coin);
-}
-
 static void drawHeader(const HdrV &h)
 {
   const bool P = isPortrait();
   const int bx = P ? 6 : 8;
-  const int tx = P ? 166 : 244;
+  // Clock widget kept narrow and short so it never covers the dial's arc
+  // (which now rises into the bar): x 174..233 / 252..311, y 2..22.
+  const int tx = P ? 174 : 252;
   const int wBadge = 48, hBadge = 22;
-  const int wClock = 68, hClock = 20;
+  const int wClock = 60, hClock = 21;
 
   // Top-left trophy badge (x=6/8, y=4, w=48, h=22)
   String kBadge = "hbdg|" + h.blocks + "|" + (P ? "P" : "L");
@@ -994,30 +999,18 @@ static void drawHeader(const HdrV &h)
     }
   }
 
-  // Active coin + pool between the badge and the clock: "EMB - Shears" (ASCII only: the TFT font has no middle dot),
-  // or just the ticker when that doesn't fit.
-  // Same on every screen (the ring's top edge is y=38 / 30, below the bar).
-  {
-    char lab[40];
-    const int cx0 = bx + wBadge + 4, cw = tx - cx0 - 4, ch = 20;
-    coinLabel(lab, sizeof(lab), cw - 4, 12);
-    String kCoin = String("hcoin|") + lab + "|" + (P ? "P" : "L");
-    if (need(W_HDR_COIN, kCoin) && wBegin(cw, ch, C_BG))
-    {
-      text(wgt, lab, cw / 2, 4, 12, C_GOLD, C_BG, Align::TopCenter);
-      wEnd(cx0, 5);
-      done(W_HDR_COIN, kCoin);
-    }
-  }
+  // No coin or pool on the device bar: just trophy + clock (both live on the web dashboard).
 
-  // Top-right 12-hour clock (x=166/244, y=4, w=68, h=20)
+  // Top-right 12-hour clock (x=174/252, y=2, w=60, h=21); same text spot as before
   String kClock = "hclk|" + h.time12 + "|" + (P ? "P" : "L");
   if (need(W_HDR_TIME, kClock))
   {
     if (wBegin(wClock, hClock, C_BG))
     {
-      text(wgt, h.time12.c_str(), 66, 3, 13, C_TEXT, C_BG, Align::TopRight);
-      wEnd(tx, 4);
+      unsigned cs = 13;
+      while (cs > 10 && textW(h.time12.c_str(), cs) > wClock - 2) cs--;
+      text(wgt, h.time12.c_str(), wClock - 2, 5, cs, C_TEXT, C_BG, Align::TopRight);
+      wEnd(tx, 2);
       done(W_HDR_TIME, kClock);
     }
   }
@@ -1158,10 +1151,14 @@ static void drawRaceCard(int id, int x, int y, int w, int h, const char *ago, co
     return;
   panel(wgt, 0, 0, w, h, 6, C_PANEL, C_EDGE, C_BG);
   drawBlockIcon(wgt, 7, (h - 15) / 2, C_DIM);
-  text(wgt, "LAST NET BLOCK", 26, 3, 9, C_DIM, C_PANEL);
-  text(wgt, ago, 26, 15, 15, C_TEXT, C_PANEL);
   char t[32];
   snprintf(t, sizeof(t), "you: %s tries", tries);
+  // someone else on the network found it (not you); shorter label if crowded
+  const char *lab = "LAST BLOCK - ANYONE";
+  if (26 + textW(lab, 9) + 6 > w - 7 - textW(t, 11))
+    lab = "NETWORK BLOCK";
+  text(wgt, lab, 26, 3, 9, C_DIM, C_PANEL);
+  text(wgt, ago, 26, 15, 15, C_TEXT, C_PANEL);
   text(wgt, t, w - 7, 3, 11, C_TEXT, C_PANEL, Align::TopRight);
   caption(wgt, every, w - 7, 20, 110, Align::TopRight);
   wEnd(x, y);
@@ -1194,7 +1191,7 @@ static String fmtEvery(double poolDiff, float kh)
 // Everyone's guesses per second, from the live job's difficulty (per coin).
 static double worldHs()
 {
-  return g_networkDifficulty > 0 ? g_networkDifficulty * 4294967296.0 / (double)getActiveCoinProfile().targetBlockTimeSec : 0;
+  return g_networkDifficulty > 0 ? g_networkDifficulty * 4294967296.0 / (double)blockTargetSecs() : 0;
 }
 
 static String uptimeNow()
@@ -1265,17 +1262,19 @@ struct MineV
   bool flash = false;
 };
 
-// Bottom panel (option 2 "record timeline"): the last minute of speed over
-// its average, then the zero records of this round and the round's guesses.
-//   Portrait : 6,197 228x121 - speed on top, records (2/3) | guesses (1/3)
-//   Landscape: 208,30 108x208 - speed / records / guesses stacked
-static Rect mineChartRect() { return isPortrait() ? Rect{6, 197, 228, 121} : Rect{208, 30, 108, 208}; }
+// Panels under the half-circle dial.
+//   Portrait : one box 6,158 228x160 - 5 min speed on top (full width),
+//              records (2/3) | guesses (1/3) below
+//   Landscape: speed box under the dial (4,158 200x80) and a right column
+//              208,30 108x208 with records over guesses
+static Rect mineChartRect() { return isPortrait() ? Rect{6, 158, 228, 160} : Rect{4, 158, 200, 80}; }
+static Rect mineChart2Rect() { return isPortrait() ? Rect{0, 0, 0, 0} : Rect{208, 30, 108, 208}; }
 struct MinePanelG { Rect spd, rec, gss; int sepY, sep2Y, divX; };
 static MinePanelG minePanelG()
 {
   if (isPortrait())
-    return {Rect{8, 199, 224, 54}, Rect{8, 259, 148, 57}, Rect{160, 259, 72, 57}, 256, -1, 158};
-  return {Rect{210, 32, 104, 71}, Rect{210, 108, 104, 62}, Rect{210, 175, 104, 61}, 105, 172, -1};
+    return {Rect{8, 160, 224, 86}, Rect{8, 251, 148, 65}, Rect{160, 251, 72, 65}, 248, -1, 158};
+  return {Rect{6, 160, 196, 76}, Rect{210, 32, 104, 100}, Rect{210, 138, 104, 98}, -1, 135, -1};
 }
 
 static void chromeMine(TFT_eSPI &d)
@@ -1287,8 +1286,10 @@ static void chromeMine(TFT_eSPI &d)
   const Rect c = mineChartRect();
   const MinePanelG g = minePanelG();
   panel(d, c.x, c.y, c.w, c.h, 6, C_BG, C_EDGE, C_BG); // black inside, thin gray border
-  d.drawFastHLine(c.x + 6, dY(g.sepY), c.w - 12, C_EDGE);
-  if (g.sep2Y > 0) d.drawFastHLine(c.x + 6, dY(g.sep2Y), c.w - 12, C_EDGE);
+  const Rect c2 = mineChart2Rect();
+  if (c2.w > 0) panel(d, c2.x, c2.y, c2.w, c2.h, 6, C_BG, C_EDGE, C_BG);
+  if (g.sepY > 0) d.drawFastHLine(c.x + 6, dY(g.sepY), c.w - 12, C_EDGE);
+  if (g.sep2Y > 0) d.drawFastHLine(c2.x + 6, dY(g.sep2Y), c2.w - 12, C_EDGE);
   if (g.divX > 0) d.drawFastVLine(g.divX, dY(g.rec.y + 3), g.rec.h - 8, C_EDGE);
 }
 
@@ -1296,9 +1297,17 @@ static void chromeMine(TFT_eSPI &d)
 // Speed: 60 x 1 s samples (0.1 KH/s units) from the miner's KH counter.
 // Records: the last 3 times my best leading-zero count this round went UP.
 extern uint32_t totalKHashes;
-#define HR_N 60
+#define HR_N 300 // 5 minutes of ~1 Hz speed samples (0.1 KH/s each)
+#define HR_RM 8   // chart line: rolling mean over the last 8 samples (~8 s)
 static uint16_t hrS[HR_N];
-static uint8_t hrHead = 0, hrCount = 0;
+static uint16_t hrHead = 0, hrCount = 0;
+// i-th newest sample (0 = newest); i < hrCount
+static inline uint16_t hrBack(int i) { return hrS[(hrHead + HR_N - 1 - i) % HR_N]; }
+// Held average of the window (0.1 KH/s; 0 = none yet): the panel's header and
+// dashed line. Taken once 10 samples exist, then refreshed every 60 samples so
+// it settles instead of jittering. Also the reference for the outlier filter.
+static float hrAvgHeld = 0.0f;
+static uint32_t hrAvgAt = 0; // hrEpoch when it was taken
 static uint32_t hrEpoch = 0;
 #define REC_N 3
 static uint32_t recT[REC_N];
@@ -1323,21 +1332,46 @@ static void panelSample()
 {
   static uint32_t lastMs = 0, lastKh = 0, lastBlk = 0;
   const uint32_t now = millis();
-  // speed: one sample each time the miner's KH counter ticks (about 1 Hz)
-  const uint32_t kh = totalKHashes;
-  if (kh != lastKh)
+  // speed: one sample per miner stats tick (about 1 Hz), timed with the tick's
+  // own timestamp, not when this loop happens to notice it (that lag made
+  // +/-50% spikes)
+  const uint32_t s1 = g_khTickSeq;
+  const uint32_t kh = g_khTickKh, tickMs = g_khTickMs;
+  if (!(s1 & 1) && s1 == g_khTickSeq && kh != lastKh)
   {
-    const uint32_t dt = now - lastMs;
-    if (lastMs && kh > lastKh && dt >= 500UL && dt <= 5000UL)
+    const uint32_t dt = tickMs - lastMs;
+    // The first few ticks after boot, and while the miner is reconnecting /
+    // has no job (plus a few ticks after it resumes), are not a real rate.
+    static uint8_t warm = 0, odd = 0;
+    uint32_t v = (lastMs && kh > lastKh && dt >= 500UL && dt <= 5000UL)
+                     ? (uint32_t)(((uint64_t)(kh - lastKh) * 10000ULL) / dt) // 0.1 KH/s
+                     : 0;
+    if (!getMinerStatus().subscribed || lastJobAgeSec() < 0) { warm = 0; v = 0; }
+    if (v && warm < 8) { warm++; v = 0; }
+    // one-off outliers (> 2x or < 0.5x the held average) would stretch the
+    // 5 min band; skip them, but accept after 10 in a row (a real change)
+    if (v && hrAvgHeld > 0.0f && (v > 2.0f * hrAvgHeld || v < 0.5f * hrAvgHeld))
     {
-      uint32_t v = (uint32_t)(((uint64_t)(kh - lastKh) * 10000ULL) / dt); // 0.1 KH/s
+      if (++odd < 10) v = 0;
+      else { odd = 0; hrAvgHeld = 0.0f; } // re-take the average from new samples
+    }
+    else if (v) odd = 0;
+    if (v >= 1000) // 100 KH/s floor
+    {
       hrS[hrHead] = v > 65535 ? 65535 : (uint16_t)v;
       hrHead = (hrHead + 1) % HR_N;
       if (hrCount < HR_N) hrCount++;
       hrEpoch++;
+      if (hrAvgHeld <= 0.0f ? hrCount >= 10 : hrEpoch - hrAvgAt >= 60)
+      {
+        uint32_t sum = 0;
+        for (int i = 0; i < hrCount; i++) sum += hrS[i];
+        hrAvgHeld = (float)sum / hrCount;
+        hrAvgAt = hrEpoch;
+      }
     }
     lastKh = kh;
-    lastMs = now;
+    lastMs = tickMs;
   }
   // a new block (the prev-block hash changed): the round starts over
   const uint32_t nb = g_newBlockMs;
@@ -1361,15 +1395,16 @@ static void panelSample()
   }
 }
 
-// Guesses this round / what a typical 10-minute block takes at the average
+// Guesses this round / what a typical block (blockTargetSecs) takes at the average
 // speed (last 60 s; the dial reading until samples exist). 1.0 = one block's worth.
 static float roundRatio(float khFallback)
 {
-  uint32_t sum = 0;
-  for (int i = 0; i < hrCount; i++) sum += hrS[i];
-  const float kh = hrCount ? (float)sum / hrCount / 10.0f : khFallback;
+  uint32_t sum = 0; // last 60 s only (the history buffer holds 5 min)
+  const int n60 = hrCount < 60 ? hrCount : 60;
+  for (int i = 0; i < n60; i++) sum += hrBack(i);
+  const float kh = n60 ? (float)sum / n60 / 10.0f : khFallback;
   if (!(kh > 1.0f)) return 0.0f;
-  return (float)((double)g_currentBlockHashes / ((double)kh * 1000.0 * 600.0));
+  return (float)((double)g_currentBlockHashes / ((double)kh * 1000.0 * (double)blockTargetSecs()));
 }
 static float roundFill(float khFallback)
 {
@@ -1387,63 +1422,132 @@ static void fmtAge(uint32_t s, char *b, size_t n)
 
 static void drawSpeedPanel(const Rect &r, float khNow)
 {
-  const bool P = isPortrait();
-  (void)khNow; // the dial shows the live number; the panel shows the 60 s average
+  const bool P = isPortrait() || r.w > 150; // wide box: one-line header
+  (void)khNow;
   char k[48];
   snprintf(k, sizeof(k), "s|%lu|%d", (unsigned long)hrEpoch, P ? 1 : 0);
   if (!need(W_CHART, k))
     return;
-  // average over what we have (also the dashed line)
-  uint32_t sum = 0;
-  for (int i = 0; i < hrCount; i++) sum += hrS[i];
-  const float avg = hrCount ? (float)sum / hrCount : 0.0f; // 0.1 KH/s
+  const float avgHeld = hrAvgHeld; // held in panelSample()
+  const bool haveAvg = avgHeld > 0.0f;
+  // Fixed band: anchor +/-15%. The anchor is the held average and only
+  // re-centers when that average drifts more than 5% from it, so the top and
+  // bottom stay put and the line moves inside them. Samples outside the band
+  // are clipped to the edge and marked with a caret there (spikes stay
+  // visible but never stretch the scale). Units: 0.1 KH/s.
+  static float anchor = 0.0f;
+  float anc = anchor;
+  if (haveAvg)
+  {
+    if (anchor <= 0.0f || fabsf(avgHeld - anchor) > 0.05f * anchor) anchor = avgHeld;
+    anc = anchor;
+  }
+  else if (hrCount)
+  { // before the first held average: centre on what we have (not stored)
+    uint32_t sum = 0;
+    for (int i = 0; i < hrCount; i++) sum += hrS[i];
+    anc = (float)sum / hrCount;
+  }
+  const int hi = (int)lroundf(anc * 1.15f), lo = (int)lroundf(anc * 0.85f);
   const int x0 = r.x + 4, x1 = r.x + r.w - 5;
-  const int pTop = r.y + (P ? 19 : 29), pBot = r.y + (P ? 41 : 55); // plot band (+11% .. -11%)
+  const int pTop = r.y + (P ? 19 : 29), pBot = r.y + r.h - 13; // plot band (room for "now" under it)
   const int mid = (pTop + pBot) / 2;
   banded(r.x, r.y, r.w, r.h, C_BG, [&] {
     TFT_eSPI &d = out();
     d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
     char t[24];
-    const char *lbl = "60s AVG";
+    const char *lbl = "5m AVG"; // the held average; the dial already shows the live number
     text(d, lbl, x0, dY(r.y + (P ? 1 : 0)), P ? 9 : 8, C_DIM, C_BG);
-    if (hrCount >= 2) snprintf(t, sizeof(t), "%d KH/s", (int)(avg / 10.0f + 0.5f));
+    if (haveAvg) snprintf(t, sizeof(t), "%d KH/s", (int)(avgHeld / 10.0f + 0.5f));
     else snprintf(t, sizeof(t), "-- KH/s");
     if (P) text(d, t, x0 + textW(lbl, 9) + 8, dY(r.y - 3), 15, C_METER, C_BG);
     else text(d, t, x0, dY(r.y + 9), 14, C_METER, C_BG);
-    text(d, "+11%", x1, dY(P ? r.y + 1 : pTop - 10), 8, C_METER, C_BG, Align::TopRight);
-    text(d, "-11%", x1, dY(pBot + 2), 8, C_METER, C_BG, Align::TopRight);
     const uint16_t guide = mix565(C_BG, C_EDGE, 200);
-    for (int x = x0; x <= x1; x += 4) // faint +/-11% guides
+    if (hrCount < 2)
+    {
+      for (int x = x0; x <= x1; x += 4)
+      {
+        d.drawPixel(x, dY(pTop), guide);
+        d.drawPixel(x, dY(pBot), guide);
+      }
+      caption(d, "collecting...", x0, dY(mid - 5), x1 - x0, Align::TopLeft, C_BG);
+      return;
+    }
+    // right gutter: the band's real top / bottom in KH/s
+    const int gx1 = x1 - (P ? 24 : 22); // plot's right edge
+    char tl[8];
+    snprintf(tl, sizeof(tl), "%d", (int)lroundf(anc * 0.115f)); // KH/s
+    text(d, tl, x1, dY(pTop - 4), 8, C_DIM, C_BG, Align::TopRight);
+    snprintf(tl, sizeof(tl), "%d", (int)lroundf(anc * 0.085f));
+    text(d, tl, x1, dY(pBot - 4), 8, C_DIM, C_BG, Align::TopRight);
+    for (int x = x0; x <= gx1; x += 4) // faint top / bottom guides
     {
       d.drawPixel(x, dY(pTop), guide);
       d.drawPixel(x, dY(pBot), guide);
     }
-    if (hrCount < 2)
-    {
-      caption(d, "collecting...", x0, dY(mid - 5), x1 - x0, Align::TopLeft, C_BG);
-      return;
-    }
-    for (int x = x0; x <= x1; x += 6) // dashed average (0%)
-      d.drawFastHLine(x, dY(mid), 3, mix565(C_BG, C_METER, 150));
-    // oldest .. newest across the full width; +/-11% of the average fills the band
-    const int n = hrCount, half = (pBot - pTop) / 2;
-    auto Y = [&](uint16_t v) {
-      float f = avg > 0 ? ((float)v - avg) / avg / 0.11f : 0.0f;
-      if (f > 1) f = 1;
-      if (f < -1) f = -1;
-      return mid - (int)lroundf(f * half);
+    const int bandH = pBot - pTop;
+    auto Y = [&](float v) {
+      int y = pBot - (int)lroundf((v - lo) * bandH / (float)(hi - lo));
+      if (y < pTop) y = pTop;
+      if (y > pBot) y = pBot;
+      return y;
     };
-    const int span = HR_N - 1; // fixed 60 s axis: a short history grows from the right
-    int px = -1, py = 0;
+    // fixed 5 min axis, oldest .. newest; a short history grows from the right
+    const int n = hrCount, span = HR_N - 1, w = gx1 - x0;
+    auto X = [&](int i) { return gx1 - (int)((long)(n - 1 - i) * w / span); };
+    // The line is a trailing rolling mean of the last HR_RM samples (~8 s):
+    // calm enough that one slow / fast second doesn't spike it, short enough
+    // that a real change shows within a few seconds. Oldest .. newest.
+    static uint16_t sm[HR_N];
+    {
+      uint32_t run = 0;
+      for (int i = 0; i < n; i++)
+      {
+        run += hrS[(hrHead + HR_N - n + i) % HR_N];
+        if (i >= HR_RM) run -= hrS[(hrHead + HR_N - n + i - HR_RM) % HR_N];
+        const int cnt = i + 1 < HR_RM ? i + 1 : HR_RM;
+        sm[i] = (uint16_t)((run + cnt / 2) / cnt);
+      }
+    }
+    // soft area under the line: per pixel column, down from its highest sample
+    const uint16_t fill = mix565(C_BG, C_METER, 55);
+    int cx = -1, cy = pBot;
     for (int i = 0; i < n; i++)
     {
-      const int idx = (hrHead + HR_N - n + i) % HR_N;
-      const int x = x1 - (int)((long)(n - 1 - i) * (x1 - x0) / span);
-      const int y = Y(hrS[idx]);
+      const int x = X(i), y = Y(sm[i]);
+      if (x != cx)
+      {
+        if (cx >= 0 && cy < pBot) d.drawFastVLine(cx, dY(cy), pBot - cy, fill);
+        cx = x;
+        cy = y;
+      }
+      else if (y < cy) cy = y;
+    }
+    if (cx >= 0 && cy < pBot) d.drawFastVLine(cx, dY(cy), pBot - cy, fill);
+    if (haveAvg) // dashed held average at its true height
+    {
+      const uint16_t avgC = mix565(C_METER, C_TEXT, 150);
+      const int ay = Y(avgHeld);
+      for (int x = x0; x <= gx1; x += 6)
+        d.drawFastHLine(x, dY(ay), 3, avgC);
+    }
+    int px = -1, py = 0, lastCx = -99;
+    for (int i = 0; i < n; i++)
+    {
+      const uint16_t v = sm[i];
+      const int x = X(i), y = Y(v);
       if (px >= 0) d.drawLine(px, dY(py), x, dY(y), C_METER);
+      if ((v > hi || v < lo) && x - lastCx >= 3) // clipped: caret at that edge
+      {
+        if (v > hi) d.fillTriangle(x - 2, dY(pTop + 3), x + 2, dY(pTop + 3), x, dY(pTop - 1), C_TEXT);
+        else d.fillTriangle(x - 2, dY(pBot - 3), x + 2, dY(pBot - 3), x, dY(pBot + 1), C_TEXT);
+        lastCx = x;
+      }
       px = x;
       py = y;
     }
+    d.fillCircle(px, dY(py), 2, C_METER); // now (tip of the rolling mean)
+    text(d, "now", gx1, dY(pBot + 2), 8, C_METER, C_BG, Align::TopRight);
   });
   done(W_CHART, k);
 }
@@ -1470,7 +1574,7 @@ static void drawRecordsPanel(const Rect &r)
   if (!need(W_MP_REC, k))
     return;
   const int x0 = r.x + 4, x1 = r.x + r.w - 5;
-  const int numY = r.y + (P ? 9 : 16), railY = r.y + (P ? 35 : 38), ageY = railY + (P ? 5 : 4);
+  const int numY = r.y + (P ? 13 : 12), railY = r.y + (P ? 42 : 38), ageY = railY + (P ? 6 : 4);
   banded(r.x, r.y, r.w, r.h, C_BG, [&] {
     TFT_eSPI &d = out();
     d.fillRect(r.x, dY(r.y), r.w, r.h, C_BG);
@@ -1512,8 +1616,9 @@ static void drawGuessesPanel(const Rect &r, const String &g)
     unsigned sz = 24;
     while (sz > 10 && textW(g.c_str(), sz) > r.w - 6) sz--;
     const int cx = r.x + r.w / 2;
-    text(d, g.c_str(), cx, dY(r.y + 8), sz, C_GUESS, C_BG, Align::TopCenter);
-    text(d, "GUESSES", cx, dY(r.y + 38), 9, C_DIM, C_BG, Align::TopCenter);
+    const int gy = P ? r.y + 12 : r.y + 8;
+    text(d, g.c_str(), cx, dY(gy), sz, C_GUESS, C_BG, Align::TopCenter);
+    text(d, "GUESSES", cx, dY(gy + 30), 9, C_DIM, C_BG, Align::TopCenter);
   });
   done(W_MP_GSS, k);
 }
@@ -1527,15 +1632,18 @@ static void paintMine(const MineV &m)
   }
   const bool P = isPortrait();
   // Hero inside the ring: what the number is / value / unit in words.
-  const int hw = P ? 96 : 100, hh = P ? 56 : 62; // corners stay clear of the inner ring
+  // In the dome of the half circle; the box ends 2 px above the centre line
+  // and its top corners stay inside the inner ring (r 73 / 66).
+  const int hw = P ? 88 : 80, hh = P ? 54 : 48;
   String k = m.hash + "|" + (P ? "P" : "L");
   if (need(W_HERO, k) && wBegin(hw, hh, C_BG))
   {
     int c = hw / 2;
-    unsigned sz = P ? (m.hash.length() <= 5 ? 34 : 30) : (m.hash.length() <= 5 ? 36 : 30);
+    unsigned sz = P ? 36 : 32;
+    while (sz > 20 && textW(m.hash.c_str(), sz) > hw - 2) sz--;
     text(wgt, m.hash.c_str(), c, 0, sz, C_TEXT, C_BG, Align::TopCenter);
-    text(wgt, "KH/s", c, P ? 38 : 42, 12, C_METER, C_BG, Align::TopCenter);
-    wEnd(G_CX - c, G_CY - (P ? 36 : 40));
+    text(wgt, "KH/s", c, hh - 13, 12, C_METER, C_BG, Align::TopCenter);
+    wEnd(G_CX - c, G_CY - hh - 2);
     done(W_HERO, k);
   }
   // Small muted round lines: one above the hero, two below (inside the rings).
@@ -1551,9 +1659,11 @@ static void paintMine(const MineV &m)
     wEnd(G_CX - w / 2, G_CY + dy);
     done(id, kk);
   };
-  // line A: the 5 s "BLOCK # WON" news (guesses moved to the bottom panel)
-  line(W_RND_A, m.rA, P ? 21 : 24, P ? 88 : 88, 14, P ? 13 : 12, m.rACol, true);
-  line(W_RND_B, m.rB, P ? 36 : 40, P ? 70 : 86, 11, 9, m.rBCol, false);
+  // line A: the 5 s "NEW #N" news (a network block at height N, not yours) (guesses moved to the bottom panel)
+  // Under the dial's centre line the full width is free (the rings stop at
+  // 9 and 3 o'clock), so the toasts get big type.
+  line(W_RND_A, m.rA, 1, P ? 220 : 196, 22, 20, m.rACol, true);
+  line(W_RND_B, m.rB, 24, P ? 220 : 196, 15, 14, m.rBCol, false);
   hexRingDraw(m.bestHex);
   const MinePanelG g = minePanelG();
   drawSpeedPanel(g.spd, m.kh);
@@ -1612,9 +1722,9 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
   const uint32_t nb = g_newBlockMs;
   if (nb && (millis() - nb) < 5000UL)
   { // a block was just found: the small lines become the news
-    m.rA = "BLOCK #" + commas(String((unsigned long)g_lastWinnerHeight)) + " WON";
+    m.rA = "NEW #" + commas(String((unsigned long)g_lastWinnerHeight)); // network block, short = bigger
     m.rACol = C_GOOD;
-    m.rB = "zeros start over";
+    m.rB = "ZEROS RESET";
     m.rBCol = C_TEXT;
     m.rC = "";
   }
@@ -1628,8 +1738,8 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN)
     const float rr = roundRatio(m.kh);
     if (rr >= 1.05f)
     {
-      char ob[16];
-      snprintf(ob, sizeof(ob), "%.1fx usual", rr);
+      char ob[24];
+      snprintf(ob, sizeof(ob), "%.1fx AVG ROUND", rr); // guesses this round vs a typical round
       m.rB = ob;
     }
     else
@@ -1759,7 +1869,10 @@ static void paintOdds(const ArchitectureV &av)
     if (av.shares[i].diff > 0 && av.shares[i].diff < floorD) floorD = av.shares[i].diff;
   const double lo = floor(log10(floorD));
   const double hi = log10(net);
-  const float kh = av.hashRate.toFloat();
+  // Held 5-minute average (0.1 KH/s units) so the odds/wait cards don't
+  // blank or jump with a single slow tick; the live reading until it exists.
+  const float khLive = av.hashRate.toFloat();
+  const float kh = hrAvgHeld > 0.0f ? hrAvgHeld / 10.0f : khLive;
 
   // ---- Top: closest try vs needed, "1 in N to a block" + bar ----------------
   char perrK[24];
@@ -1774,10 +1887,14 @@ static void paintOdds(const ArchitectureV &av)
     text(wgt, best > 0 ? bestS : "--", 8, 15, vs, C_METER, C_PANEL);
     if (netKnown)
     {
+      // your best (big) vs what a block needs (small); both are difficulty
       char of[24];
-      snprintf(of, sizeof(of), "/ %s", netS);
-      int ox = 8 + textW(best > 0 ? bestS : "--", vs) + 4;
-      text(wgt, of, ox, 15 + vs - 12, 11, C_DIM, C_PANEL);
+      snprintf(of, sizeof(of), "need %s", netS);
+      int ox = 8 + textW(best > 0 ? bestS : "--", vs) + 6;
+      const int lim = P ? (haveBest ? 120 : 130) : (haveBest ? 128 : 200); // clear of the bar / right text
+      unsigned os = 11;
+      while (os > 8 && ox + textW(of, os) > lim) os--;
+      text(wgt, of, ox, 15 + vs - os - 1, os, C_DIM, C_PANEL);
     }
     const int rx = g.top.w - 8;
     if (haveBest)
@@ -1853,7 +1970,7 @@ static void paintOdds(const ArchitectureV &av)
       for (int x = lx1 + 2; x < x1 + 4; x += 5)
         d.drawFastHLine(x, dY(yTop), 3, C_GOLD);
       char blk[24];
-      snprintf(blk, sizeof(blk), "BLOCK %s", netS);
+      snprintf(blk, sizeof(blk), "NEED %s", netS); // a block needs this difficulty
       text(d, blk, x1 + 2, dY(pr.y + 6), 9, C_GOLD, C_PANEL, Align::TopRight);
       d.drawFastHLine(lx1 + 2, dY(yBot), x1 + 2 - lx1, C_EDGE);
       int bestI = -1;
@@ -1893,13 +2010,14 @@ static void paintOdds(const ArchitectureV &av)
   fmtWait((netKnown && kh > 0) ? net * 4294967296.0 / (kh * 1000.0) : 0, waitV, waitU);
   const double wh = worldHs();
   String odds = (wh > 0 && kh > 0) ? ("1 in " + fmtCount(wh / (kh * 1000.0))) : String("--");
-  drawCardRow(W_T0, g.c0.x, g.c0.y, g.c0.w, g.c0.h, "AVG WAIT FOR BLOCK", waitV.c_str(), C_TEXT, waitU.c_str());
-  drawCardRow(W_T1, g.c1.x, g.c1.y, g.c1.w, g.c1.h, "ODDS PER BLOCK", odds.c_str(), C_METER, "");
+  drawCardRow(W_T0, g.c0.x, g.c0.y, g.c0.w, g.c0.h, "YOUR WAIT", waitV.c_str(), C_TEXT,
+              waitV == "--" ? (netKnown ? "measuring" : "no job yet") : waitU.c_str());
+  drawCardRow(W_T1, g.c1.x, g.c1.y, g.c1.w, g.c1.h, "YOUR ODDS", odds.c_str(), C_METER, "");
 
   // ---- The race -------------------------------------------------------------
   char blkEvery[24];
   {
-    uint32_t t = getActiveCoinProfile().targetBlockTimeSec;
+    uint32_t t = blockTargetSecs();
     if (t % 60 == 0) snprintf(blkEvery, sizeof(blkEvery), "1 per %u min", (unsigned)(t / 60));
     else snprintf(blkEvery, sizeof(blkEvery), "1 per %u s", (unsigned)t);
   }
@@ -1943,6 +2061,7 @@ static void paintOdds(const ArchitectureV &av)
   }
 }
 
+#if CYD_WORLD_SCREEN
 // =========================================================== WORLD screen ==
 // You vs everyone (computed locally from the difficulty, never "waiting"),
 // the puzzle, the chain height and halving, price/fee only when the fetch
@@ -2142,6 +2261,7 @@ static void paintWorld(const WorldV &w)
   stripCell(1, 2, "CHIP TEMP", w.temp.c_str(), w.tempCol, w.tempCol == C_TEXT ? C_METER : w.tempCol);
   stripCell(2, 0, "WINS", w.blocks.c_str(), w.blocks != "0" ? C_GOLD : C_TEXT, C_GOLD);
 }
+#endif // CYD_WORLD_SCREEN
 
 // ------------------------------------------------------ boot / setup pages --
 
@@ -2200,8 +2320,10 @@ static void paintChrome(TFT_eSPI &d, int scr)
   clearScreen(d);
   if (scr == SCR_ODDS)
     chromeOdds(d);
+#if CYD_WORLD_SCREEN
   else if (scr == SCR_WORLD)
     chromeWorld(d);
+#endif
   else
     chromeMine(d);
 }
@@ -2236,6 +2358,7 @@ static HdrV liveHeader(const String &time);
 static MineV lastMine;
 static ArchitectureV lastOdds;
 static bool haveMine = false, haveOdds = false;
+static uint32_t lastMineMs = 0; // millis() when lastMine was filled
 
 static void repaintCached(int scr)
 {
@@ -2243,6 +2366,7 @@ static void repaintCached(int scr)
     paintMine(lastMine);
   else if (scr == SCR_ODDS && haveOdds)
     paintOdds(lastOdds);
+#if CYD_WORLD_SCREEN
   else if (scr == SCR_WORLD)
   {
     WorldV w;
@@ -2250,6 +2374,7 @@ static void repaintCached(int scr)
     fillWorld(w, lastKh, String(bitcoin_price), gData.halfHourFee);
     paintWorld(w);
   }
+#endif
 }
 
 void esp32_2432S028R_SetTheme(int idx)
@@ -2327,7 +2452,7 @@ static void loadUiPrefs()
     page = p.getUChar("page3", 0);
   else
   { // v2.0.0 had 4 pages: 0 mining, 1 market, 2 clock, 3 architecture
-    static const uint8_t map4[4] = {SCR_MINE, SCR_WORLD, SCR_MINE, SCR_ODDS};
+    static const uint8_t map4[4] = {SCR_MINE, SCR_MINE, SCR_MINE, SCR_ODDS};
     int old = p.getUChar("page", 0);
     page = (old >= 0 && old < 4) ? map4[old] : SCR_MINE;
   }
@@ -2422,7 +2547,7 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   float kh = data.currentHashRate.toFloat();
   noteHashrate(kh);
   gaugeTarget = constrain(kh / G_MAX_KH, 0.0f, 1.0f);
-  roundTarget = roundFill(kh); // inner ring = guesses this round vs a typical 10-min block
+  roundTarget = roundFill(kh); // inner ring = guesses this round vs a typical block of this coin
   uint32_t sh = data.completedShares.toInt();
   if (sh > lastShares && lastShares != 0)
     shareFlashUntil = millis() + 1500;
@@ -2432,11 +2557,14 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   m.hdr = liveHeader(data.currentTime);
   fillMine(m, data.currentHashRate, sh);
   lastMine = m;
+  lastMineMs = millis();
   haveMine = true;
   paintMine(m);
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
+
+static void netKpiTick(unsigned long mElapsed);
 
 void esp32_2432S028R_OddsScreen(unsigned long mElapsed)
 {
@@ -2447,6 +2575,7 @@ void esp32_2432S028R_OddsScreen(unsigned long mElapsed)
   }
   std::lock_guard<std::mutex> lock(g_displayMutex);
   mining_data data = getMiningData(mElapsed);
+  netKpiTick(mElapsed); // price / fee / global hashrate for the web dashboard
   refreshPool();
   uiLive = true;
   ensureChrome(SCR_ODDS);
@@ -2481,6 +2610,16 @@ static auto withTlsHeap(F fetch) -> decltype(fetch())
   return r;
 }
 
+// Price, fee and global hashrate (mempool / price APIs) feed the web
+// dashboard's network numbers. The WORLD page used to fetch them; now the ODDS
+// page does, on the same throttles (price 1 min, global 2 min). Called with
+// the display mutex held: the TLS fetch borrows the widget sprite's heap.
+static void netKpiTick(unsigned long mElapsed)
+{
+  (void)withTlsHeap([&] { return getCoinData(mElapsed); });
+}
+
+#if CYD_WORLD_SCREEN
 void esp32_2432S028R_WorldScreen(unsigned long mElapsed)
 {
   if (g_onb)
@@ -2502,6 +2641,7 @@ void esp32_2432S028R_WorldScreen(unsigned long mElapsed)
 
   logShare(data.completedShares, data.totalKHashes, data.currentHashRate);
 }
+#endif
 
 // --------------------------------------------------------- driver plumbing --
 
@@ -3548,9 +3688,17 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
   bool shotHaveMine;
   {
     std::lock_guard<std::mutex> lock(g_displayMutex);
-    shotHaveMine = haveMine;
+    // lastMine is only refreshed while the panel shows MINE; if it's older
+    // than 0.3 s (panel on ODDS, or a block just landed after the last tick) capture a fresh one so the toast, guesses
+    // and round lines are current.
+    shotHaveMine = haveMine && (millis() - lastMineMs) < 300UL;
     if (shotHaveMine)
       shotMine = lastMine;
+    else
+    {
+      fillMine(shotMine, getCurrentHashRate(0), shares);
+      shotHaveMine = true;
+    }
   }
 
   auto renderSlice = [&](int yOff) {
@@ -3595,6 +3743,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       fillOdds(a, getCurrentHashRate(0), blkSec, (double)g_currentBlockHashes);
       paintOdds(a);
     }
+#if CYD_WORLD_SCREEN
     else
     {
       WorldV w;
@@ -3602,6 +3751,7 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
       fillWorld(w, getCurrentHashRate(0).toFloat(), String(bitcoin_price), gData.halfHourFee);
       paintWorld(w);
     }
+#endif
     shotOn = false;
   };
 
@@ -3629,8 +3779,11 @@ bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx)
 
 CyclicScreenFunction esp32_2432S028RCyclicScreens[] = {
     esp32_2432S028R_MinerScreen,
-    esp32_2432S028R_OddsScreen,
-    esp32_2432S028R_WorldScreen};
+    esp32_2432S028R_OddsScreen
+#if CYD_WORLD_SCREEN
+    , esp32_2432S028R_WorldScreen
+#endif
+};
 
 DisplayDriver esp32_2432S028RDriver = {
     esp32_2432S028R_Init,

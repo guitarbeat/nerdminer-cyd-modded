@@ -166,7 +166,7 @@ void updateGlobalData(void){
               gData.globalHash = formatNetworkHashrate(hr, true);
             else if (g_networkDifficulty > 0.0)
             {
-              double derivedHr = g_networkDifficulty * 4294967296.0 / (double)getActiveCoinProfile().targetBlockTimeSec;
+              double derivedHr = g_networkDifficulty * 4294967296.0 / (double)blockTargetSecs();
               gData.globalHash = formatNetworkHashrate(derivedHr, true);
             }
 
@@ -192,7 +192,7 @@ void updateGlobalData(void){
         }
         if (gData.globalHash.length() == 0 && g_networkDifficulty > 0.0)
         {
-          double derivedHr = g_networkDifficulty * 4294967296.0 / (double)getActiveCoinProfile().targetBlockTimeSec;
+          double derivedHr = g_networkDifficulty * 4294967296.0 / (double)blockTargetSecs();
           gData.globalHash = formatNetworkHashrate(derivedHr, true);
         }
 

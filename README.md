@@ -144,23 +144,44 @@ Pick any colour and a brightness from 1 to 255 (the LED is very bright, so 20-60
 
 ---
 
-## 🖥️ 4-Screen Performance Carousel
+## 🖥️ CYD Screens (v2.2.0)
 
-The CYD firmware features a high-density, zero-overhead carousel of **4 specialized screens** designed specifically for the 240x320 portrait form factor. All rendering occurs without blocking network calls or sacrificing hashrate:
+The CYD firmware shows **two screens**, built to teach what a miner does at a glance (ASCII text only, colours carry meaning: **orange = speed**, **blue = guesses**, **magenta = your best hash**). The network numbers that used to have their own WORLD screen (share of network, difficulty, block height, halving, price, fee) now live on the **web dashboard** only.
 
-| Index | Screen | Highlights & Information Architecture |
-|:---:|:---|:---|
-| **0** | **MINE**<br>*(Pulse Dashboard)* | • **Hero Segmented Hashrate Arc**: 270° tachometer sweep (0 to 1200 KH/s) with peak hold.<br>• **Hero Hashrate Readout**: High-contrast, large KH/s display.<br>• **Hashes Tested**: Humanized counter of lifetime attempts (e.g. `1.1G HASHES`).<br>• **Shares & Best**: Crisp stat cards showing submitted 32-bit shares and session **★ BEST** difficulty.<br>• **Telemetry Footer**: Current worker tag, session uptime, and blocks found (`0`). |
-| **1** | **MARKET**<br>*(Bitcoin Network)* | • **Hero Spot Price**: Real-time Bitcoin price formatted in USD (`$XX,XXX`).<br>• **Block Age & Height**: Time elapsed since last mined block (`Xm ago`) and current block height.<br>• **Network & Difficulty**: Global network hashrate (EH/s) and current difficulty (T).<br>• **Mempool Fee**: Half-hour transaction fee (sat/vB) with priority pill (**LOW**, **NORMAL**, **BUSY**).<br>• **Halving Progress Bar**: Visual progress bar and countdown to the next Bitcoin halving. |
-| **2** | **CLOCK**<br>*(Ambient Desk Clock)* | • **Ambient Digital Clock**: High-legibility 12h/24h time with pulsing colon and calendar date.<br>• **Current Hashrate Badge**: Compact live KH/s indicator.<br>• **60-Second Sparkline**: Rolling 60s hashrate bar chart populated by real hardware samples.<br>• **Health Telemetry Strip**: ESP32 core temperature (°C), system uptime, and Wi-Fi RSSI bars. |
-| **3** | **ARCH**<br>*(Architecture & Protocol)* | • **Attempt Quality Scatter Plot**: Logarithmic difficulty Y-axis (higher = rarer candidate hash attempt).<br>• **Live-Sampled Hardware Attempts**: Nonce candidates sampled at ~1 in 16,384 for zero display latency.<br>• **Block Threshold Line**: Horizontal target line anchored to live network difficulty ($hash < target$).<br>• **Header Geometry Breakdown**: Visualizes the 80-byte block header format and pipeline state.<br>• **In-Place Best Tracker**: Prominent marker tracking your closest candidate hash of the session.<br>• **Hashrate Footer**: Real-time KH/s status footer. |
+| MINE (0) | ODDS (1) |
+|:---:|:---:|
+| ![MINE screen](docs/screens/mine.png) | ![ODDS screen](docs/screens/odds.png) |
+
+<details><summary>Landscape</summary>
+
+| MINE (0) | ODDS (1) |
+|:---:|:---:|
+| ![MINE screen, landscape](docs/screens/mine-landscape.png) | ![ODDS screen, landscape](docs/screens/odds-landscape.png) |
+
+</details>
+
+**Top bar** (both screens): just the trophy badge (blocks *your* CYD found; gold once it is above 0) and the clock. The coin and pool are shown on the web dashboard, not on the device.
+
+**MINE: what is my miner doing right now?**
+- **Half-circle dial** that rises into the top bar, between the trophy and the clock. It has three stacked rings: the outer orange ring is your speed (0-1200 KH/s), the middle ring spells your best hash this round one hex digit per cell (leading zeros lit magenta), and the inner blue ring is your guesses this round (full = one typical block time of the coin you mine at your average speed).
+- **Live KH/s** in the dial centre. This is the only place the live speed is shown.
+- **Toast under the dial**: when *anyone* on the network finds a block, `NEW #N` (that block's height, not a block you found) and `ZEROS RESET` show for 5 s, and the rings empty and start over. During a long round the same spot says e.g. `1.4x AVG ROUND` (this round has already taken 1.4x the guesses of a typical round).
+- **5-minute speed plot**: the orange line is a short rolling average (last ~8 s) of your speed. It sits in a fixed band of the 5-minute average +/-15% (the band only re-centres if the average moves more than 5%). The dashed line is the held 5-minute average (`5m AVG`, refreshed once a minute), and the dot marks now.
+- **New zero records** (the last 3 times your best zero count went up this round) and **Guesses** this round.
+
+**ODDS: how close am I to winning a block?**
+- **Closest try**: your best this round (big) with `need N`, the difficulty a block needs, plus `1 in N to a block` and a progress bar.
+- **Share ladder**: one rung per 10x, every share as a dot (gold = your best), with the dashed `NEED N` block target on top.
+- **YOUR WAIT**: the average time for your CYD alone to find a block. **YOUR ODDS**: your chance of winning any one block.
+- **LAST BLOCK - ANYONE**: how long ago someone on the network found a block, and how many guesses you made since (`1 per N min` is the coin's block time).
+- **Last shares** the pool accepted.
 
 ---
 
 ### 👆 Touchscreen & Physical Controls
 
 #### Touch Zones (Resistive & Capacitive CYD)
-- **Tap Right Half**: Cycle forward to next screen (`MINE → MARKET → CLOCK → ARCH → MINE`)
+- **Tap Right Half**: Cycle forward to next screen (`MINE → ODDS → MINE`)
 - **Tap Left Half**: Cycle backward to previous screen
 - **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
 - **Ambient Light Sensor (LDR)**: Automatic dynamic dimming in dark environments on CYD boards with light sensor (GPIO 34)
