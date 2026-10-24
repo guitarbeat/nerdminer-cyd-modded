@@ -633,6 +633,11 @@ static void statusRateSample(uint64_t kh, uint32_t ms)
     s_rateCount++;
 }
 
+int8_t poolAuthorized(void)
+{
+  return s_authorized;
+}
+
 MinerStatus getMinerStatus(void)
 {
   MinerStatus s{};
@@ -1407,6 +1412,7 @@ void runStratumWorker(void *name) {
                                         {
                                           s_authId = 0;
                                           s_authorized = 0;
+                                          notePoolError(line); // keep the pool's reason for the screens / api
                                           Serial.printf("[STRATUM] The pool REFUSED the worker \"%s\": check the BTC address in the settings\n", mWorker.wName);
                                           break;
                                         }

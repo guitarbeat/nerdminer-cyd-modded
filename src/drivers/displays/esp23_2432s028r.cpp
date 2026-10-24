@@ -1164,6 +1164,7 @@ static void poolState(String &v, uint16_t &col)
   char perr[48];
   getPoolError(perr, sizeof(perr));
   if (WiFi.status() != WL_CONNECTED) { v = "NO WI-FI"; col = C_BAD; }
+  else if (poolAuthorized() == 0) { v = "REFUSED"; col = C_BAD; } // wallet refused (upstream #11): shares would all fail
   else if (uiStatus() == NM_hashing) { v = "ONLINE"; col = C_GOOD; }
   else if (perr[0]) { v = "REFUSED"; col = C_BAD; }
   else { v = "LINKING"; col = C_WARN; }
@@ -2156,8 +2157,9 @@ static void fillMine(MineV &m, const String &rate, uint32_t sharesN, uint32_t bl
     char perr[48];
     getPoolError(perr, sizeof(perr));
     const char *mm = strstr(perr, ": ");
-    m.jobLabel = "REFUSED";
-    m.job = String(mm ? mm + 2 : perr).substring(0, 14);
+    const bool wallet = poolAuthorized() == 0;
+    m.jobLabel = wallet ? "WALLET REFUSED" : "REFUSED";
+    m.job = perr[0] ? String(mm ? mm + 2 : perr).substring(0, 14) : String("CHECK BTC ADDR");
     m.jobIcon = 3;
     m.jobCol = m.jobICol = C_BAD;
   }
