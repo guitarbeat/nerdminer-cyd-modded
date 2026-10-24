@@ -20,9 +20,7 @@
 #endif
 
 extern uint32_t templates;
-extern uint32_t hashes;
-extern uint32_t Mhashes;
-extern uint32_t totalKHashes; // 32-bit here (fork); see mining.cpp
+extern uint64_t totalKHashes;
 extern uint32_t elapsedKHs;
 extern uint64_t upTime;
 
@@ -669,7 +667,7 @@ mining_data getMiningData(unsigned long mElapsed)
   snprintf(timeMining, sizeof(timeMining), "%01d  %02d:%02d:%02d", days, hours, mins, secs);
 
   data.completedShares = shares;
-  data.totalMHashes = Mhashes;
+  data.totalMHashes = String((unsigned long)(getTotalHashes() / 1000000ULL));
   data.totalKHashes = String((unsigned long long)totalKHashes);
   data.currentHashRate = getCurrentHashRate(mElapsed);
   data.templates = templates;

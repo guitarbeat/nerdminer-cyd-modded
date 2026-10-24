@@ -65,9 +65,47 @@
 nvs_handle_t stat_handle;
 
 uint32_t templates = 0;
-uint32_t hashes = 0;
-uint32_t Mhashes = 0;
-uint32_t totalKHashes = 0;
+// Hashes since the saved stats began (restored at boot + this run), see
+// addHashes(). It used to be a pair, Mhashes + hashes, folded across in two
+// steps at every new job; the monitor (and /api/status) could read between the
+// two and see a million hashes counted twice, i.e. an absurd one-second rate.
+// One 64-bit counter under a spinlock instead (upstream #18, @bdlglua).
+static uint64_t s_hashTotal = 0;
+static portMUX_TYPE s_hashMux = portMUX_INITIALIZER_UNLOCKED;
+
+void addHashes(uint32_t n)
+{
+  portENTER_CRITICAL(&s_hashMux);
+  s_hashTotal += n;
+  portEXIT_CRITICAL(&s_hashMux);
+}
+
+// 64 bits are two words on the ESP32: read under the lock, never half updated.
+uint64_t getTotalHashes()
+{
+  portENTER_CRITICAL(&s_hashMux);
+  const uint64_t v = s_hashTotal;
+  portEXIT_CRITICAL(&s_hashMux);
+  return v;
+}
+
+static void setTotalHashes(uint64_t v)
+{
+  portENTER_CRITICAL(&s_hashMux);
+  s_hashTotal = v;
+  portEXIT_CRITICAL(&s_hashMux);
+}
+
+// Saved stats read back at boot (whole MH): added, so hashes already counted
+// this run (none in practice, no job has come in yet) are kept.
+static void restoreHashes(uint32_t mhashes)
+{
+  portENTER_CRITICAL(&s_hashMux);
+  s_hashTotal += (uint64_t)mhashes * 1000000ULL;
+  portEXIT_CRITICAL(&s_hashMux);
+}
+
+uint64_t totalKHashes = 0; // 32 bits wrapped after ~4.3 TH (about 50 days at 1 MH/s)
 // the stats tick that last set totalKHashes, published as a consistent pair
 // (seq is odd while writing) so the display can turn it into an exact rate
 volatile uint32_t g_khTickSeq = 0, g_khTickKh = 0, g_khTickMs = 0;
@@ -210,7 +248,7 @@ uint32_t getHashSampleSeq(void) { return s_hsSeq; }
 AttemptCounters getAttemptCounters(void)
 {
   AttemptCounters c;
-  const uint64_t tot = (uint64_t)Mhashes * 1000000ULL + hashes; // two plain reads; a fold in between is rare
+  const uint64_t tot = getTotalHashes(); // one consistent 64-bit read
   c.attemptsTotal = (double)tot;
   c.attemptsSession = (s_bootAttemptsSet && tot >= s_bootAttempts) ? (double)(tot - s_bootAttempts) : 0.0;
   c.found = s_sharesFound;
@@ -774,7 +812,7 @@ bool checkPoolConnection(void) {
 unsigned long mStart0Hashrate = 0;
 bool checkPoolInactivity(unsigned int keepAliveTime, unsigned long inactivityTime){ 
 
-    uint64_t currentKHashes = (uint64_t)Mhashes * 1000 + hashes / 1000;
+    uint64_t currentKHashes = getTotalHashes() / 1000;
     uint64_t elapsedKHs = currentKHashes - totalKHashes;
 
     uint32_t time_now = millis();
@@ -1270,10 +1308,6 @@ void runStratumWorker(void *name) {
                                           last_job_time = millis();
                                           mLastTXtoPool = last_job_time;
 
-                                          uint32_t mh = hashes/1000000;
-                                          Mhashes += mh;
-                                          hashes -= mh*1000000;
-
                                           //Prepare data for new jobs
                                           memset(mMiner.bytearray_blockheader+80, 0, 128-80);
                                           mMiner.bytearray_blockheader[80] = 0x80;
@@ -1472,7 +1506,7 @@ void runStratumWorker(void *name) {
       vTaskDelay(5 / portTICK_PERIOD_MS);
       uint32_t nonces_done = 0;
       std::vector<uint32_t> nonce_vector = i2c_harvest_slaves(i2c_slave_vector, job_pool & 0xFF, nonces_done);
-      hashes += nonces_done;
+      addHashes(nonces_done);
       g_currentBlockHashes += nonces_done;
       for (size_t n = 0; n < nonce_vector.size(); ++n)
       {
@@ -1543,7 +1577,7 @@ void runStratumWorker(void *name) {
       std::shared_ptr<JobResult> res = job_result_list.front();
       job_result_list.pop_front();
 
-      hashes += res->nonce_count;
+      addHashes(res->nonce_count);
       g_currentBlockHashes += res->nonce_count;
       if (res->nonce != 0xFFFFFFFF)
         updateBestDiff(res->difficulty, res->hash); // I2C slave results (local miners already did it)
@@ -2931,7 +2965,7 @@ static bool readLegacyStats()
     return false;
 
   best_diff = nv_best;
-  Mhashes = nv_mhashes;
+  restoreHashes(nv_mhashes);
   shares = nv_shares;
   valids = nv_valids;
   templates = nv_templates;
@@ -2970,7 +3004,7 @@ void restoreStat() {
     // newest valid slot (sequence compare that survives the 32-bit wrap)
     const StatsRecord &r = (okA && (!okB || (int32_t)(a.seq - b.seq) > 0)) ? a : b;
     best_diff = r.best_diff;
-    Mhashes = r.Mhashes;
+    restoreHashes(r.Mhashes);
     shares = r.shares;
     valids = r.valids;
     templates = r.templates;
@@ -2986,7 +3020,6 @@ void restoreStat() {
     Serial.printf("[MONITOR] Stats restored from the old format, now saved in slots A/B\n");
   } else {
     best_diff = 0.0;
-    Mhashes = 0;
     shares = 0;
     valids = 0;
     templates = 0;
@@ -3313,7 +3346,7 @@ void saveStat() {
   r.magic = STATS_MAGIC;
   r.seq = s_statsSeq + 1;
   r.best_diff = getBestDiff();
-  r.Mhashes = Mhashes;
+  r.Mhashes = (uint32_t)(getTotalHashes() / 1000000ULL); // whole MH, as before
   r.shares = shares;
   r.valids = valids;
   r.templates = templates;
@@ -3333,7 +3366,8 @@ void saveStat() {
 
 void resetStat() {
     Serial.printf("[MONITOR] Resetting NVS stats\n");
-    templates = hashes = Mhashes = totalKHashes = elapsedKHs = upTime = shares = valids = 0;
+    templates = totalKHashes = elapsedKHs = upTime = shares = valids = 0;
+    setTotalHashes(0);
     shares32Rejected = 0;
     best_diff = 0.0;
     clearShareHistory();
@@ -3430,11 +3464,12 @@ void runMonitor(void *name)
 
   uint32_t seconds_elapsed = 0;
 
-  totalKHashes = (uint64_t)Mhashes * 1000 + hashes / 1000;
+  const uint64_t bootHashes = getTotalHashes();
+  totalKHashes = bootHashes / 1000;
   uint32_t last_update_millis = millis();
   uint32_t uptime_frac = 0;
   s_bootKh = totalKHashes;
-  s_bootAttempts = (uint64_t)Mhashes * 1000000ULL + hashes;
+  s_bootAttempts = bootHashes;
   s_bootAttemptsSet = true;
   statusRateSample(s_bootKh, last_update_millis);
   s_bootUs = s_lastSampleUs;
@@ -3486,11 +3521,11 @@ void runMonitor(void *name)
       }
       #endif
 
-      uint64_t currentKHashes = (uint64_t)Mhashes * 1000 + hashes / 1000;
+      uint64_t currentKHashes = getTotalHashes() / 1000;
       elapsedKHs = (uint32_t)(currentKHashes - totalKHashes);
       totalKHashes = currentKHashes;
       g_khTickSeq++;
-      g_khTickKh = currentKHashes;
+      g_khTickKh = (uint32_t)currentKHashes; // low word: the display only uses tick-to-tick deltas
       g_khTickMs = now_millis;
       g_khTickSeq++;
       statusRateSample(currentKHashes, now_millis);

@@ -219,7 +219,6 @@ extern double best_diff;
 extern volatile uint32_t shares;
 extern volatile uint32_t valids;
 extern uint32_t templates;
-extern uint32_t Mhashes;
 extern uint64_t upTime;
 
 #endif //MONITOR_API_H

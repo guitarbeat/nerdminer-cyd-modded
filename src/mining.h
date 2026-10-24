@@ -141,6 +141,8 @@ String printLocalTime(void);
 void resetStat();
 void resetSessionStats();
 
+void addHashes(uint32_t n);        // stratum task: hashes the miners report
+uint64_t getTotalHashes();         // since the saved stats began; any task
 void updateBestDiff(double diff, const uint8_t *hashLE = nullptr); // keep the best hash difficulty seen (any core); hashLE = that hash (round best)
 bool getRoundBestHash(uint8_t outBE[32]); // best hash this round, printed order; false = none yet
 extern char g_lastWinnerHashHex[65];      // last winning block hash, printed order ("" = none yet)
@@ -238,7 +240,7 @@ void noteCandidate(double diff, const uint8_t *hashLE); // local miners: 16-bit 
 // Blocks are a subset of found shares (a block hash also beats pool diff).
 struct AttemptCounters
 {
-  double attemptsTotal;   // lifetime hashes (Mhashes*1e6 + hashes, persisted)
+  double attemptsTotal;   // lifetime hashes (getTotalHashes(), persisted in whole MH)
   double attemptsSession; // hashes since boot
   double missSession;     // attemptsSession - found
   uint32_t candidates;    // 16-bit prefilter hits (local miners)

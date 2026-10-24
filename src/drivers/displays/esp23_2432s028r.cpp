@@ -1332,7 +1332,6 @@ static void chromeMine(TFT_eSPI &d)
 // ---- data, sampled once a second on any screen (display task, no I/O) ----
 // Speed: 60 x 1 s samples (0.1 KH/s units) from the miner's KH counter.
 // Records: the last 3 times my best leading-zero count this round went UP.
-extern uint32_t totalKHashes;
 #define HR_N 300 // 5 minutes of ~1 Hz speed samples (0.1 KH/s each)
 #define HR_RM 8   // chart line: rolling mean over the last 8 samples (~8 s)
 static uint16_t hrS[HR_N];

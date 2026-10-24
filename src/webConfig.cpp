@@ -28,7 +28,7 @@
 extern TSettings Settings;
 extern monitor_data mMonitor;
 extern pool_data pData;
-extern uint32_t templates, hashes, Mhashes;
+extern uint32_t templates;
 extern uint64_t upTime;
 extern volatile uint32_t shares, valids;
 extern double best_diff;
@@ -1992,7 +1992,7 @@ static void handleStatus()
   doc["hashrate_khs"] = round(m.hashrateKHs * 10.0) / 10.0;
   doc["hashrate_avg_khs"] = round(m.avgHashrateKHs * 10.0) / 10.0;
   doc["hw_loop"] = m.hwLoop ? m.hwLoop : "default";
-  doc["total_mhashes"] = Mhashes + hashes / 1000000;
+  doc["total_mhashes"] = (uint32_t)(getTotalHashes() / 1000000ULL); // one 64-bit read, never mid-fold
   doc["mining_time_s"] = (uint32_t)upTime;
   doc["templates"] = templates;
   doc["best_diff"] = getBestDiff();
