@@ -44,8 +44,33 @@ static String htmlEscape(const String &in)
   out.replace("\"", "&quot;");
   out.replace("<", "&lt;");
   out.replace(">", "&gt;");
+  out.replace("'", "&#39;"); // the page puts every value between single quotes
   return out;
 }
+
+// A form posted from another site still reaches this miner from the user's
+// browser, so state-changing POSTs only take requests whose Origin (or,
+// without one, Referer) is this device. Browsers send Origin with every POST;
+// a request with neither header (curl, scripts) is let through. Upstream #17.
+static bool sameOrigin()
+{
+  const String self = "http://" + webCfgServer.hostHeader();
+  const String origin = webCfgServer.header("Origin");
+  if (origin.length())
+    return origin.equalsIgnoreCase(self);
+  const String referer = webCfgServer.header("Referer");
+  if (referer.length())
+    return referer.equalsIgnoreCase(self) || referer.startsWith(self + "/");
+  return true;
+}
+static bool refuseForeign()
+{
+  if (sameOrigin())
+    return false;
+  webCfgServer.send(403, "text/plain", "Refused: the request was not sent from this miner's own page.");
+  return true;
+}
+
 
 static String getCleanWallet(const String &w)
 {
@@ -312,6 +337,8 @@ static void handleApiCryptoAudit()
 
 static void handleResetSession()
 {
+  if (refuseForeign())
+    return;
   resetSessionStats();
   webCfgServer.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Session stats reset\"}");
 }
@@ -439,6 +466,8 @@ static void handleScreenshot()
 
 static void handleRestart()
 {
+  if (refuseForeign())
+    return;
   webCfgServer.send(200, "application/json", "{\"status\":\"restarting\"}");
   delay(600);
   ESP.restart();
@@ -1026,8 +1055,24 @@ static void handleRoot()
   const CoinProfile &coin = getActiveCoinProfile();
 
   String page;
-  page.reserve(32000);
+  // Sent in parts (chunked, as upstream #17 does): the whole page never has to
+  // sit in one String. One ~32 KB String needed a contiguous block bigger than
+  // the heap usually has (max_alloc ~21-24 KB), so the page came out cut.
+  page.reserve(6000);
+  bool started = false;
+  auto flush = [&]() {
+    if (!started)
+    {
+      webCfgServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+      webCfgServer.send(200, "text/html", page);
+      started = true;
+    }
+    else if (page.length())
+      webCfgServer.sendContent(page);
+    page = "";
+  };
 
+  if (page.length() > 3500) flush();
   page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
             "<meta name='theme-color' content='#0b0d12'>"
@@ -1052,6 +1097,7 @@ static void handleRoot()
     page += String(coin) + F(" &middot; ") + htmlEscape(String(shortName));
     page += F("</div>");
   }
+  if (page.length() > 3500) flush();
   page += F(""
             "<div class='status-badge' role='status' aria-live='polite'>"
             "<span id='st-txt' class='");
@@ -1068,12 +1114,15 @@ static void handleRoot()
             "<div class='diag-strip'>"
             "<div class='diag-item primary'><span class='diag-label'>Speed</span><span class='diag-val'><span id='st-top-hr'>");
   page += d.currentHashRate.length() ? d.currentHashRate : String("--");
+  if (page.length() > 3500) flush();
   page += F("</span> <span class='diag-sub'>KH/s</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Temp</span><span class='diag-val'><span id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
+  if (page.length() > 3500) flush();
   page += F("</span>&deg;C</span></div>"
             "<div class='diag-item'><span class='diag-label'>Wi-Fi</span><span class='diag-val'><span id='st-wifi'>");
   page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
+  if (page.length() > 3500) flush();
   page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
             "<div class='diag-item'><span class='diag-label'>Pool ping</span><span class='diag-val'><span id='st-ping'>");
   page += String(g_stratumPing) + F("</span> <span class='diag-sub'>ms</span></span></div>"
@@ -1094,6 +1143,7 @@ static void handleRoot()
     page += htmlEscape(cleanWallet) + F("' target='_blank' rel='noopener' class='pool-btn'>"
               "View on public-pool.io &#8599;</a></div>");
   }
+  if (page.length() > 3500) flush();
   page += F("</aside>"
             "<main class='console-main'>"
             "<nav class='console-tabs' role='tablist'>"
@@ -1114,13 +1164,16 @@ static void handleRoot()
             "<div class='tele-hero-val amber'><span id='dyn-hps'>");
   float hr = d.currentHashRate.toFloat();
   unsigned long hps = (unsigned long)(hr * 1000.0f);
+  if (page.length() > 3500) flush();
   page += (hps > 0 ? String(hps) : F("0"));
+  if (page.length() > 3500) flush();
   page += F("</span> <span class='unit'>H/s</span></div>"
             "<div class='tele-hero-sub'><span id='dyn-hpd'>--</span> hashes per day</div>"
             "<div class='tele-row'><span>Total hashes</span><span class='hl-val'><span id='dyn-totwork'>");
   uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
   if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
   else page += String((unsigned long)mhashes) + F(" million");
+  if (page.length() > 3500) flush();
   page += F("</span></span></div>"
             "<div class='tele-row' title='Why it matters: the pool hands your miner a fresh puzzle (a job) every 30-60 s, and right away when anyone finds a block. Old puzzles are worthless, so a recent time means you are working on current work.'><span>New puzzle from pool</span><span class='hl-val' id='dyn-lastjob'>--</span></div>"
             "<div class='tele-row' title='Why it matters: every proof (share) is checked by the pool. ok = it counted; bad = refused (stale after a new block, or a duplicate). A few bad ones are normal.'><span>Proofs checked by pool</span><span class='hl-val' id='dyn-okbad'>--</span></div>"
@@ -1132,6 +1185,7 @@ static void handleRoot()
             "<div class='tele-row' title='Why it matters: each round you get a fresh lottery ticket. Your best vs the winner shows how far off a small miner is, round after round.'><span>Recent rounds (my best vs winner)</span><span class='hl-val' id='dyn-rounds'>--</span></div>"
             "<div class='tele-row'><span>Uptime</span><span class='hl-val' id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
+  if (page.length() > 3500) flush();
   page += F("</span></div>"
             "</div>"
             "<div class='tele-card'>"
@@ -1141,10 +1195,12 @@ static void handleRoot()
             "</div>"
             "<div class='tele-hero-val'><span id='dyn-shares'>");
   page += (d.completedShares.length() ? d.completedShares : F("0"));
+  if (page.length() > 3500) flush();
   page += F("</span> <span class='unit'>shares</span></div>"
             "<div class='tele-hero-sub' title='Why it matters: shares are easy proofs the pool asks for so it can see you are working. On a solo pool they do not pay.'>About 1 per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
             "<div class='tele-row' title='Why it matters: difficulty measures how good a guess is. A block needs the network difficulty; this is your best so far.'><span>Closest try (best difficulty, session)</span><span class='hl-val'><span id='dyn-diff'>");
   page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
+  if (page.length() > 3500) flush();
   page += F("</span></span></div>"
             "<div class='tele-row'><span>Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
             "</div>"
@@ -1187,9 +1243,11 @@ static void handleRoot()
   page += String(coin.name) + " (" + String(coin.ticker) + F(") address</label>"
             "<input type='text' id='f-wallet' class='form-control' name='wallet' value='");
   page += htmlEscape(String(Settings.BtcWallet));
+  if (page.length() > 3500) flush();
   page += F("' placeholder='Your on-chain address (e.g. bc1q...)' required>"
             "<span class='form-hint'>A found block pays 3.125 ");
   page += String(coin.ticker) + F(" + fees straight to this address. Add <code>.name</code> to set a worker name, e.g. <code>");
+  if (page.length() > 3500) flush();
   page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</span>"
             "</div>"
             "</div></div>");
@@ -1200,6 +1258,7 @@ static void handleRoot()
             "<div class='cfg-card-title'>Pool</div>"
             "<span class='active-pool-pill");
   page += (onBackupPool() ? F(" fallback'>Using fallback") : F("'>Using primary"));
+  if (page.length() > 3500) flush();
   page += F("</span>"
             "</div>"
             "<div class='cfg-card-body'>"
@@ -1208,18 +1267,21 @@ static void handleRoot()
             "<label class='form-label' for='f-pool'>Host</label>"
             "<input type='text' id='f-pool' class='form-control' name='pool' value='");
   page += htmlEscape(Settings.PoolAddress);
+  if (page.length() > 3500) flush();
   page += F("' placeholder='public-pool.io' required>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-port'>Port</label>"
             "<input type='number' id='f-port' class='form-control' name='port' value='");
   page += String(Settings.PoolPort);
+  if (page.length() > 3500) flush();
   page += F("' placeholder='3333' required>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-pass'>Password</label>"
             "<input type='text' id='f-pass' class='form-control' name='poolpass' value='");
   page += htmlEscape(String(Settings.PoolPassword));
+  if (page.length() > 3500) flush();
   page += F("' placeholder='x'>"
             "</div>"
             "</div>"
@@ -1237,6 +1299,7 @@ static void handleRoot()
             "<div id='preset-note' class='preset-comment'>Presets fill in the pool above. Save to apply.</div>"
             "</div>");
   page += (onBackupPool() ? F("<details class='more' open>") : F("<details class='more'>"));
+  if (page.length() > 3500) flush();
   page += F("<summary>Fallback pool (optional)</summary>"
             "<div class='more-body'>"
             "<span class='form-hint'>Used after 3 failed connections to the pool above.</span>"
@@ -1245,18 +1308,21 @@ static void handleRoot()
             "<label class='form-label' for='f-fbpool'>Host</label>"
             "<input type='text' id='f-fbpool' class='form-control' name='fbpool' value='");
   page += htmlEscape(Settings.FallbackPoolAddress);
+  if (page.length() > 3500) flush();
   page += F("' placeholder='pool.nerdminers.org'>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-fbport'>Port</label>"
             "<input type='number' id='f-fbport' class='form-control' name='fbport' value='");
   page += String(Settings.FallbackPoolPort);
+  if (page.length() > 3500) flush();
   page += F("' placeholder='3333'>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-fbpass'>Password</label>"
             "<input type='text' id='f-fbpass' class='form-control' name='fbpass' value='");
   page += htmlEscape(String(Settings.FallbackPoolPassword));
+  if (page.length() > 3500) flush();
   page += F("' placeholder='x'>"
             "</div>"
             "</div>"
@@ -1278,10 +1344,15 @@ static void handleRoot()
             "<label class='form-label' for='f-rot'>Orientation</label>"
             "<select name='rot' id='f-rot' class='form-control'>");
   int curRot = Settings.screenRotation;
+  if (page.length() > 3500) flush();
   page += "<option value='0'" + String(curRot == 0 ? " selected" : "") + ">Portrait, USB at bottom (default)</option>";
+  if (page.length() > 3500) flush();
   page += "<option value='1'" + String(curRot == 1 ? " selected" : "") + ">Landscape, USB on right</option>";
+  if (page.length() > 3500) flush();
   page += "<option value='2'" + String(curRot == 2 ? " selected" : "") + ">Portrait flipped, USB at top</option>";
+  if (page.length() > 3500) flush();
   page += "<option value='3'" + String(curRot == 3 ? " selected" : "") + ">Landscape flipped, USB on left</option>";
+  if (page.length() > 3500) flush();
   page += F("</select>"
             "<span class='form-hint'>Changing orientation restarts the miner when you save.</span>"
             "</div>"
@@ -1298,6 +1369,7 @@ static void handleRoot()
             "<label class='form-check'>"
             "<input type='checkbox' name='invert' id='cb-invert' onchange='toggleInvert(this.checked)'");
   if (Settings.invertColors) page += F(" checked");
+  if (page.length() > 3500) flush();
   page += F("> <span>Invert colors</span></label>"
             "<div style='display:flex;gap:8px;margin-top:10px'>"
             "<button type='button' class='btn-restart' id='btn-recal-touch' onclick='recal(\"touch\")'>Recalibrate touch</button>"
@@ -1309,33 +1381,40 @@ static void handleRoot()
             "<span class='form-label'>Theme <span class='form-label-sub'>applies immediately</span></span>"
             "<div class='theme-grid'>");
   int curTheme = Settings.displayTheme;
+  if (page.length() > 3500) flush();
   page += F("<div class='theme-card");
   if (curTheme == 0) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-0' onclick='selectTheme(0,\"#f7931a\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f7931a'></span><span class='swatch-dot' style='background:#10141c'></span></div>"
             "<h4>Instrument Amber</h4><p>Default</p></div>"
             "<div class='theme-card");
   if (curTheme == 1) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-1' onclick='selectTheme(1,\"#22c55e\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#22c55e'></span><span class='swatch-dot' style='background:#08140a'></span></div>"
             "<h4>Matrix Green</h4><p>Green on black</p></div>"
             "<div class='theme-card");
   if (curTheme == 2) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-2' onclick='selectTheme(2,\"#f59e0b\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#f59e0b'></span><span class='swatch-dot' style='background:#181208'></span></div>"
             "<h4>Cyber Amber</h4><p>Amber CRT</p></div>"
             "<div class='theme-card");
   if (curTheme == 3) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-3' onclick='selectTheme(3,\"#06b6d4\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#06b6d4'></span><span class='swatch-dot' style='background:#ec4899'></span></div>"
             "<h4>Arcade Neon</h4><p>Cyan and magenta</p></div>"
             "<div class='theme-card");
   if (curTheme == 4) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-4' onclick='selectTheme(4,\"#38bdf8\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#38bdf8'></span><span class='swatch-dot' style='background:#111827'></span></div>"
             "<h4>Ice Blue</h4><p>Slate and blue</p></div>"
             "<div class='theme-card");
   if (curTheme == 5) page += F(" active");
+  if (page.length() > 3500) flush();
   page += F("' id='thm-5' onclick='selectTheme(5,\"#ffffff\")'>"
             "<div class='theme-swatch'><span class='swatch-dot' style='background:#ffffff'></span><span class='swatch-dot' style='background:#181818'></span></div>"
             "<h4>Monochrome</h4><p>White on black</p></div>"
@@ -1352,6 +1431,7 @@ static void handleRoot()
             "<label class='form-label' for='f-screenoff'>Sleep after (min)</label>"
             "<input type='number' id='f-screenoff' class='form-control' name='screenoff' min='0' max='1440' value='");
   page += String(Settings.ScreenTimeout);
+  if (page.length() > 3500) flush();
   page += F("' placeholder='0'>"
             "<span class='form-hint'>0 = never. Touch or BOOT wakes it.</span>"
             "</div>"
@@ -1359,18 +1439,21 @@ static void handleRoot()
             "<label class='form-label' for='f-nbright'>Night brightness (1–255)</label>"
             "<input type='number' id='f-nbright' class='form-control' name='nightbright' min='1' max='255' value='");
   page += String(Settings.NightBrightness);
+  if (page.length() > 3500) flush();
   page += F("'>"
             "</div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-nfade'>Fade (min)</label>"
             "<input type='number' id='f-nfade' class='form-control' name='nightfade' min='0' max='240' value='");
   page += String(Settings.NightFade);
+  if (page.length() > 3500) flush();
   page += F("'>"
             "</div>"
             "</div>"
             "<label class='form-check'>"
             "<input type='checkbox' name='nightdim'");
   if (Settings.nightDim) page += F(" checked");
+  if (page.length() > 3500) flush();
   page += F("> <span>Dim at night, based on sunset at the location below</span></label>"
             "<div class='form-grid-3'>"
             "<div class='form-group'>"
@@ -1381,20 +1464,24 @@ static void handleRoot()
   {
     page += "<option value='" + String(kCities[i].latitude, 2) + "," + String(kCities[i].longitude, 2) + "'>" + String(kCities[i].name) + "</option>";
   }
+  if (page.length() > 3500) flush();
   page += F("</select></div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-lat'>Latitude (&deg;)</label>"
             "<input type='text' id='f-lat' name='lat' class='form-control' value='");
   page += String(Settings.Latitude, 2);
+  if (page.length() > 3500) flush();
   page += F("'></div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-lon'>Longitude (&deg;)</label>"
             "<input type='text' id='f-lon' name='lon' class='form-control' value='");
   page += String(Settings.Longitude, 2);
+  if (page.length() > 3500) flush();
   page += F("'></div>"
             "</div>"
             "<span class='form-hint'>Status: ");
   page += nightDimStatus();
+  if (page.length() > 3500) flush();
   page += F("</span></div></details>");
 #endif
 
@@ -1418,12 +1505,14 @@ static void handleRoot()
     if (Settings.ledMode == i) page += " selected";
     page += ">" + String(kLedModes[i]) + "</option>";
   }
+  if (page.length() > 3500) flush();
   page += F("</select></div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-ledcolor'>Color</label>"
             "<input type='color' id='f-ledcolor' name='ledcolor' class='form-control' value='");
   char colorHex[8];
   snprintf(colorHex, sizeof(colorHex), "#%06lx", (unsigned long)(Settings.ledColor & 0xFFFFFF));
+  if (page.length() > 3500) flush();
   page += String(colorHex) + F("'></div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-ledbright'>Brightness (1–255)</label>"
@@ -1432,6 +1521,7 @@ static void handleRoot()
             "<label class='form-check'>"
             "<input type='checkbox' name='ledscreen'");
   if (Settings.ledScreenOff) page += F(" checked");
+  if (page.length() > 3500) flush();
   page += F("> <span>Turn the LED off when the screen sleeps</span></label>"
             "</div></details>");
 #endif
@@ -1480,6 +1570,7 @@ static void handleRoot()
       page += " selected";
     page += ">" + String(kCurrencies[i].label) + "</option>";
   }
+  if (page.length() > 3500) flush();
   page += F("</select></div></div>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-mempool'>Mempool API</label>"
@@ -1491,6 +1582,7 @@ static void handleRoot()
             "<label class='form-check'>"
             "<input type='checkbox' name='savestats'");
   if (Settings.saveStats) page += F(" checked");
+  if (page.length() > 3500) flush();
   page += F("> <span>Keep lifetime hashes and shares across reboots (stored in flash)</span></label>"
             "</div></div></div>"
             "<div class='cfg-card'>"
@@ -1682,14 +1774,19 @@ static void handleRoot()
             "<script src='/cyd-twin.js?v=" FW_GIT "'></script>"
             "<script src='/dash.js?v=" FW_GIT "'></script>");
   page += F("<script>const initStats=");
+  if (page.length() > 3500) flush();
   page += buildStatsJson(d);
+  if (page.length() > 3500) flush();
   page += F(";updateStats(initStats);setInterval(pollStats,3000);</script></body></html>");
 
-  webCfgServer.send(200, "text/html", page);
+  flush();
+  webCfgServer.sendContent(""); // ends the chunked response
 }
 
 static void handleSave()
 {
+  if (refuseForeign())
+    return;
   const TSettings before = currentSettings();
   TSettings next = before;
 
@@ -1713,7 +1810,10 @@ static void handleSave()
   }
 
   if (webCfgServer.hasArg("pool"))
+  {
     next.PoolAddress = webCfgServer.arg("pool");
+    next.PoolAddress.trim(); // a pasted address often ends with a space or a newline
+  }
   if (webCfgServer.hasArg("port"))
     next.PoolPort = constrain(webCfgServer.arg("port").toInt(), 0, 65535); // like fbport (upstream #8)
   if (webCfgServer.hasArg("fbpool"))
@@ -1726,9 +1826,13 @@ static void handleSave()
   if (webCfgServer.hasArg("fbpass"))
     strncpy(next.FallbackPoolPassword, webCfgServer.arg("fbpass").c_str(), sizeof(next.FallbackPoolPassword) - 1);
   if (webCfgServer.hasArg("poolpass"))
-    strncpy(next.PoolPassword, webCfgServer.arg("poolpass").c_str(), sizeof(next.PoolPassword) - 1);
+    strlcpy(next.PoolPassword, webCfgServer.arg("poolpass").c_str(), sizeof(next.PoolPassword));
   if (webCfgServer.hasArg("wallet"))
-    strncpy(next.BtcWallet, webCfgServer.arg("wallet").c_str(), sizeof(next.BtcWallet) - 1);
+  {
+    String wallet = webCfgServer.arg("wallet");
+    wallet.trim();
+    strlcpy(next.BtcWallet, wallet.c_str(), sizeof(next.BtcWallet));
+  }
   if (webCfgServer.hasArg("tz"))
     next.Timezone = constrain(webCfgServer.arg("tz").toInt(), -12, 14);
   if (webCfgServer.hasArg("currency"))
@@ -1962,7 +2066,6 @@ static void handleStatus()
 
   String out;
   serializeJson(doc, out);
-  webCfgServer.sendHeader("Access-Control-Allow-Origin", "*");
   webCfgServer.sendHeader("Cache-Control", "no-store");
   webCfgServer.send(200, "application/json", out);
 }
@@ -2004,7 +2107,6 @@ static void handleHistory()
     out += v % 10;
   }
   out += F("]}");
-  webCfgServer.sendHeader("Access-Control-Allow-Origin", "*");
   webCfgServer.sendHeader("Cache-Control", "no-store");
   webCfgServer.send(200, "application/json", out);
 }
@@ -2039,6 +2141,8 @@ void setup_webConfig(void)
     webCfgServer.sendHeader("Cache-Control", "public, max-age=86400");
     webCfgServer.send_P(200, "application/javascript", DASH_JS);
   });
+  static const char *kHeaders[] = {"Origin", "Referer"}; // read by sameOrigin()
+  webCfgServer.collectHeaders(kHeaders, 2);
   webCfgServer.on("/", HTTP_GET, handleRoot);
   webCfgServer.on("/monitor", HTTP_GET, handleMonitor); // upstream live monitor page
   webCfgServer.on("/api/history", HTTP_GET, handleHistory);
