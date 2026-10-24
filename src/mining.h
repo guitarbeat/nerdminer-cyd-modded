@@ -125,6 +125,7 @@ struct MinerStatus
   bool subscribed;      // connected and subscribed to the pool
   double poolDifficulty;
   const char *hwLoop;
+  int8_t authorized;    // mining.authorize answer: -1 none yet, 0 refused, 1 accepted
 };
 MinerStatus getMinerStatus(void);
 const char *activeHwShaLoopName(void);
