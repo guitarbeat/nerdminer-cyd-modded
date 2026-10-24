@@ -144,52 +144,45 @@ Pick any colour and a brightness from 1 to 255 (the LED is very bright, so 20-60
 
 ---
 
-## 🖥️ CYD Screens (v2.2.0)
+## 🖥️ CYD Screen (v2.2.1)
 
-The CYD firmware shows **two screens**, built to teach what a miner does at a glance (ASCII text only, colours carry meaning: **orange = speed**, **blue = guesses**, **magenta = your best hash**). The network numbers that used to have their own WORLD screen (share of network, difficulty, block height, halving, price, fee) now live on the **web dashboard** only.
+The CYD firmware shows **one unified screen**, built to teach what a miner does at a glance (ASCII text only, colours carry meaning: **orange = speed**, **blue = guesses**, **magenta = your best hash**, **gold = block target**). The network numbers that used to have their own WORLD screen (share of network, difficulty, block height, halving, price, fee) live on the **web dashboard** only.
 
-| MINE (0) | ODDS (1) |
-|:---:|:---:|
-| ![MINE screen](docs/screens/mine.png) | ![ODDS screen](docs/screens/odds.png) |
+![MINE screen, portrait](docs/screens/mine.png)
 
-<details><summary>Landscape</summary>
+All components share one cohesive look: black cards with thin gray edges (`C_EDGE`), dim gray captions, big numbers with small uppercase labels (>= 10px floor for crisp readability on 2.4"–2.8" SPI TFTs). Colours carry the same meaning everywhere: orange = speed, blue = guesses (and shares), magenta = your best, gold = a block (trophy, block target).
 
-| MINE (0) | ODDS (1) |
-|:---:|:---:|
-| ![MINE screen, landscape](docs/screens/mine-landscape.png) | ![ODDS screen, landscape](docs/screens/odds-landscape.png) |
-
-</details>
-
-**Top bar** (both screens): just the trophy badge (blocks *your* CYD found; gold once it is above 0) and the clock. The coin and pool are shown on the web dashboard, not on the device.
-
-**MINE: what is my miner doing right now?**
-- **Half-circle dial** that rises into the top bar, between the trophy and the clock. It has three stacked rings: the outer orange ring is your speed (0-1200 KH/s), the middle ring spells your best hash this round one hex digit per cell (leading zeros lit magenta), and the inner blue ring is your guesses this round (full = one typical block time of the coin you mine at your average speed).
-- **Live KH/s** in the dial centre. This is the only place the live speed is shown.
-- **Toast under the dial**: when *anyone* on the network finds a block, `NEW #N` (that block's height, not a block you found) and `ZEROS RESET` show for 5 s, and the rings empty and start over. During a long round the same spot says e.g. `1.4x AVG ROUND` (this round has already taken 1.4x the guesses of a typical round).
-- **5-minute speed plot**: the orange line is a short rolling average (last ~8 s) of your speed. It sits in a fixed band of the 5-minute average +/-15% (the band only re-centres if the average moves more than 5%). The dashed line is the held 5-minute average (`5m AVG`, refreshed once a minute), and the dot marks now.
-- **New zero records** (the last 3 times your best zero count went up this round) and **Guesses** this round.
-
-**ODDS: how close am I to winning a block?**
-- **Closest try**: your best this round (big) with `need N`, the difficulty a block needs, plus `1 in N to a block` and a progress bar.
-- **Share ladder**: one rung per 10x, every share as a dot (gold = your best), with the dashed `NEED N` block target on top.
-- **YOUR WAIT**: the average time for your CYD alone to find a block. **YOUR ODDS**: your chance of winning any one block.
-- **LAST BLOCK - ANYONE**: how long ago someone on the network found a block, and how many guesses you made since (`1 per N min` is the coin's block time).
-- **Last shares** the pool accepted.
+- **Orientation**: Fixed in portrait only with the charger / USB port at the bottom.
+- **Top bar**: just the trophy badge (blocks *your* CYD found; gold once it is above 0) and the clock. The coin and pool are shown on the web dashboard, not cluttering the on-device screen.
+- **Half-circle dial**: rises into the top bar between the trophy and the clock. Three stacked rings:
+  - Outer orange ring: live mining speed (0–1200 KH/s).
+  - Middle ring: spells your best hash this round one hex digit per cell, with leading zeros lit magenta.
+  - Inner blue ring: guesses this round (full = one typical block time of the coin you mine at your average speed).
+  - Big live **KH/s** in the center dome.
+- **Closest try & Guesses**:
+  - Big magenta difficulty score of your best attempt this round, along with `need N` (difficulty required for a valid network block).
+  - Visual logarithmic progress bar towards the block target and `1 in N` block odds.
+  - Blue round guesses count (`GUESSES`).
+- **5-minute speed microchart**:
+  - Orange line: short rolling average (~8s) of speed, seated inside a fixed band (+/- 15% of 5-minute average; band only re-centers if drift exceeds 5%), with an orange dot marking the current sample.
+  - **Round news toast**: when *anyone* on the network finds a block, `NEW #N` and `ZEROS RESET` replace the `5m AVG` line for 5 seconds in the header row ([example](docs/screens/mine-new-block.png)), and the dial rings reset. During long rounds, `1.Nx AVG ROUND` indicates round progress.
+- **Multifunctional share ladder**:
+  - One rung per 10x decade from pool floor difficulty up to network difficulty.
+  - Every accepted share plotted as a blue dot (magenta ring for your best share).
+  - Dashed gold line marked `NEED N` indicating the network block target.
+  - Context captions for round block odds and average share interval.
 
 ---
 
 ### 👆 Touchscreen & Physical Controls
 
 #### Touch Zones (Resistive & Capacitive CYD)
-- **Tap Right Half**: Cycle forward to next screen (`MINE → ODDS → MINE`)
-- **Tap Left Half**: Cycle backward to previous screen
-- **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF
-- **Ambient Light Sensor (LDR)**: Automatic dynamic dimming in dark environments on CYD boards with light sensor (GPIO 34)
-- **NVS Memory**: Automatically saves your active screen index to flash and restores it across reboots!
+- **Display Orientation**: Fixed portrait with charger / USB port at the bottom (touch to change orientation disabled).
+- **Tap Top-Right Corner**: Toggle LCD backlight ON / OFF.
+- **Ambient Light Sensor (LDR)**: Automatic dynamic dimming in dark environments on CYD boards with light sensor (GPIO 34).
 
 #### Physical BOOT Button
-- **1 Click**: Cycle to the next screen view
-- **Double Click**: Rotate display orientation (0° Portrait, 90° Landscape, 180° Inverted Portrait, 270° Inverted Landscape)
+- **1 Click**: Wake display / refresh
 - **Triple Click**: Toggle LCD backlight ON / OFF
 - **Hold 5 Seconds**: Factory reset flash configuration and reboot into setup AP mode
 
@@ -384,6 +377,20 @@ Build and flash for your specific target environment (e.g. using `pio` or `uvx`)
 > 💡 **Tip:** Always use `-t upload` (without erase) so your saved Wi-Fi credentials and pool settings in NVS remain intact across firmware updates.
 
 ---
+
+### Mining starvation guard (run before pushing UI changes)
+
+```bash
+python3 scripts/check_mining_starvation.py             # static checks, host-only, <1 s
+python3 scripts/check_mining_starvation.py --selftest  # proves each known regression is caught
+```
+
+Redrawing the Mine screen too often starves the stratum/job feed: a RECENT ATTEMPTS plot keyed on the
+sampler's sequence counter (~5 repaints/s) cut the CYD from ~1000 to ~690 KH/s. The guard enforces the
+layered redraw budget (`ATT_DOTS_MIN_MS` >= 1000, `ATT_MISS_BIN_MIN_MS` >= 5000, frame only on
+window/threshold change, no text in the dot layer) and keeps the attempt sampler off the HW hot loop.
+It runs in CI on every push to `main` and before release builds. On-device, confirm with
+`/api/status` (`hashrate_khs`) and `/api/profile` (`chunk_gap_cycles` should stay ~10-30K, not millions).
 
 ## 🏷️ Firmware Versioning
 

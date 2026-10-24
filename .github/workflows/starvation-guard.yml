@@ -1,0 +1,22 @@
+name: Mining starvation guard
+
+# Host-only static checks: UI redraw budgets and sampler placement must not
+# starve the miner (see scripts/check_mining_starvation.py).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Starvation guard
+        run: python3 scripts/check_mining_starvation.py
+      - name: Guard self-test (each known regression must be caught)
+        run: python3 scripts/check_mining_starvation.py --selftest

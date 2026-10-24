@@ -108,7 +108,8 @@ bool tx_mining_subscribe(WiFiClient& client, mining_subscribe& mSubscribe)
 bool parse_mining_subscribe(String line, mining_subscribe& mSubscribe)
 {
     if(!verifyPayload(&line)) return false;
-    Serial.print("  Receiving: "); Serial.println(line);
+    extern volatile bool g_serialMuted;
+    if (!g_serialMuted) { Serial.print("  Receiving: "); Serial.println(line); }
    
     DeserializationError error = deserializeJson(doc, line);
 
@@ -161,7 +162,8 @@ bool tx_mining_auth(WiFiClient& client, const char * user, const char * pass)
 stratum_method parse_mining_method(String line)
 {
     if(!verifyPayload(&line)) return STRATUM_PARSE_ERROR;
-    Serial.print("  Receiving: "); Serial.println(line);
+    extern volatile bool g_serialMuted;
+    if (!g_serialMuted) { Serial.print("  Receiving: "); Serial.println(line); }
     
     DeserializationError error = deserializeJson(doc, line);
 
@@ -187,7 +189,9 @@ stratum_method parse_mining_method(String line)
 
 bool parse_mining_notify(String line, mining_job& mJob)
 {
+    #ifdef DEBUG_MINING
     Serial.println("    Parsing Method [MINING NOTIFY]");
+    #endif
     if(!verifyPayload(&line)) return false;
    
     DeserializationError error = deserializeJson(doc, line);
@@ -246,7 +250,8 @@ bool tx_mining_submit(WiFiClient& client, mining_subscribe mWorker, mining_job m
         mJob.ntime.c_str(),
         nonceHex
         );
-    Serial.print("  Sending  : "); Serial.print(payload);
+    extern volatile bool g_serialMuted;
+    if (!g_serialMuted) { Serial.print("  Sending  : "); Serial.print(payload); }
     client.print(payload);
     //Serial.print("  Receiving: "); Serial.println(client.readStringUntil('\n'));
 
@@ -255,7 +260,9 @@ bool tx_mining_submit(WiFiClient& client, mining_subscribe mWorker, mining_job m
 
 bool parse_mining_set_difficulty(String line, double& difficulty)
 {
+    #ifdef DEBUG_MINING
     Serial.println("    Parsing Method [SET DIFFICULTY]");
+    #endif
     if(!verifyPayload(&line)) return false;
    
     DeserializationError error = deserializeJson(doc, line);
@@ -263,7 +270,9 @@ bool parse_mining_set_difficulty(String line, double& difficulty)
     if (error) return false;
     if (!doc.containsKey("params")) return false;
 
+    #ifdef DEBUG_MINING
     Serial.print("    difficulty: "); Serial.println((double)doc["params"][0],12);
+    #endif
     difficulty = (double)doc["params"][0];
 
     return true;

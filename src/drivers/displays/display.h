@@ -21,8 +21,8 @@ void setDisplayScreen(int idx);
 int getDisplayScreen();
 void setDisplayInvert(bool inv);
 
-class WiFiClient;
-bool captureDisplayBmp(WiFiClient &client, int screenIdx = -1);
+class Print;
+bool captureDisplayBmp(Print &client, int screenIdx = -1);
 
 // Backlight control on the boards whose backlight is LEDC channel 0 (M5StickC
 // Plus2: GPIO27, set up in tDisplayV1Driver.cpp) and set

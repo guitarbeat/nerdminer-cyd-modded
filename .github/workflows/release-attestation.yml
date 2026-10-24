@@ -34,6 +34,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
 
+      - name: Mining starvation guard
+        run: python3 scripts/check_mining_starvation.py
+
       - name: Compile Target Environments
         run: |
           pio run -e ESP32-2432S028R-BL27 \

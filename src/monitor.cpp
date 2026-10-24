@@ -1035,12 +1035,16 @@ pool_data getPoolData(void){
               if (heliosPool && heliosJudgeAnswer(httpCode, pData.workersCount))
                   mPoolUpdate = millis() - (UPDATE_POOL_min * 60 * 1000 - HELIOS_RETRY_ms);
 #endif
-              Serial.println("\n####### Pool Data OK!");
+              extern volatile bool g_serialMuted;
+              if (!g_serialMuted) Serial.println("\n####### Pool Data OK!");
           } else {
-              Serial.println("\n####### Pool Data HTTP Error!");
-              Serial.println(httpCode);
-              String payload = http.getString();
-              Serial.println(payload);
+              extern volatile bool g_serialMuted;
+              if (!g_serialMuted) {
+                Serial.println("\n####### Pool Data HTTP Error!");
+                Serial.println(httpCode);
+                String payload = http.getString();
+                Serial.println(payload);
+              }
               // Must still back off on failure, or a persistently-failing
               // pool API gets hammered every ~2s instead of once a minute —
               // enough to trip some pools' WAF/anti-abuse rate limiting and

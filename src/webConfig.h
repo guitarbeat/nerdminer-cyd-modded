@@ -6,5 +6,7 @@
 // to change pool/wallet/etc. Protected by HTTP basic auth (see webConfig.cpp).
 void setup_webConfig(void);
 void webConfigProcess(void);
+String getStatsJson(void);
+extern volatile bool g_serialMuted;
 
 #endif // _WEBCONFIG_H

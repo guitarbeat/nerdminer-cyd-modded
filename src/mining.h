@@ -206,6 +206,46 @@ uint32_t getShareHistorySeq(void); // bumps on every new share (change detection
 double getPoolDifficulty(void);    // difficulty the pool asked for (mining.set_difficulty)
 void clearShareHistory(void);
 
+// --- Attempt sampler (Mine "RECENT ATTEMPTS" MISS lane) ----------------------
+// A bounded ring of REAL hash results, two honest sources, tagged by sign:
+//  * TAP  (diff > 0): a uniform 1-in-HASH_TAP_EVERY tap of the background SW
+//    miner (core 0). Every tapped nonce gets a full double-SHA (the normal SW
+//    path exits early on non-candidates), so these are unbiased samples of
+//    ordinary attempts. Cost: one counter decrement per SW hash + one extra
+//    hash per tap; the core-1 HW loop is untouched.
+//  * CAND (diff < 0, store -diff): HW/SW candidates that cleared the 16-bit
+//    prefilter (diff >= ~1.5e-5), i.e. real near-misses; rate-gated.
+// Lane class (MISS / SHARE / BLOCK) is decided at draw time vs the pool and
+// network targets, never on the hot path.
+#define HASH_SAMP_N 360
+#define HASH_TAP_EVERY 256u
+struct HashSampleRec
+{
+  float diff;  // >0 uniform tap, <0 prefilter candidate (magnitude = difficulty)
+  uint32_t ms; // millis() when sampled
+};
+int getHashSamples(HashSampleRec *out, int max); // oldest..newest; returns count
+uint32_t getHashSampleSeq(void);                 // bumps on every new sample
+void noteCandidate(double diff, const uint8_t *hashLE); // local miners: 16-bit prefilter hit
+
+// Attempt accounting (session = since boot unless noted). MISS = attempts
+// that did not reach the pool share target = attemptsSession - found.
+// Blocks are a subset of found shares (a block hash also beats pool diff).
+struct AttemptCounters
+{
+  double attemptsTotal;   // lifetime hashes (Mhashes*1e6 + hashes, persisted)
+  double attemptsSession; // hashes since boot
+  double missSession;     // attemptsSession - found
+  uint32_t candidates;    // 16-bit prefilter hits (local miners)
+  uint32_t found;         // results >= pool share target (before stale-job drop)
+  uint32_t submitted;     // sent to the pool
+  uint32_t accepted;      // pool accepted
+  uint32_t rejected;      // pool refused
+  uint32_t blocks;        // >= network target (valids)
+  uint32_t taps;          // uniform tap samples taken
+};
+AttemptCounters getAttemptCounters(void);
+
 // Per-pool stats (see mining.cpp): shares, best diff, blocks and the share
 // ring are kept per "host:port", up to POOLSTAT_N pools (LRU).
 #define POOLSTAT_N 8

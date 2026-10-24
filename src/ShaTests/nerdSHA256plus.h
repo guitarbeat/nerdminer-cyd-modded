@@ -31,6 +31,7 @@ IRAM_ATTR bool nerd_sha256d(nerdSHA256_context* midstate, const uint8_t* dataIn,
 
 IRAM_ATTR void nerd_sha256_bake(const uint32_t* digest, const uint8_t* dataIn, uint32_t* bake);  //15 words
 IRAM_ATTR bool nerd_sha256d_baked(const uint32_t* digest, const uint8_t* dataIn, const uint32_t* bake, uint8_t* doubleHash);
+bool nerd_sha256d_baked_full(const uint32_t* digest, const uint8_t* dataIn, const uint32_t* bake, uint8_t* doubleHash); // no early exit (sampler tap)
 
 void ByteReverseWords(uint32_t* out, const uint32_t* in, uint32_t byteCount);
 

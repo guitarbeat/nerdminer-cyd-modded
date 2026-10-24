@@ -296,10 +296,10 @@ int getDisplayScreen()
 }
 
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
-bool esp32_2432S028R_CaptureBmp(WiFiClient &client, int screenIdx);
+bool esp32_2432S028R_CaptureBmp(Print &client, int screenIdx);
 #endif
 
-bool captureDisplayBmp(WiFiClient &client, int screenIdx)
+bool captureDisplayBmp(Print &client, int screenIdx)
 {
 #if defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)
   return esp32_2432S028R_CaptureBmp(client, screenIdx);

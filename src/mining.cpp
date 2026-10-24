@@ -134,6 +134,97 @@ static uint8_t s_roundBestHash[32]; // little-endian, like the miners' digests
 static bool s_roundBestHashOk = false;
 char g_lastWinnerHashHex[65] = "";  // winning block hash, printed form (leading zeros first)
 
+// --- Attempt sampler (Mine "RECENT ATTEMPTS" MISS lane) -- see mining.h -------
+// Two real sources, both OFF the core-1 HW hot loop's per-hash path:
+//  * uniform TAP from the core-0 SW miner (1 in HASH_TAP_EVERY nonces, full
+//    double-SHA recomputed for that one nonce), rate-capped at ~4/s;
+//  * prefilter CANDIDATES (already-computed real hashes), rate-capped ~2/s.
+static HashSampleRec s_hsamp[HASH_SAMP_N];
+static uint16_t s_hsHead = 0, s_hsCount = 0;
+static volatile uint32_t s_hsSeq = 0;
+static uint32_t s_tapLastMs = 0, s_candLastMs = 0;
+static portMUX_TYPE s_hsMux = portMUX_INITIALIZER_UNLOCKED;
+static volatile uint32_t s_candidates = 0; // 16-bit prefilter hits (local miners)
+static volatile uint32_t s_sharesFound = 0, s_sharesSubmitted = 0;
+static volatile uint32_t s_taps = 0;
+static uint64_t s_bootAttempts = 0;
+static bool s_bootAttemptsSet = false;
+
+static void hashSamplePut(float signedDiff, uint32_t ms)
+{
+  portENTER_CRITICAL(&s_hsMux);
+  s_hsamp[s_hsHead].diff = signedDiff;
+  s_hsamp[s_hsHead].ms = ms;
+  s_hsHead = (uint16_t)((s_hsHead + 1) % HASH_SAMP_N);
+  if (s_hsCount < HASH_SAMP_N)
+    s_hsCount++;
+  s_hsSeq++;
+  portEXIT_CRITICAL(&s_hsMux);
+}
+
+// SW miner, every HASH_TAP_EVERY-th nonce (never inlined into the loop).
+static void __attribute__((noinline)) hashTapSw(const uint32_t *mid, const uint8_t *data, const uint32_t *bake)
+{
+  const uint32_t now = millis();
+  if (s_tapLastMs && (uint32_t)(now - s_tapLastMs) < 250)
+    return;
+  s_tapLastMs = now;
+  uint8_t h[32];
+  nerd_sha256d_baked_full(mid, data, bake, h);
+  const double d = diff_from_target(h);
+  if (!(d > 0.0) || !(d < 1e30))
+    return;
+  s_taps++;
+  hashSamplePut((float)d, now);
+}
+
+// Local miners: a hash that cleared the 16-bit prefilter (~12/s at 800 KH/s).
+void noteCandidate(double diff, const uint8_t *hashLE)
+{
+  if (diff > 0.0)
+  {
+    s_candidates++;
+    const uint32_t now = millis();
+    if (!s_candLastMs || (uint32_t)(now - s_candLastMs) >= 500)
+    {
+      s_candLastMs = now;
+      if (diff < 1e30)
+        hashSamplePut(-(float)diff, now);
+    }
+  }
+  updateBestDiff(diff, hashLE);
+}
+
+int getHashSamples(HashSampleRec *out, int max)
+{
+  portENTER_CRITICAL(&s_hsMux);
+  int n = s_hsCount < max ? s_hsCount : max;
+  for (int i = 0; i < n; i++)
+    out[i] = s_hsamp[(s_hsHead + HASH_SAMP_N - n + i) % HASH_SAMP_N];
+  portEXIT_CRITICAL(&s_hsMux);
+  return n;
+}
+
+uint32_t getHashSampleSeq(void) { return s_hsSeq; }
+
+AttemptCounters getAttemptCounters(void)
+{
+  AttemptCounters c;
+  const uint64_t tot = (uint64_t)Mhashes * 1000000ULL + hashes; // two plain reads; a fold in between is rare
+  c.attemptsTotal = (double)tot;
+  c.attemptsSession = (s_bootAttemptsSet && tot >= s_bootAttempts) ? (double)(tot - s_bootAttempts) : 0.0;
+  c.found = s_sharesFound;
+  c.missSession = c.attemptsSession > c.found ? c.attemptsSession - c.found : 0.0;
+  c.candidates = s_candidates;
+  c.submitted = s_sharesSubmitted;
+  const MinerStatus m = getMinerStatus();
+  c.accepted = m.accepted;
+  c.rejected = m.rejected;
+  c.blocks = valids;
+  c.taps = s_taps;
+  return c;
+}
+
 void updateBestDiff(double diff, const uint8_t *hashLE)
 {
   // The round best is never above the all-time best, so one unlocked look at
@@ -1389,6 +1480,8 @@ void runStratumWorker(void *name) {
       g_currentBlockHashes += res->nonce_count;
       if (res->nonce != 0xFFFFFFFF)
         updateBestDiff(res->difficulty, res->hash); // I2C slave results (local miners already did it)
+      if (res->difficulty > currentPoolDifficulty && res->nonce != 0xFFFFFFFF)
+        s_sharesFound++; // met the pool share target (a stale-job one is dropped below)
       if (res->difficulty > currentPoolDifficulty && job_pool == res->id && res->nonce != 0xFFFFFFFF)
       {
         hashSamplePushDigest(res->hash);
@@ -1396,12 +1489,17 @@ void runStratumWorker(void *name) {
           break;
         unsigned long sumbit_id = 0;
         tx_mining_submit(client, mWorker, mJob, res->nonce, sumbit_id);
-        Serial.print("   - Current diff share: "); Serial.println(res->difficulty,12);
-        Serial.print("   - Current pool diff : "); Serial.println(currentPoolDifficulty,12);
-        Serial.print("   - TX SHARE: ");
-        for (size_t i = 0; i < 32; i++)
-            Serial.printf("%02x", res->hash[i]);
-        Serial.println("");
+        s_sharesSubmitted++;
+        extern volatile bool g_serialMuted;
+        if (!g_serialMuted)
+        {
+          Serial.print("   - Current diff share: "); Serial.println(res->difficulty,12);
+          Serial.print("   - Current pool diff : "); Serial.println(currentPoolDifficulty,12);
+          Serial.print("   - TX SHARE: ");
+          for (size_t i = 0; i < 32; i++)
+              Serial.printf("%02x", res->hash[i]);
+          Serial.println("");
+        }
         mLastTXtoPool = millis();
 
         std::shared_ptr<Submition> submition = std::make_shared<Submition>();
@@ -1432,6 +1530,7 @@ void minerWorkerSw(void * task_id)
   std::shared_ptr<JobRequest> job;
   std::shared_ptr<JobResult> result;
   uint8_t hash[32];
+  uint32_t swTap = HASH_TAP_EVERY;
   uint32_t wdt_counter = 0;
   #ifdef DEBUG_MINING
   volatile uint32_t *myDebugCounter = &debugHashesSw[miner_id & 1];
@@ -1479,12 +1578,17 @@ void minerWorkerSw(void * task_id)
           g_cycleProfile.sw_cycles_per_hash = (g_cycleProfile.sw_cycles_per_hash * 15 + sw_cycles) / 16;
         g_cycleProfile.total_sw_hashes++;
         g_cryptoAudit.sw_nonce_cursor = nonce_n;
+        if (--swTap == 0) // uniform attempt-sampler tap: dec+compare per hash
+        {
+          swTap = HASH_TAP_EVERY;
+          hashTapSw(job->midstate, job->sha_buffer + 64, job->bake);
+        }
 
         if (sw_hit)
         {
           double diff_hash = diff_from_target(hash);
           pushCryptoAuditSample(nonce_n, diff_hash, hash);
-          updateBestDiff(diff_hash, hash);
+          noteCandidate(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             result->difficulty = diff_hash;
@@ -1860,7 +1964,7 @@ void minerWorkerHw(void * task_id)
               debugPipelinedHwSwMismatch++;
             #endif
             const double cand_diff = confirmed && isSha256Valid(sw_hash) ? diff_from_target(sw_hash) : 0.0;
-            updateBestDiff(cand_diff, sw_hash);
+            noteCandidate(cand_diff, sw_hash);
             if (cand_diff > job->difficulty)
             {
               // A share: hand it over now, not when the chunk ends (a job
@@ -1959,7 +2063,7 @@ void minerWorkerHw(void * task_id)
           //~5 per second
           double diff_hash = diff_from_target(hash);
           if (isSha256Valid(hash))
-            updateBestDiff(diff_hash, hash);
+            noteCandidate(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             if (isSha256Valid(hash))
@@ -2517,7 +2621,7 @@ void minerWorkerHw(void * task_id)
           #endif
 
           const double cand_diff = confirmed && isSha256Valid(sw_hash) ? diff_from_target(sw_hash) : 0.0;
-          updateBestDiff(cand_diff, sw_hash);
+          noteCandidate(cand_diff, sw_hash);
           if (cand_diff > 0.0)
             pushCryptoAuditSample(cand_native_pl, cand_diff, sw_hash);
           if (cand_diff > job->difficulty)
@@ -2610,7 +2714,7 @@ void minerWorkerHw(void * task_id)
           //~5 per second
           double diff_hash = diff_from_target(hash);
           if (isSha256Valid(hash))
-            updateBestDiff(diff_hash, hash);
+            noteCandidate(diff_hash, hash);
           if (diff_hash > result->difficulty)
           {
             if (isSha256Valid(hash))
@@ -3270,6 +3374,8 @@ void runMonitor(void *name)
   uint32_t uptime_frac = 0;
   s_bootKh = totalKHashes;
   s_bootMs = last_update_millis;
+  s_bootAttempts = (uint64_t)Mhashes * 1000000ULL + hashes;
+  s_bootAttemptsSet = true;
   statusRateSample(s_bootKh, s_bootMs);
 
   while (1)

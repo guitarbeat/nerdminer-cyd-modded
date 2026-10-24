@@ -5,6 +5,7 @@
 #include <Update.h>
 #include <ArduinoJson.h>
 #include <esp_timer.h>
+#include <esp_log.h>
 #include "webConfig.h"
 #include "wManager.h"
 #include "drivers/storage/storage.h"
@@ -405,17 +406,9 @@ static void handleGetScreen()
 
 static void handleSetScreen()
 {
-  int scr = 0;
-  if (webCfgServer.hasArg("id"))
-    scr = webCfgServer.arg("id").toInt();
-  else if (webCfgServer.hasArg("screen"))
-    scr = webCfgServer.arg("screen").toInt();
-
-  if (scr < 0 || scr > 1) // Mine, Odds (the old World page = 2 maps to Mine)
-    scr = 0;
-
-  setDisplayScreen(scr);
-  String json = "{\"status\":\"ok\",\"screen\":" + String(scr) + "}";
+  // Single-screen unified dashboard: all screen requests map to 0
+  setDisplayScreen(0);
+  String json = "{\"status\":\"ok\",\"screen\":0}";
   webCfgServer.send(200, "application/json", json);
 }
 
@@ -1563,14 +1556,13 @@ static void handleRoot()
             "<line x1='30' y1='16' x2='30' y2='112' stroke='#3a4658'/><line x1='54' y1='16' x2='54' y2='112' stroke='#3a4658'/>"
             "<g stroke-width='3'><line x1='31' y1='110' x2='53' y2='110' stroke='#f7931a'/><line x1='31' y1='103' x2='53' y2='103' stroke='#f7931a'/><line x1='31' y1='96' x2='53' y2='96' stroke='#3a4658'/><line x1='31' y1='89' x2='53' y2='89' stroke='#3a4658'/><line x1='31' y1='82' x2='53' y2='82' stroke='#3a4658'/><line x1='31' y1='75' x2='53' y2='75' stroke='#3a4658'/><line x1='31' y1='68' x2='53' y2='68' stroke='#3a4658'/><line x1='31' y1='61' x2='53' y2='61' stroke='#3a4658'/><line x1='31' y1='54' x2='53' y2='54' stroke='#3a4658'/><line x1='31' y1='47' x2='53' y2='47' stroke='#3a4658'/><line x1='31' y1='40' x2='53' y2='40' stroke='#3a4658'/><line x1='31' y1='33' x2='53' y2='33' stroke='#3a4658'/><line x1='31' y1='26' x2='53' y2='26' stroke='#3a4658'/><line x1='31' y1='18' x2='53' y2='18' stroke='#f59e0b'/></g>"
             "<text x='66' y='22' fill='#f59e0b'>block (jackpot)</text><text x='66' y='113' fill='#f7931a'>your closest try</text>"
-            "<text x='200' y='50' fill='#e6edf3'>The ODDS screen is a ladder.</text>"
+            "<text x='200' y='50' fill='#e6edf3'>The shares figure is a ladder.</text>"
             "<text x='200' y='68' fill='#8a96a8'>Each rung is 10x harder than the one below.</text>"
             "<text x='200' y='86' fill='#8a96a8'>Lit rungs = how far your best guess climbed.</text>"
             "<text x='200' y='104' fill='#8a96a8'>Dots = your shares, oldest to newest.</text>"
             "</g></svg>"
-            "<p style='margin:10px 0 4px'><strong>The two screens</strong> (tap the right half of the CYD for the next one, the left half to go back):</p>"
-            "&bull; <strong>MINE</strong> &ndash; what is my miner doing right now? The top bar shows your block trophy (blocks <em>your</em> CYD found) and the time; the coin and pool are shown here on the web page. The half-circle dial rises into the top bar, between the trophy and the clock; it is <em>guesses / sec</em> (outer orange arc, filling left to right). Under it, the middle ring spells out your best hash this round, one hex digit per cell (leading zeros lit magenta: the only zeros count on the dial). The inner blue ring is your guesses this round; full = what you'd make in one typical block time of the coin you mine (10 min on Bitcoin, 1 min on POL/FXTC, 20 min on EMB) at your average speed (it stays full if a round runs long; then the line under the speed says e.g. <em>1.4x AVG ROUND</em>: this round already took 1.4 times the guesses of a typical round). When anyone on the network finds a block, both empty and start over, because all earlier work is thrown away; the screen then shows <em>NEW #N</em> (the new block's height, found by someone else, not you) and <em>ZEROS RESET</em> for 5 s. The panel below shows your speed over the last 5 minutes: the orange line is a short rolling average of your speed (the mean of the last ~8 seconds, so single slow or fast seconds don't spike it) and moves inside a fixed band of your average &plusmn;15% (numbers on the right; it only re-centres if your average shifts more than 5%), white marks on the edges are spikes outside the band, the dashed line is your average (the <em>5m AVG</em> number, updated once a minute), the dot is now, <em>New zero records</em> (the last 3 times your best zeros count went up this round, with how long ago) and <em>Guesses</em> this round (blue, like the inner ring). <em>Proofs sent</em> = shares the pool accepted (they prove the miner works; on a solo pool they earn nothing). <em>Pool</em> = online / linking / refused. <em>Proof every</em> = how often a share should arrive at your speed.<br>"
-            "&bull; <strong>ODDS</strong> &ndash; how close am I to winning? <em>Closest try</em>: your best guess this round (big number) and <em>need 141T</em>, what a block needs (both are difficulty: higher = rarer); <em>1 in 4.5T</em> means it would need to be 4.5 trillion times better. The ladder plots every share (gold = your best); the dashed line at the top, <em>NEED 141T</em>, is the block target. <em>Your wait</em> = average time for your CYD alone to find a block: network difficulty &times; 2<sup>32</sup> &divide; your guesses per second; for Bitcoin it is billions of years, which is why solo mining on a CYD is a lottery ticket, not an income. <em>Your odds</em> = your chance of winning any one block. <em>Last block - anyone</em> (or <em>Network block</em> when space is short): someone on the network, not you, found a block X ago (about one every 10 minutes on Bitcoin; 1 min on POL/FXTC, 20 min on EMB); <em>you: N tries</em> is how many guesses your CYD made since.<br>"
+            "<p style='margin:10px 0 4px'><strong>The on-device screen (MINE)</strong>:</p>"
+            "&bull; <strong>MINE</strong> &ndash; unified live mining dashboard. The top bar shows your block trophy (blocks <em>your</em> CYD found) and the time; the coin and pool are shown here on the web page. The half-circle dial rises into the top bar: <em>guesses / sec</em> (outer orange arc), your best hash this round (middle ring, leading zeros lit magenta), and your guesses this round (inner blue ring). Under the dial, <strong>Closest try</strong> shows your best difficulty in magenta vs what a block needs, with <strong>1 in N</strong> to a block and your round <strong>Guesses</strong> in blue. Below it, the <strong>5m speed microchart</strong> plots your 8-second rolling mean speed inside a fixed &plusmn;15% band around your held average, switching to <em>NEW #N</em> and <em>ZEROS RESET</em> for 5 s when any network block lands. At the bottom, the <strong>Multifunctional shares ladder</strong> plots every share as a dot (magenta = your best), zero-record diamonds, and the gold <em>NEED</em> block target line.<br>"
             "<p style='margin:10px 0 4px'><strong>Network numbers</strong> (here on the web page; the CYD no longer has a WORLD screen):</p>"
             "&bull; <em>Share of network</em>: your slice of all the guessing in the world (computed from the difficulty, so it works offline). <em>Difficulty</em> = how hard the puzzle is; it adjusts so a block is found about once per block time (10 minutes on Bitcoin). <em>Block height</em> = blocks so far (read from the pool's job). <em>Next halving</em>: every 210,000 blocks (~4 years) the reward per block is cut in half. Price and fee show when the price service answers.<br>"
             "<span class='muted'>Aaron Miner is built on the open-source <a href='https://github.com/BitMaker-hub/NerdMiner_v2' target='_blank' rel='noopener'>NerdMiner</a> project and its community forks. Thank you to everyone who built it.</span>"
@@ -1888,7 +1880,7 @@ static void handleSave()
 static void handleStatus()
 {
   const MinerStatus m = getMinerStatus();
-  DynamicJsonDocument doc(1536);
+  DynamicJsonDocument doc(2048);
   doc["version"] = CURRENT_VERSION;
   doc["fw"] = FW_GIT;
   doc["uptime_s"] = (uint32_t)(esp_timer_get_time() / 1000000ULL); // 64-bit clock: millis() wraps after 49.7 days
@@ -1905,6 +1897,23 @@ static void handleStatus()
   doc["blocks_found"] = valids;
   doc["shares_accepted"] = m.accepted;
   doc["shares_rejected"] = m.rejected;
+  {
+    // Attempt accounting (new keys; existing keys above unchanged). Session =
+    // since boot. miss = attempts that did not reach the pool share target.
+    const AttemptCounters ac = getAttemptCounters();
+    JsonObject at = doc.createNestedObject("attempts");
+    at["total"] = ac.attemptsTotal;        // lifetime hashes
+    at["session"] = ac.attemptsSession;    // hashes since boot
+    at["miss_session"] = ac.missSession;   // session - shares_found
+    at["candidates"] = ac.candidates;      // 16-bit prefilter hits
+    at["shares_found"] = ac.found;         // >= pool share target
+    at["shares_submitted"] = ac.submitted; // sent to the pool
+    at["shares_accepted"] = ac.accepted;   // pool accepted
+    at["shares_rejected"] = ac.rejected;   // pool refused (the only "rejected")
+    at["blocks"] = ac.blocks;              // >= network target
+    at["tap_samples"] = ac.taps;           // uniform sampler taps taken
+    at["tap_every"] = HASH_TAP_EVERY;      // 1 tap per N SW-miner nonces
+  }
   JsonObject pool = doc.createNestedObject("pool");
   pool["address"] = activePoolAddress();
   pool["port"] = activePoolPort();
@@ -2080,9 +2089,62 @@ void setup_webConfig(void)
   Serial.println("/  (upstream monitor: /monitor)");
 }
 
+volatile bool g_serialMuted = false;
+
+String getStatsJson(void)
+{
+  mining_data d = getMiningData(0);
+  return buildStatsJson(d);
+}
+
 void webConfigProcess(void)
 {
   historyTick(); // also before the server is up, so the graph has the full hour
   if (webCfgStarted)
     webCfgServer.handleClient();
+
+  static char s_cmdBuf[32];
+  static uint8_t s_cmdLen = 0;
+  while (Serial.available())
+  {
+    char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n')
+    {
+      s_cmdBuf[s_cmdLen] = '\0';
+      if (s_cmdLen > 0)
+      {
+        if (strncmp(s_cmdBuf, "SHOT", 4) == 0)
+        {
+          int screenIdx = 0;
+          int rot = -1;
+          sscanf(s_cmdBuf + 4, "%d %d", &screenIdx, &rot);
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+          extern void cydSetShotRotation(int r);
+          cydSetShotRotation(rot);
+#endif
+          g_serialMuted = true;
+          esp_log_level_set("*", ESP_LOG_NONE);
+          delay(40);
+          while (Serial.available()) Serial.read();
+          Serial.println(F(">>>BMP_BEGIN 77878<<<"));
+          captureDisplayBmp(Serial, screenIdx);
+          Serial.println(F("\n>>>BMP_END<<<"));
+          esp_log_level_set("*", ESP_LOG_WARN);
+          g_serialMuted = false;
+        }
+        else if (strcmp(s_cmdBuf, "STATS") == 0)
+        {
+          Serial.println(F(">>>STATS_BEGIN<<<"));
+          Serial.println(getStatsJson());
+          Serial.println(F(">>>STATS_END<<<"));
+        }
+      }
+      s_cmdLen = 0;
+    }
+    else if (s_cmdLen < sizeof(s_cmdBuf) - 1)
+    {
+      s_cmdBuf[s_cmdLen++] = c;
+    }
+  }
 }

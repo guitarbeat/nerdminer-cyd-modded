@@ -260,16 +260,8 @@ static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
            height='320'>
     </div>
     <div class='cyd-shot-cap'><span id='cyd-shot-ts'></span></div>
-    <div class='cyd-tabs' role='tablist'>
-      <button type='button' class='cyd-tab-btn active' id='ctab-0' onclick='cydSelectTab(0)'>
-        <span class='cyd-live-dot' title='On the device now'></span>Mine
-      </button>
-      <button type='button' class='cyd-tab-btn' id='ctab-1' onclick='cydSelectTab(1)'>Odds</button>
-    </div>
     <div class='cyd-ctrls'>
-      <button type='button' class='cyd-btn-nav' onclick='cydPrevScreen()' title='Previous screen'>&larr; Prev</button>
-      <button type='button' class='cyd-btn-switch' id='cyd-switch-btn' onclick='cydSwitchPhysical()'>Show Mine on device</button>
-      <button type='button' class='cyd-btn-nav' onclick='cydNextScreen()' title='Next screen'>Next &rarr;</button>
+      <button type='button' class='cyd-btn-switch' id='cyd-snap-btn' onclick='cydSnapshot()'>Refresh preview</button>
       <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview is portrait; click to rotate'>Rotate preview</button>
     </div>
   </div>
@@ -286,8 +278,8 @@ let cydTabSynced = false;    // first stats: line the tabs up with the device
 let cydIsLoading = false;
 let cydPendingRefresh = false;
 
-const CYD_SCREEN_NAMES = ['Mine', 'Odds'];
-const CYD_SCREEN_COUNT = CYD_SCREEN_NAMES.length;
+const CYD_SCREEN_NAMES = ['Mine'];
+const CYD_SCREEN_COUNT = 1;
 
 function cydGetScreenUrl(screenIdx) {
   const s = (typeof screenIdx === 'number') ? screenIdx : cydPreviewScr;

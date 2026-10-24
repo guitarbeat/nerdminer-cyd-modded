@@ -220,7 +220,9 @@ miner_data calculateMiningData(mining_subscribe& mWorker, mining_job mJob){
     int zeros = (int) strtol(mJob.nbits.substring(0, 2).c_str(), 0, 16) - 3;
     memcpy(target + zeros - 2, mJob.nbits.substring(2).c_str(), mJob.nbits.length() - 2);
     target[TARGET_BUFFER_SIZE] = 0;
+    #ifdef DEBUG_MINING
     Serial.print("    target: "); Serial.println(target);
+    #endif
     
     // bytearray target
     size_t size_target = to_byte_array(target, 32, mMiner.bytearray_target);
@@ -256,7 +258,9 @@ miner_data calculateMiningData(mining_subscribe& mWorker, mining_job mJob){
     snprintf(coinbase_buffer, sizeof(coinbase_buffer), "%s%s%s%s", 
              mJob.coinb1.c_str(), mWorker.extranonce1.c_str(), 
              mWorker.extranonce2.c_str(), mJob.coinb2.c_str());
+    #ifdef DEBUG_MINING
     Serial.print("    coinbase: "); Serial.println(coinbase_buffer);
+    #endif
     size_t str_len = strlen(coinbase_buffer)/2;
     uint8_t bytearray[str_len];
 
@@ -264,7 +268,9 @@ miner_data calculateMiningData(mining_subscribe& mWorker, mining_job mJob){
 
     #ifdef DEBUG_MINING
     Serial.print("    extranonce2: "); Serial.println(mWorker.extranonce2);
+    #ifdef DEBUG_MINING
     Serial.print("    coinbase: "); Serial.println(coinbase_buffer);
+    #endif
     Serial.print("    coinbase bytes - size: "); Serial.println(res);
     for (size_t i = 0; i < res; i++)
         Serial.printf("%02x", bytearray[i]);
@@ -339,14 +345,18 @@ miner_data calculateMiningData(mining_subscribe& mWorker, mining_job mJob){
     }
     // merkle root from merkle_result
     
-    Serial.print("    merkle sha         : ");
     char merkle_root[65];
     for (int i = 0; i < 32; i++) {
-      Serial.printf("%02x", mMiner.merkle_result[i]);
       snprintf(&merkle_root[i*2], 3, "%02x", mMiner.merkle_result[i]);
     }
     merkle_root[64] = 0; // 64 hex digits; [65] was one byte past the end
+    #ifdef DEBUG_MINING
+    Serial.print("    merkle sha         : ");
+    for (int i = 0; i < 32; i++) {
+      Serial.printf("%02x", mMiner.merkle_result[i]);
+    }
     Serial.println("");
+    #endif
 
     // calculate blockheader
     // j.block_header = ''.join([j.version, j.prevhash, merkle_root, j.ntime, j.nbits])
