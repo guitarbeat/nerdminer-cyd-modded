@@ -1715,7 +1715,7 @@ static void handleSave()
   if (webCfgServer.hasArg("pool"))
     next.PoolAddress = webCfgServer.arg("pool");
   if (webCfgServer.hasArg("port"))
-    next.PoolPort = webCfgServer.arg("port").toInt();
+    next.PoolPort = constrain(webCfgServer.arg("port").toInt(), 0, 65535); // like fbport (upstream #8)
   if (webCfgServer.hasArg("fbpool"))
   {
     next.FallbackPoolAddress = webCfgServer.arg("fbpool");
@@ -1730,7 +1730,7 @@ static void handleSave()
   if (webCfgServer.hasArg("wallet"))
     strncpy(next.BtcWallet, webCfgServer.arg("wallet").c_str(), sizeof(next.BtcWallet) - 1);
   if (webCfgServer.hasArg("tz"))
-    next.Timezone = webCfgServer.arg("tz").toInt();
+    next.Timezone = constrain(webCfgServer.arg("tz").toInt(), -12, 14);
   if (webCfgServer.hasArg("currency"))
     next.Currency = currencyFor(webCfgServer.arg("currency")).code;
   if (webCfgServer.hasArg("mempool"))
@@ -1915,8 +1915,13 @@ static void handleStatus()
     at["tap_every"] = HASH_TAP_EVERY;      // 1 tap per N SW-miner nonces
   }
   JsonObject pool = doc.createNestedObject("pool");
-  pool["address"] = activePoolAddress();
-  pool["port"] = activePoolPort();
+  {
+    // The stratum task swaps a new pool into Settings under this mutex
+    // (takePoolChange); this runs on the other core, so copy it under it too.
+    std::lock_guard<std::mutex> lock(g_settingsMutex);
+    pool["address"] = activePoolAddress();
+    pool["port"] = activePoolPort();
+  }
   pool["backup"] = onBackupPool();
   pool["subscribed"] = m.subscribed;
   pool["difficulty"] = m.poolDifficulty;
