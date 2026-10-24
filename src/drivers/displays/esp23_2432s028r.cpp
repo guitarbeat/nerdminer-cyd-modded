@@ -273,6 +273,7 @@ enum WidgetId
   W_CONVEYOR, // MINE: animated mini conveyor machine
   W_ATT_DOTS, // MINE RECENT ATTEMPTS: point layer
   W_ATT_BINS, // MINE RECENT ATTEMPTS: MISS/SHARE/BLOCK bins
+  W_ATT_PILLS, // MINE RECENT ATTEMPTS: window share/block pills on the lane dividers
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -1737,15 +1738,7 @@ static void drawClosestTry(const Rect &r, const MineV &m)
 // (measured: ~5 redraws/s dropped ~1000 KH/s to ~690). Do not lower these.
 #define ATT_DOTS_MIN_MS 1000     // dot layer (text-free): at most once per second
 #define ATT_MISS_BIN_MIN_MS 5000 // MISS bin counter: at most every 5 s
-static uint8_t g_attWin = 0; // 0=15s 1=30s 2=60s (tab row; touch-selectable)
-static const uint16_t kAttWinSec[3] = {15, 30, 60};
-static Rect attTabRect(int i)
-{
-  const Rect r = mineChartRect();
-  const int tw = 28, gap = 3;
-  const int x = r.x + r.w - 4 - (3 - i) * tw - (2 - i) * gap;
-  return Rect{x, r.y + 2, tw, 14};
-}
+#define ATT_WIN_SEC 60 // fixed time window (the 15s/30s/60s tabs were removed)
 static void fmtCompact(double v, char *out, size_t n)
 {
   if (v < 10000.0) snprintf(out, n, "%lu", (unsigned long)(v + 0.5));
@@ -1773,7 +1766,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   if (netKnown) fmtDiff(netD, netS, sizeof(netS)); else snprintf(netS, sizeof(netS), "net");
   fmtDiff(poolD, poolS, sizeof(poolS));
 
-  const uint32_t win = kAttWinSec[g_attWin < 3 ? g_attWin : 0];
+  const uint32_t win = ATT_WIN_SEC;
   const double LMIN = -9.632959861; // log10(2^-32): smallest possible difficulty
   const double lPool = log10(poolD), lNet = log10(netD);
   const uint16_t tapCol = mix565(C_BEST, C_BG, 110);
@@ -1782,11 +1775,11 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   // PERF: the plot is split into three layers with separate keys. Measured:
   // repainting the whole 228x222 figure (all its text) every second starved
   // the stratum/job feed (chunk gaps ~28M cycles, ~690 KH/s vs ~930 without).
-  //  frame : titles, tabs, lane headers, age labels -- only on threshold/window change
+  //  frame : lane header band -- only on threshold/window change
   //  dots  : text-free point layer -- at most once per second
   //  bins  : counters -- on share/block change, MISS value at most every 5 s
   char kf[96];
-  snprintf(kf, sizeof(kf), "rf3|%s|%s|%u|%d|%u", netS, poolS, (unsigned)recEpoch, P ? 1 : 0, (unsigned)win);
+  snprintf(kf, sizeof(kf), "rf4|%s|%s|%u|%d|%u", netS, poolS, (unsigned)recEpoch, P ? 1 : 0, (unsigned)win);
   const bool frame = need(W_PROTO_PLOT, kf);
 
   if (!P)
@@ -1817,18 +1810,31 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   }
 
   // ---- portrait geometry (shared by the layers) ----
-  const int ageW = 22;
+  const int ageW = 3; // no NOW / -30s / -60s labels: lanes use the full width
   const int x0 = r.x + 2;
   const int x1 = r.x + r.w - ageW;
   const int colW = (x1 - x0) / 3;
-  const int cratesH = 54;
+  const int cratesH = 44; // flat outlined bins
   const int cratesTop = r.y + r.h - cratesH - 2;
-  const int yHdr = r.y + 21;
-  const int yTop = yHdr + 26; // NOW
+  const int yHdr = r.y + 2; // panel top is just the lane band (no title / tabs)
+  const int hdrH = 16;        // MISS | SHARE | BLOCK band
+  const int yTop = yHdr + hdrH + 5; // NOW
   const int yBot = cratesTop - 9;
   const int H = yBot - yTop;
   const int pad = 4;
   const int yMid = (yTop + yBot) / 2;
+  // lane look (mockup): faint per-lane tint, dashed dividers in the accent of
+  // the lane to their right, window share/block pills sitting on them
+  const uint16_t laneC[3] = {C_BEST, C_CYAN, C_GOLD};
+  // cyan washes start from a bluer cyan: 0x07FF darkened in RGB565 drifts green
+  const uint16_t kCyanWash = 0x04DF;
+  const uint16_t hdrTint[3] = {mix565(C_BEST, C_BG, 196), mix565(kCyanWash, C_BG, 190), mix565(C_GOLD, C_BG, 196)};
+  const uint16_t bodyTint[3] = {mix565(C_BEST, C_BG, 222), mix565(0x041F, C_BG, 218), mix565(C_GOLD, C_BG, 222)};
+  const uint16_t gridC[3] = {mix565(C_BEST, C_BG, 200), mix565(0x041F, C_BG, 202), mix565(C_GOLD, C_BG, 200)};
+  const uint16_t divC[3] = {0, mix565(C_CYAN, C_BG, 40), mix565(C_GOLD, C_BG, 40)};
+  const int pillW = 13, pillH = 3 * 9 + 6;
+  auto pillRect = [&](int c) -> Rect { return Rect{x0 + c * colW - pillW / 2, yMid - pillH / 2, pillW, pillH}; };
+  static uint16_t s_winShares = 0, s_winBlocks = 0; // counted on the dots tick (<= 1/s)
   auto laneX = [&](int lane, double t) -> int {
     if (t < 0) t = 0; if (t > 1) t = 1;
     const int lx0 = x0 + lane * colW + pad, lw = colW - 2 * pad;
@@ -1846,47 +1852,21 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     banded(r.x, r.y, r.w, yTop - 1 - r.y, C_BG, [&] {
       TFT_eSPI &d = out();
       d.fillRect(r.x, dY(r.y), r.w, yTop - 1 - r.y, C_BG);
-      text(d, "RECENT ATTEMPTS", r.x + 4, dY(r.y + 4), 10, C_CYAN, C_BG);
-      for (int i = 0; i < 3; i++)
-      {
-        const Rect t = attTabRect(i);
-        char lb[6]; snprintf(lb, sizeof(lb), "%us", (unsigned)kAttWinSec[i]);
-        const bool sel = i == g_attWin;
-        if (sel) d.fillRoundRect(t.x, dY(t.y), t.w, t.h, 3, mix565(C_CYAN, C_BG, 70));
-        d.drawRoundRect(t.x, dY(t.y), t.w, t.h, 3, sel ? C_CYAN : mix565(C_CYAN, C_BG, 90));
-        text(d, lb, t.x + t.w / 2, dY(t.y + 3), 9, sel ? C_TEXT : mix565(C_CYAN, C_BG, 60),
-             sel ? mix565(C_CYAN, C_BG, 70) : C_BG, Align::TopCenter);
-      }
-      const uint16_t colC[3] = {C_BEST, C_CYAN, C_GOLD};
+      // Header band: only the three lane names (thresholds live in /api/status)
       const char *colN[3] = {"MISS", "SHARE", "BLOCK"};
-      char th[3][20];
-      snprintf(th[0], sizeof(th[0]), "<%s", poolS);
-      snprintf(th[1], sizeof(th[1]), ">=%s", poolS);
-      snprintf(th[2], sizeof(th[2]), ">=%s", netS);
       for (int c = 0; c < 3; c++)
       {
-        const int cx = x0 + c * colW + colW / 2;
-        text(d, colN[c], cx, dY(yHdr), 10, colC[c], C_BG, Align::TopCenter);
-        unsigned ts = 9;
-        while (ts > 7 && textW(th[c], ts) > colW - 2) ts--;
-        text(d, th[c], cx, dY(yHdr + 11), ts, colC[c], C_BG, Align::TopCenter);
+        d.fillRect(x0 + c * colW, dY(yHdr), colW, hdrH, hdrTint[c]);
+        text(d, colN[c], x0 + c * colW + colW / 2, dY(yHdr + 3), 11, laneC[c], hdrTint[c], Align::TopCenter);
       }
-      d.drawFastHLine(x0, dY(yTop - 3), x1 - x0, mix565(C_DIM, C_BG, 160));
+      d.drawRect(x0, dY(yHdr), 3 * colW + 1, hdrH, mix565(C_DIM, C_BG, 150));
       for (int c = 1; c < 3; c++)
-        for (int y = yHdr; y < yTop - 4; y += 5) d.drawFastVLine(x0 + c * colW, dY(y), 2, C_DIM);
-      text(d, "NOW", r.x + r.w - 1, dY(yTop - 14), 9, C_TEXT, C_BG, Align::TopRight);
+        for (int y = yHdr + 1; y < yHdr + hdrH - 1; y += 4) d.drawFastVLine(x0 + c * colW, dY(y), 2, divC[c]);
     });
-    // age labels (right gutter, beside the dots layer)
+    // right edge strip (the old age-label gutter): plain background
     banded(x1 + 1, yTop - 1, r.x + r.w - x1 - 1, yBot - yTop + 2, C_BG, [&] {
       TFT_eSPI &d = out();
       d.fillRect(x1 + 1, dY(yTop - 1), r.x + r.w - x1 - 1, yBot - yTop + 2, C_BG);
-      const uint16_t ageCol = C_TEXT;
-      char midL[8], botL[8];
-      snprintf(midL, sizeof(midL), "-%us", (unsigned)(win / 2));
-      snprintf(botL, sizeof(botL), "-%us", (unsigned)win);
-      text(d, midL, r.x + r.w - 1, dY(yMid - 4), 9, ageCol, C_BG, Align::TopRight);
-      text(d, botL, r.x + r.w - 1, dY(yBot - 11), 9, ageCol, C_BG, Align::TopRight);
-      for (int yy : {yTop, yMid, yBot}) d.drawFastHLine(x1 + 1, dY(yy), 3, C_DIM);
     });
     // gap between dots and bins
     banded(r.x, yBot + 1, r.w, cratesTop - 3 - yBot - 1, C_BG, [&] {
@@ -1896,6 +1876,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     done(W_PROTO_PLOT, kf);
     wkey[W_ATT_DOTS] = "";
     wkey[W_ATT_BINS] = "";
+    wkey[W_ATT_PILLS] = "";
   }
 
   // ================= dots layer (no text) =================
@@ -1904,11 +1885,32 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   if (need(W_ATT_DOTS, kd))
   {
     const int nSamp = getHashSamples(samp, HASH_SAMP_N);
-    banded(x0, yTop - 1, x1 - x0 + 1, yBot - yTop + 2, C_BG, [&] {
+    {
+      // shares / blocks inside the window, for the divider pills
+      uint16_t ns = 0, nb = 0;
+      const uint32_t nowU = m.nowUtc;
+      for (int i = 0; i < m.nShares; i++)
+      {
+        const ShareRec &s = m.shares[i];
+        if (!s.utc || !nowU || s.diff <= 0) continue;
+        if ((nowU > s.utc ? nowU - s.utc : 0) > win) continue;
+        if (netKnown && s.diff >= netD) nb++; else ns++;
+      }
+      s_winShares = ns; s_winBlocks = nb;
+    }
+    auto body = [&] {
       TFT_eSPI &d = out();
       d.fillRect(x0, dY(yTop - 1), x1 - x0 + 1, yBot - yTop + 2, C_BG);
+      for (int c = 0; c < 3; c++)
+      {
+        const int lx = x0 + c * colW;
+        d.fillRect(lx, dY(yTop - 1), colW, yBot - yTop + 2, bodyTint[c]);
+        for (int gy = yTop + 8; gy < yBot; gy += 8) d.drawFastHLine(lx + 1, dY(gy), colW - 1, gridC[c]);
+        for (int gx = lx + 8; gx < lx + colW - 2; gx += 8) d.drawFastVLine(gx, dY(yTop), yBot - yTop, gridC[c]);
+      }
+      d.drawFastHLine(x0, dY(yMid), x1 - x0, mix565(C_DIM, C_BG, 120)); // -win/2 line
       for (int c = 1; c < 3; c++)
-        for (int y = yTop; y < yBot; y += 5) d.drawFastVLine(x0 + c * colW, dY(y), 2, C_DIM);
+        for (int y = yTop - 1; y < yBot + 1; y += 5) d.drawFastVLine(x0 + c * colW, dY(y), 2, divC[c]);
       // MISS lane: faint tick where the 16-bit prefilter starts (2^-16):
       // left of it = uniform taps, right = real near-misses.
       const int xp = laneX(0, (-4.816479931 - LMIN) / (lPool - LMIN));
@@ -1921,10 +1923,11 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         const double dv = cand ? -samp[i].diff : samp[i].diff;
         const uint32_t ageMs = nowMs - samp[i].ms;
         if (ageMs > win * 1000u || dv >= poolD || !(dv > 0)) continue; // >= pool: it is a share (share log)
-        const int x = laneX(0, (log10(dv) - LMIN) / (lPool - LMIN));
-        const int y = ageY(ageMs / 1000.0);
-        if (cand) d.fillRect(x - 1, dY(y - 1), 3, 3, candCol);
-        else d.fillRect(x, dY(y), 2, 2, tapCol);
+        // spectrogram cells: each real sample snapped to a 4 px cell
+        const int x = x0 + ((laneX(0, (log10(dv) - LMIN) / (lPool - LMIN)) - x0) & ~3);
+        const int y = yTop + ((ageY(ageMs / 1000.0) - yTop) & ~3);
+        if (cand) d.fillRect(x, dY(y), 3, 3, candCol);
+        else d.drawRect(x, dY(y), 3, 3, tapCol);
       }
       // SHARE / BLOCK lanes: the actual share log (hollow = pool refused)
       const uint32_t nowU = m.nowUtc;
@@ -1939,11 +1942,52 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         const int x = laneX(blk ? 2 : 1, t);
         const int y = ageY((double)age);
         const uint16_t c = blk ? C_GOLD : C_CYAN;
-        if (s.accepted) d.fillCircle(x, dY(y), 2, c);
-        else d.drawCircle(x, dY(y), 2, c);
+        // SHARE = short horizontal bar, BLOCK = gold cell; outlined = pool refused
+        const int bw = blk ? 8 : 12, bh = blk ? 6 : 3;
+        if (s.accepted) d.fillRect(x - bw / 2, dY(y - bh / 2), bw, bh, c);
+        else d.drawRect(x - bw / 2, dY(y - bh / 2), bw, bh, c);
       }
-    });
+    };
+    // Pushed around the two divider pills (their own layer below), so the
+    // per-second repaint never touches them: above / pill row gaps / below.
+    const Rect p1 = pillRect(1), p2 = pillRect(2);
+    const int bx = x0, bw = x1 - x0 + 1, byT = yTop - 1, byB = yBot + 1;
+    banded(bx, byT, bw, p1.y - byT, C_BG, body);
+    banded(bx, p1.y, p1.x - bx, pillH, C_BG, body);
+    banded(p1.x + p1.w, p1.y, p2.x - (p1.x + p1.w), pillH, C_BG, body);
+    banded(p2.x + p2.w, p1.y, bx + bw - (p2.x + p2.w), pillH, C_BG, body);
+    banded(bx, p1.y + pillH, bw, byB - (p1.y + pillH), C_BG, body);
     done(W_ATT_DOTS, kd);
+  }
+
+  // ================= divider pills (window counts; tiny, only on change) =================
+  char kp[32];
+  snprintf(kp, sizeof(kp), "p|%u|%u|%u", (unsigned)win, (unsigned)s_winShares, (unsigned)s_winBlocks);
+  if (need(W_ATT_PILLS, kp))
+  {
+    for (int c = 1; c < 3; c++)
+    {
+      const Rect pr = pillRect(c);
+      char num[6];
+      if (c == 1) snprintf(num, sizeof(num), "%02u", (unsigned)(s_winShares > 99 ? 99 : s_winShares));
+      else snprintf(num, sizeof(num), "%03u", (unsigned)(s_winBlocks > 999 ? 999 : s_winBlocks));
+      banded(pr.x, pr.y, pr.w, pr.h, C_BG, [&] {
+        TFT_eSPI &d = out();
+        d.fillRect(pr.x, dY(pr.y), pr.w / 2, pr.h, bodyTint[c - 1]);
+        d.fillRect(pr.x + pr.w / 2, dY(pr.y), pr.w - pr.w / 2, pr.h, bodyTint[c]);
+        const uint16_t fill = mix565(c == 1 ? kCyanWash : laneC[c], C_BG, 205);
+        d.fillRoundRect(pr.x, dY(pr.y), pr.w, pr.h, 2, fill);
+        d.drawRoundRect(pr.x, dY(pr.y), pr.w, pr.h, 2, laneC[c]);
+        const int n = strlen(num);
+        int ty = pr.y + (pr.h - n * 9) / 2;
+        for (int i = 0; i < n; i++, ty += 9)
+        {
+          const char ch[2] = {num[i], 0};
+          text(d, ch, pr.x + pr.w / 2 + 1, dY(ty), 9, laneC[c], fill, Align::TopCenter);
+        }
+      });
+    }
+    done(W_ATT_PILLS, kp);
   }
 
   // ================= bins layer =================
@@ -1972,47 +2016,26 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       };
       for (int c = 0; c < 3; c++)
       {
-        int cx = r.x + gap + c * (cw + gap);
-        uint16_t col = cr[c].col;
-        uint16_t dim = mix565(col, C_BG, 70);
-        d.fillRoundRect(cx, dY(cy0), cw, 8, 3, dim);
-        d.drawRoundRect(cx, dY(cy0), cw, 8, 3, col);
-        d.fillRoundRect(cx, dY(cy0 + 9), cw, ch - 9, 4, C_BG);
-        d.drawRoundRect(cx, dY(cy0 + 9), cw, ch - 9, 4, col);
-        d.fillRect(cx + cw / 2 - 4, dY(cy0 - 2), 8, 3, col);
-        int mid = cx + cw / 2;
-        int iy = cy0 + 12;
-        if (c == 1 && ac.accepted != ac.found)
+        const int cx = r.x + gap + c * (cw + gap);
+        const uint16_t col = cr[c].col;
+        const int mid = cx + cw / 2;
+        // flat outlined crate, a small funnel from its lane, label + big count
+        d.fillRoundRect(cx, dY(cy0), cw, ch, 4, mix565(c == 1 ? 0x04DF : col, C_BG, 222));
+        d.drawRoundRect(cx, dY(cy0), cw, ch, 4, col);
+        d.fillTriangle(mid - 6, dY(cy0 - 3), mid + 6, dY(cy0 - 3), mid, dY(cy0 + 3), col);
+        const uint16_t crBg = mix565(c == 1 ? 0x04DF : col, C_BG, 222);
+        const bool showAcc = c == 1 && ac.accepted != ac.found;
+        text(d, cr[c].label, showAcc ? cx + 5 : mid, dY(cy0 + 5), 9, col, crBg, showAcc ? Align::TopLeft : Align::TopCenter);
+        unsigned vs = 20;
+        while (vs > 10 && textW(cr[c].val, vs) > cw - 8) vs--;
+        text(d, cr[c].val, mid, dY(cy0 + 17), vs, col, crBg, Align::TopCenter);
+        if (showAcc)
         {
           char ab[20], an[12];
           fmtCompact((double)ac.accepted, an, sizeof(an));
           snprintf(ab, sizeof(ab), "acc %s", an);
-          text(d, ab, mid, dY(iy), 9, col, C_BG, Align::TopCenter);
+          text(d, ab, cx + cw - 4, dY(cy0 + 6), 8, mix565(col, C_BG, 80), crBg, Align::TopRight);
         }
-        else if (cr[c].icon == 'x')
-        {
-          d.drawLine(mid - 5, dY(iy), mid + 5, dY(iy + 8), col);
-          d.drawLine(mid - 5, dY(iy + 8), mid + 5, dY(iy), col);
-          d.drawLine(mid - 4, dY(iy), mid + 6, dY(iy + 8), col);
-          d.drawLine(mid - 6, dY(iy + 8), mid + 4, dY(iy), col);
-        }
-        else if (cr[c].icon == 'v')
-        {
-          d.drawLine(mid - 6, dY(iy + 4), mid - 1, dY(iy + 9), col);
-          d.drawLine(mid - 1, dY(iy + 9), mid + 7, dY(iy), col);
-          d.drawLine(mid - 6, dY(iy + 5), mid - 1, dY(iy + 10), col);
-          d.drawLine(mid - 1, dY(iy + 10), mid + 7, dY(iy + 1), col);
-        }
-        else
-          drawTrophy(d, mid - 4, dY(iy), col);
-        unsigned vs = 14;
-        while (vs > 9 && textW(cr[c].val, vs) > cw - 6) vs--;
-        text(d, cr[c].val, mid, dY(cy0 + 26), vs, col, C_BG, Align::TopCenter);
-        int pw = textW(cr[c].label, 9) + 10;
-        int px = mid - pw / 2;
-        int py = cy0 + ch - 13;
-        d.drawRoundRect(px, dY(py), pw, 12, 4, col);
-        text(d, cr[c].label, mid, dY(py + 2), 9, col, C_BG, Align::TopCenter);
       }
     });
     done(W_ATT_BINS, kb);
@@ -3491,22 +3514,8 @@ enum TouchAction
   TA_NEXT,
   TA_PREV,
   TA_BACKLIGHT,
-  TA_ACCENT,
-  TA_WIN0, // RECENT ATTEMPTS window tabs: TA_WIN0 + 0/1/2
-  TA_WIN1,
-  TA_WIN2
+  TA_ACCENT
 };
-// Generous hit boxes (+-6 px) around the small 15s/30s/60s tabs.
-static int attTabHit(int x, int y)
-{
-  for (int i = 0; i < 3; i++)
-  {
-    const Rect t = attTabRect(i);
-    if (x >= t.x - 2 && x < t.x + t.w + 2 && y >= t.y - 6 && y < t.y + t.h + 6)
-      return i;
-  }
-  return -1;
-}
 static volatile int pendingTouch = TA_NONE;
 
 // Ambient light sensor (LDR on GPIO 34, ADC1) auto-dimming
@@ -3625,8 +3634,6 @@ static void touchTask(void *)
           pendingTouch = TA_BACKLIGHT; // dark screen: any touch wakes it
         else if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
           pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
-        else if (uiScreen == SCR_MINE && isPortrait() && attTabHit(t_x, t_y) >= 0)
-          pendingTouch = TA_WIN0 + attTabHit(t_x, t_y); // RECENT ATTEMPTS 15s/30s/60s
         else
           pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
       }
@@ -3685,16 +3692,6 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     esp32_2432S028R_AlternateScreenState();
     break;
   case TA_ACCENT:
-    break;
-  case TA_WIN0:
-  case TA_WIN1:
-  case TA_WIN2:
-    g_attWin = (uint8_t)(action - TA_WIN0);
-    if (!g_onb && uiLive)
-    {
-      std::lock_guard<std::mutex> lock(g_displayMutex);
-      repaintCached(uiScreen); // plot key includes the window: only it redraws
-    }
     break;
   case TA_NEXT:
   case TA_PREV:
