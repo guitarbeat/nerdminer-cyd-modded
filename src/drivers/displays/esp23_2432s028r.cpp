@@ -1739,6 +1739,28 @@ static void drawClosestTry(const Rect &r, const MineV &m)
 #define ATT_DOTS_MIN_MS 1000     // dot layer (text-free): at most once per second
 #define ATT_MISS_BIN_MIN_MS 5000 // MISS bin counter: at most every 5 s
 #define ATT_WIN_SEC 60 // fixed time window (the 15s/30s/60s tabs were removed)
+// Screen 0 (A) spectrogram: 16 rows of 3.75 s, anchored to absolute time
+// (row = nowMs / ATT_ROW_MS), so between scrolls only the newest row changes
+// and only it is repainted; the whole body only on a scroll (every 3.75 s).
+#define ATT_ROWS 16
+#define ATT_ROW_MS (ATT_WIN_SEC * 1000 / ATT_ROWS) // 3750
+// Mine chart mode stub for the two-screen plan: 0 = A spectrogram (this),
+// 1 = E target ruler (Phase 2, not built yet).
+static uint8_t g_mineChartMode = 0;
+static volatile int8_t g_mineChartReq = -1; // web request, applied by the display task
+#define ATT_STAIR_MS 5000 // Screen 1 staircase row: repainted at most every 5 s
+// Screen 1 (E) target ruler geometry inside the chart body
+#define ATT_SPARK_H 62    // per-second max-bits sweep
+#define ATT_LABEL_H 10    // 0 / 16 / share / NET axis labels under the staircase
+void cydSetMineChartMode(int m) { g_mineChartReq = (int8_t)(m ? 1 : 0); }
+int cydGetMineChartMode() { return g_mineChartMode; }
+// Tap target for the 0 <-> 1 switch: the MISS | SHARE | BLOCK band (the old
+// 15s/30s/60s tab row sat here), with a few px of slop.
+static bool mineChartBandHit(int x, int y)
+{
+  const Rect r = mineChartRect();
+  return x >= r.x && x < r.x + r.w && y >= r.y - 6 && y < r.y + 2 + 16 + 6;
+}
 static void fmtCompact(double v, char *out, size_t n)
 {
   if (v < 10000.0) snprintf(out, n, "%lu", (unsigned long)(v + 0.5));
@@ -1779,7 +1801,8 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   //  dots  : text-free point layer -- at most once per second
   //  bins  : counters -- on share/block change, MISS value at most every 5 s
   char kf[96];
-  snprintf(kf, sizeof(kf), "rf4|%s|%s|%u|%d|%u", netS, poolS, (unsigned)recEpoch, P ? 1 : 0, (unsigned)win);
+  snprintf(kf, sizeof(kf), "rf5|%s|%s|%u|%d|%u|%u", netS, poolS, (unsigned)recEpoch, P ? 1 : 0, (unsigned)win,
+           (unsigned)g_mineChartMode);
   const bool frame = need(W_PROTO_PLOT, kf);
 
   if (!P)
@@ -1821,8 +1844,16 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   const int yTop = yHdr + hdrH + 5; // NOW
   const int yBot = cratesTop - 9;
   const int H = yBot - yTop;
-  const int pad = 4;
   const int yMid = (yTop + yBot) / 2;
+  // Spectrogram grid: ONE cell pitch for all three lanes. 9 px pitch = an
+  // 8x8 cell + 1 px gap; ATT_ROWS rows x 8 bit-bucket columns per lane.
+  const int GRID_CELL = 9;
+  const int nCellX = (colW - 1) / GRID_CELL;          // 8 cells per 74 px lane
+  const int nCellY = H / GRID_CELL;                    // 16 rows for 60 s
+  const int gridW = nCellX * GRID_CELL + 1, gridH = nCellY * GRID_CELL + 1;
+  const int gox = (colW - gridW) / 2;                  // grid centred in each lane
+  const int goy = yTop + (H + 1 - gridH) / 2;
+
   // lane look (mockup): faint per-lane tint, dashed dividers in the accent of
   // the lane to their right, window share/block pills sitting on them
   const uint16_t laneC[3] = {C_BEST, C_CYAN, C_GOLD};
@@ -1832,19 +1863,23 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   const uint16_t bodyTint[3] = {mix565(C_BEST, C_BG, 222), mix565(0x041F, C_BG, 218), mix565(C_GOLD, C_BG, 222)};
   const uint16_t gridC[3] = {mix565(C_BEST, C_BG, 200), mix565(0x041F, C_BG, 202), mix565(C_GOLD, C_BG, 200)};
   const uint16_t divC[3] = {0, mix565(C_CYAN, C_BG, 40), mix565(C_GOLD, C_BG, 40)};
-  const int pillW = 13, pillH = 3 * 9 + 6;
-  auto pillRect = [&](int c) -> Rect { return Rect{x0 + c * colW - pillW / 2, yMid - pillH / 2, pillW, pillH}; };
+  // divider pills: one solid rounded cell per digit, stacked (room for 3)
+  // 11 px (odd) so a cell centres exactly on the 1 px divider; 3 px gaps
+  const int pillCell = 11, pillGap = 3;
+  // Pill mask: snapped to whole grid cells (the last cell left of the line,
+  // the line, the first cell right of it; 5 rows) so no cell is ever cut in
+  // half around a pill. The body never paints inside it; the pill layer
+  // paints it solid background first, then the digit squares.
+  const int pillRows = 5;
+  const int pillRow0 = (yMid - goy) / GRID_CELL - pillRows / 2;
+  auto pillRect = [&](int c) -> Rect {
+    const int divX = x0 + c * colW;
+    return Rect{divX - (colW - 1 - (nCellX - 1) * GRID_CELL), goy + pillRow0 * GRID_CELL + 1,
+                (colW - 1 - (nCellX - 1) * GRID_CELL) + GRID_CELL, pillRows * GRID_CELL - 1};
+  };
   static uint16_t s_winShares = 0, s_winBlocks = 0; // counted on the dots tick (<= 1/s)
-  auto laneX = [&](int lane, double t) -> int {
-    if (t < 0) t = 0; if (t > 1) t = 1;
-    const int lx0 = x0 + lane * colW + pad, lw = colW - 2 * pad;
-    return lx0 + (int)(t * lw);
-  };
-  auto ageY = [&](double ageSec) -> int {
-    int y = yTop + (int)(ageSec * H / win);
-    if (y < yTop) y = yTop; if (y > yBot) y = yBot;
-    return y;
-  };
+  static bool s_dotsFull = true;     // next dots pass repaints every row
+  static uint32_t s_lastRowEpoch = 0; // row epoch the panel shows
 
   // ================= frame layer =================
   if (frame)
@@ -1860,14 +1895,38 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         text(d, colN[c], x0 + c * colW + colW / 2, dY(yHdr + 3), 11, laneC[c], hdrTint[c], Align::TopCenter);
       }
       d.drawRect(x0, dY(yHdr), 3 * colW + 1, hdrH, mix565(C_DIM, C_BG, 150));
-      for (int c = 1; c < 3; c++)
-        for (int y = yHdr + 1; y < yHdr + hdrH - 1; y += 4) d.drawFastVLine(x0 + c * colW, dY(y), 2, divC[c]);
+      // target lines (share target cyan, network target gold) run through the band
+      for (int c = 1; c < 3; c++) d.drawFastVLine(x0 + c * colW, dY(yHdr), hdrH, laneC[c]);
     });
     // right edge strip (the old age-label gutter): plain background
     banded(x1 + 1, yTop - 1, r.x + r.w - x1 - 1, yBot - yTop + 2, C_BG, [&] {
       TFT_eSPI &d = out();
       d.fillRect(x1 + 1, dY(yTop - 1), r.x + r.w - x1 - 1, yBot - yTop + 2, C_BG);
     });
+    if (g_mineChartMode == 1)
+    {
+      // Screen 1 axis: bucket ticks + sparse labels at the live thresholds
+      const int yLab = yBot - ATT_LABEL_H + 1;
+      char tl[8];
+      snprintf(tl, sizeof(tl), "%d", (int)floor(32.0 + log2(poolD)));
+      banded(x0, yLab, x1 - x0 + 1, yBot - yLab + 2, C_BG, [&] {
+        TFT_eSPI &d = out();
+        d.fillRect(x0, dY(yLab), x1 - x0 + 1, yBot - yLab + 2, C_BG);
+        for (int k = 0; k <= 24; k++)
+        {
+          const int lane = k / 8, kk = k % 8;
+          const int x = (k == 24) ? x0 + 3 * colW : x0 + lane * colW + gox + kk * GRID_CELL;
+          d.drawFastVLine(x, dY(yLab), 2, mix565(C_DIM, C_BG, 60));
+        }
+        struct L { const char *t; int k; uint16_t c; } labs[4] = {
+            {"0", 0, C_BEST}, {"16", 4, C_BEST}, {tl, 8, C_CYAN}, {"NET", 16, C_GOLD}};
+        for (const L &l : labs)
+        {
+          const int lane = l.k / 8, kk = l.k % 8;
+          text(d, l.t, x0 + lane * colW + gox + kk * GRID_CELL + 2, dY(yLab + 1), 8, l.c, C_BG);
+        }
+      });
+    }
     // gap between dots and bins
     banded(r.x, yBot + 1, r.w, cratesTop - 3 - yBot - 1, C_BG, [&] {
       TFT_eSPI &d = out();
@@ -1877,6 +1936,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     wkey[W_ATT_DOTS] = "";
     wkey[W_ATT_BINS] = "";
     wkey[W_ATT_PILLS] = "";
+    s_dotsFull = true; // frame repainted: next dots pass repaints the whole body
   }
 
   // ================= dots layer (no text) =================
@@ -1898,72 +1958,267 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       }
       s_winShares = ns; s_winBlocks = nb;
     }
-    auto body = [&] {
-      TFT_eSPI &d = out();
-      d.fillRect(x0, dY(yTop - 1), x1 - x0 + 1, yBot - yTop + 2, C_BG);
-      for (int c = 0; c < 3; c++)
+    if (g_mineChartMode == 0)
+    {
+    // ---- Screen 0 (A): leading-zero-bit spectrogram ----
+    // Columns (8 per lane) are leading-zero-bit buckets of each real hash:
+    // bits = 32 + log2(difficulty) (difficulty 1 = 32 leading zero bits).
+    //  MISS : 0 | 1 | 2-3 | 4-15 | four equal slices of [16, share target)
+    //  SHARE: one bit per column above the live share target (pool diff)
+    //  BLOCK: one bit per column above the live network target
+    // Cell brightness = count in (row, column): 0 | 1 | 2-3 | 4-7 | 8+.
+    const double Tb = 32.0 + log2(poolD); // share target, live from the pool
+    const double Nb = 32.0 + log2(netD);  // network target (when known)
+    static uint16_t cnt[ATT_ROWS][24];
+    static uint8_t shf[ATT_ROWS][8]; // SHARE lane: bit0 accepted, bit1 refused
+    memset(cnt, 0, sizeof(cnt));
+    memset(shf, 0, sizeof(shf));
+    const uint32_t rowEpoch = nowMs / ATT_ROW_MS;
+    auto rowOf = [&](uint32_t ms) -> int {
+      const uint32_t e = ms / ATT_ROW_MS;
+      return e > rowEpoch ? -1 : (int)(rowEpoch - e); // 0 = newest
+    };
+    auto clampCol = [](int k) { return k < 0 ? 0 : (k > 7 ? 7 : k); };
+    for (int i = 0; i < nSamp; i++)
+    {
+      const bool cand = samp[i].diff < 0;
+      const double dv = cand ? -samp[i].diff : samp[i].diff;
+      if (dv >= poolD || !(dv > 0)) continue; // >= pool: a share (share log)
+      const int j = rowOf(samp[i].ms);
+      if (j < 0 || j >= ATT_ROWS) continue;
+      const double bits = 32.0 + log2(dv);
+      int k;
+      if (bits < 1) k = 0;
+      else if (bits < 2) k = 1;
+      else if (bits < 4) k = 2;
+      else if (bits < 16 || Tb <= 16.0) k = 3;
+      else
       {
-        const int lx = x0 + c * colW;
-        d.fillRect(lx, dY(yTop - 1), colW, yBot - yTop + 2, bodyTint[c]);
-        for (int gy = yTop + 8; gy < yBot; gy += 8) d.drawFastHLine(lx + 1, dY(gy), colW - 1, gridC[c]);
-        for (int gx = lx + 8; gx < lx + colW - 2; gx += 8) d.drawFastVLine(gx, dY(yTop), yBot - yTop, gridC[c]);
+        int q = (int)((bits - 16.0) * 4.0 / (Tb - 16.0)); // 4 equal slices up to the share target
+        k = 4 + (q < 0 ? 0 : (q > 3 ? 3 : q));
       }
-      d.drawFastHLine(x0, dY(yMid), x1 - x0, mix565(C_DIM, C_BG, 120)); // -win/2 line
-      for (int c = 1; c < 3; c++)
-        for (int y = yTop - 1; y < yBot + 1; y += 5) d.drawFastVLine(x0 + c * colW, dY(y), 2, divC[c]);
-      // MISS lane: faint tick where the 16-bit prefilter starts (2^-16):
-      // left of it = uniform taps, right = real near-misses.
-      const int xp = laneX(0, (-4.816479931 - LMIN) / (lPool - LMIN));
-      for (int y = yTop; y < yBot; y += 9) d.drawPixel(xp, dY(y), mix565(C_BEST, C_BG, 70));
-
-      // MISS lane: real sampled attempts (never synthetic)
-      for (int i = 0; i < nSamp; i++)
-      {
-        const bool cand = samp[i].diff < 0;
-        const double dv = cand ? -samp[i].diff : samp[i].diff;
-        const uint32_t ageMs = nowMs - samp[i].ms;
-        if (ageMs > win * 1000u || dv >= poolD || !(dv > 0)) continue; // >= pool: it is a share (share log)
-        // spectrogram cells: each real sample snapped to a 4 px cell
-        const int x = x0 + ((laneX(0, (log10(dv) - LMIN) / (lPool - LMIN)) - x0) & ~3);
-        const int y = yTop + ((ageY(ageMs / 1000.0) - yTop) & ~3);
-        if (cand) d.fillRect(x, dY(y), 3, 3, candCol);
-        else d.drawRect(x, dY(y), 3, 3, tapCol);
-      }
-      // SHARE / BLOCK lanes: the actual share log (hollow = pool refused)
+      cnt[j][k]++;
+    }
+    {
       const uint32_t nowU = m.nowUtc;
       for (int i = 0; i < m.nShares; i++)
       {
-        const ShareRec &s = m.shares[i];
-        if (!s.utc || !nowU || s.diff <= 0) continue;
-        const uint32_t age = nowU > s.utc ? nowU - s.utc : 0;
+        const ShareRec &sr = m.shares[i];
+        if (!sr.utc || !nowU || sr.diff <= 0) continue;
+        const uint32_t age = nowU > sr.utc ? nowU - sr.utc : 0;
         if (age > win) continue;
-        const bool blk = netKnown && s.diff >= netD;
-        const double t = blk ? log10(s.diff / netD) / log10(16.0) : (log10(s.diff) - lPool) / (lNet - lPool);
-        const int x = laneX(blk ? 2 : 1, t);
-        const int y = ageY((double)age);
-        const uint16_t c = blk ? C_GOLD : C_CYAN;
-        // SHARE = short horizontal bar, BLOCK = gold cell; outlined = pool refused
-        const int bw = blk ? 8 : 12, bh = blk ? 6 : 3;
-        if (s.accepted) d.fillRect(x - bw / 2, dY(y - bh / 2), bw, bh, c);
-        else d.drawRect(x - bw / 2, dY(y - bh / 2), bw, bh, c);
+        const int j = rowOf(nowMs - age * 1000u);
+        if (j < 0 || j >= ATT_ROWS) continue;
+        const double bits = 32.0 + log2(sr.diff);
+        if (netKnown && sr.diff >= netD)
+          cnt[j][16 + clampCol((int)(bits - Nb))]++;
+        else
+        {
+          const int k = clampCol((int)(bits - Tb));
+          cnt[j][8 + k]++;
+          shf[j][k] |= sr.accepted ? 1 : 2;
+        }
+      }
+    }
+    // 5-step dark -> neon ramp per lane (cyan darks from a bluer cyan: a
+    // darkened 0x07FF drifts green in RGB565)
+    static const uint8_t kRampT[5] = {232, 175, 118, 55, 0};
+    uint16_t ramp[3][5];
+    for (int l = 0; l < 3; l++)
+      for (int q = 0; q < 5; q++)
+        ramp[l][q] = mix565(l == 1 && q < 4 ? (uint16_t)0x04DF : (l == 1 ? (uint16_t)0x07FF : laneC[l]), C_BG,
+                            (l == 1 && q == 0) ? 205 : kRampT[q]); // empty cyan cells need more lift to show
+    auto lvl = [](uint16_t n) -> int { return n == 0 ? 0 : n == 1 ? 1 : n <= 3 ? 2 : n <= 7 ? 3 : 4; };
+
+    const bool full = s_dotsFull || shotOn || rowEpoch != s_lastRowEpoch;
+    const int rowLo = 0, rowHi = full ? ATT_ROWS : 1;
+    auto body = [&] {
+      TFT_eSPI &d = out();
+      if (full) d.fillRect(x0, dY(yTop - 1), x1 - x0 + 1, yBot - yTop + 2, C_BG);
+      for (int j = rowLo; j < rowHi && j < nCellY; j++)
+      {
+        const int y = goy + j * GRID_CELL + 1;
+        for (int k = 0; k < 24; k++)
+        {
+          const int lane = k / 8, kk = k % 8;
+          const int x = x0 + lane * colW + gox + kk * GRID_CELL + 1;
+          const uint16_t n = cnt[j][k];
+          if (lane == 1 && n)
+          {
+            if (shf[j][kk] & 1) d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, (uint16_t)0x07FF);
+            else
+            {
+              d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[1][0]);
+              d.drawRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, (uint16_t)0x07FF); // refused: outlined
+            }
+          }
+          else
+            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);
+        }
+      }
+      // live targets: cyan = share target, gold = network target
+      for (int c = 1; c < 3; c++) d.drawFastVLine(x0 + c * colW, dY(yTop - 1), yBot - yTop + 2, laneC[c]);
+    };
+    if (full)
+    {
+      // Pushed around the two divider pills (their own layer), so the body
+      // repaint never touches them: above / pill row gaps / below.
+      const Rect p1 = pillRect(1), p2 = pillRect(2);
+      const int bx = x0, bw = x1 - x0 + 1, byT = yTop - 1, byB = yBot + 1;
+      banded(bx, byT, bw, p1.y - byT, C_BG, body);
+      banded(bx, p1.y, p1.x - bx, p1.h, C_BG, body);
+      banded(p1.x + p1.w, p1.y, p2.x - (p1.x + p1.w), p1.h, C_BG, body);
+      banded(p2.x + p2.w, p1.y, bx + bw - (p2.x + p2.w), p1.h, C_BG, body);
+      banded(bx, p1.y + p1.h, bw, byB - (p1.y + p1.h), C_BG, body);
+    }
+    else
+      banded(x0, goy + 1, x1 - x0 + 1, GRID_CELL - 1, C_BG, body); // newest row only
+    if (!shotOn)
+      s_lastRowEpoch = rowEpoch;
+    }
+    else
+    {
+    // ---- Screen 1 (E): target ruler ----
+    // Top: 60 s sweep, one slot per second (slot = second % 60, so a slot never
+    // moves): bar height = most leading-zero bits seen that second; a cursor
+    // gap marks "now" and runs left -> right. Each tick repaints only the two
+    // newest finished slots + the cursor slot (3 small fills), never the sweep.
+    // Bottom: staircase over the same 24 bit buckets as Screen 0, height =
+    // log count over the last 60 s, repainted at most every ATT_STAIR_MS.
+    const double Tb = 32.0 + log2(poolD);
+    const double Nb = 32.0 + log2(netD);
+    const int S0 = yTop, S1 = yTop + ATT_SPARK_H;
+    const int yLab = yBot - ATT_LABEL_H + 1;
+    const int R0 = S1 + 6, R1 = yLab - 2;
+    const int W = x1 - x0 + 1;
+    const uint32_t nowSec = nowMs / 1000;
+    static float mxb[60];
+    static uint8_t shf1[60];
+    static float shb[60];
+    static uint16_t c60[24];
+    static uint8_t acc60[8];
+    for (int i = 0; i < 60; i++) { mxb[i] = -1; shf1[i] = 0; shb[i] = -1; }
+    memset(c60, 0, sizeof(c60));
+    memset(acc60, 0, sizeof(acc60));
+    auto missCol = [&](double bits) -> int {
+      if (bits < 1) return 0;
+      if (bits < 2) return 1;
+      if (bits < 4) return 2;
+      if (bits < 16 || Tb <= 16.0) return 3;
+      int q = (int)((bits - 16.0) * 4.0 / (Tb - 16.0));
+      return 4 + (q < 0 ? 0 : (q > 3 ? 3 : q));
+    };
+    auto cl7 = [](int k) { return k < 0 ? 0 : (k > 7 ? 7 : k); };
+    for (int i = 0; i < nSamp; i++)
+    {
+      const bool cand = samp[i].diff < 0;
+      const double dv = cand ? -samp[i].diff : samp[i].diff;
+      if (dv >= poolD || !(dv > 0)) continue;
+      const uint32_t sec = samp[i].ms / 1000;
+      if (sec > nowSec || nowSec - sec >= 60) continue;
+      const double bits = 32.0 + log2(dv);
+      const int sl = sec % 60;
+      if (bits > mxb[sl]) mxb[sl] = bits;
+      c60[missCol(bits)]++;
+    }
+    {
+      const uint32_t nowU = m.nowUtc;
+      for (int i = 0; i < m.nShares; i++)
+      {
+        const ShareRec &sr = m.shares[i];
+        if (!sr.utc || !nowU || sr.diff <= 0) continue;
+        const uint32_t age = nowU > sr.utc ? nowU - sr.utc : 0;
+        if (age >= 60) continue;
+        const double bits = 32.0 + log2(sr.diff);
+        const int sl = (int)((nowSec - age) % 60);
+        shf1[sl] |= sr.accepted ? 1 : 2;
+        if (bits > shb[sl]) shb[sl] = bits;
+        if (netKnown && sr.diff >= netD) c60[16 + cl7((int)(bits - Nb))]++;
+        else { const int k = cl7((int)(bits - Tb)); c60[8 + k]++; acc60[k] |= sr.accepted ? 1 : 2; }
+      }
+    }
+    const double lo = 12.0, hi = (Tb + 4.0 > lo + 8.0) ? Tb + 4.0 : lo + 8.0;
+    auto yOf = [&](double b) -> int {
+      if (b < lo) b = lo; if (b > hi) b = hi;
+      return S1 - (int)((b - lo) * (S1 - S0 - 2) / (hi - lo));
+    };
+    const int yT = yOf(Tb);
+    auto slotX = [&](int i) { return x0 + i * W / 60; };
+    auto drawSlot = [&](TFT_eSPI &d, int sl, bool cursor) {
+      const int xa = slotX(sl), w = slotX(sl + 1) - xa;
+      d.fillRect(xa, dY(S0), w, S1 - S0 + 1, C_BG);
+      for (int x = xa; x < xa + w; x++)
+        if ((x & 3) < 2) d.drawPixel(x, dY(yT), C_CYAN); // share-target dotted line
+      if (cursor) return;
+      if (shf1[sl])
+      {
+        const int y = yOf(shb[sl]);
+        if (shf1[sl] & 1) d.fillRect(xa, dY(y), w - 1, S1 - y + 1, C_CYAN);
+        else d.drawRect(xa, dY(y), w - 1, S1 - y + 1, C_CYAN); // pool refused
+      }
+      else if (mxb[sl] >= 0)
+      {
+        const int y = yOf(mxb[sl]);
+        double f = Tb > 16.0 ? (mxb[sl] - 16.0) / (Tb - 16.0) : 1.0;
+        if (f < 0) f = 0; if (f > 1) f = 1;
+        const uint16_t c = mix565(C_BEST, C_BG, (uint8_t)(255 * (1.0 - (0.35 + 0.65 * f))));
+        d.fillRect(xa, dY(y), w - 1, S1 - y + 1 < 1 ? 1 : S1 - y + 1, c);
       }
     };
-    // Pushed around the two divider pills (their own layer below), so the
-    // per-second repaint never touches them: above / pill row gaps / below.
-    const Rect p1 = pillRect(1), p2 = pillRect(2);
-    const int bx = x0, bw = x1 - x0 + 1, byT = yTop - 1, byB = yBot + 1;
-    banded(bx, byT, bw, p1.y - byT, C_BG, body);
-    banded(bx, p1.y, p1.x - bx, pillH, C_BG, body);
-    banded(p1.x + p1.w, p1.y, p2.x - (p1.x + p1.w), pillH, C_BG, body);
-    banded(p2.x + p2.w, p1.y, bx + bw - (p2.x + p2.w), pillH, C_BG, body);
-    banded(bx, p1.y + pillH, bw, byB - (p1.y + pillH), C_BG, body);
+    auto drawStairs = [&](TFT_eSPI &d) {
+      d.fillRect(x0, dY(R0), W, R1 - R0 + 1, C_BG);
+      const int Hh = R1 - R0;
+      for (int k = 0; k < 24; k++)
+      {
+        const int lane = k / 8, kk = k % 8;
+        const int x = x0 + lane * colW + gox + kk * GRID_CELL + 1;
+        d.fillRect(x, dY(R0), GRID_CELL - 1, Hh + 1, mix565(lane == 1 ? (uint16_t)0x04DF : laneC[lane], C_BG, 232));
+        const uint16_t n = c60[k];
+        if (!n) continue;
+        int h = (int)(Hh * (1.0 + log2((double)n)) / (1.0 + log2(360.0)));
+        if (h < 3) h = 3; if (h > Hh) h = Hh;
+        uint16_t c = laneC[lane];
+        if (lane == 1) c = (acc60[kk] & 1) ? C_CYAN : mix565(C_CYAN, C_BG, 128);
+        d.fillRect(x, dY(R1 - h + 1), GRID_CELL - 1, h, c);
+      }
+      for (int c = 1; c < 3; c++) d.drawFastVLine(x0 + c * colW, dY(R0), R1 - R0 + 1, laneC[c]);
+    };
+    static uint32_t s_lastStair = 0xFFFFFFFF;
+    const uint32_t stair = nowMs / ATT_STAIR_MS;
+    const bool fullE = s_dotsFull || shotOn;
+    if (fullE)
+    {
+      banded(x0, yTop - 1, W, yLab - yTop + 1, C_BG, [&] {
+        TFT_eSPI &d = out();
+        d.fillRect(x0, dY(yTop - 1), W, yLab - yTop + 1, C_BG);
+        for (int sl = 0; sl < 60; sl++) drawSlot(d, sl, sl == (int)(nowSec % 60));
+        drawStairs(d);
+      });
+    }
+    else
+    {
+      for (int back = 2; back >= 0; back--) // two newest finished seconds + cursor
+      {
+        const int sl = (int)((nowSec + 60 - back) % 60);
+        const int xa = slotX(sl), w = slotX(sl + 1) - xa;
+        banded(xa, S0, w, S1 - S0 + 1, C_BG, [&] { drawSlot(out(), sl, back == 0); });
+      }
+      if (stair != s_lastStair)
+        banded(x0, R0, W, R1 - R0 + 1, C_BG, [&] { drawStairs(out()); });
+    }
+    if (!shotOn)
+      s_lastStair = stair;
+    }
+    if (!shotOn)
+      s_dotsFull = false;
     done(W_ATT_DOTS, kd);
   }
 
   // ================= divider pills (window counts; tiny, only on change) =================
   char kp[32];
-  snprintf(kp, sizeof(kp), "p|%u|%u|%u", (unsigned)win, (unsigned)s_winShares, (unsigned)s_winBlocks);
-  if (need(W_ATT_PILLS, kp))
+  snprintf(kp, sizeof(kp), "p|%u|%u|%u|%u", (unsigned)win, (unsigned)s_winShares, (unsigned)s_winBlocks,
+           (unsigned)g_mineChartMode);
+  if (g_mineChartMode == 0 && need(W_ATT_PILLS, kp))
   {
     for (int c = 1; c < 3; c++)
     {
@@ -1973,17 +2228,25 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       else snprintf(num, sizeof(num), "%03u", (unsigned)(s_winBlocks > 999 ? 999 : s_winBlocks));
       banded(pr.x, pr.y, pr.w, pr.h, C_BG, [&] {
         TFT_eSPI &d = out();
-        d.fillRect(pr.x, dY(pr.y), pr.w / 2, pr.h, bodyTint[c - 1]);
-        d.fillRect(pr.x + pr.w / 2, dY(pr.y), pr.w - pr.w / 2, pr.h, bodyTint[c]);
-        const uint16_t fill = mix565(c == 1 ? kCyanWash : laneC[c], C_BG, 205);
-        d.fillRoundRect(pr.x, dY(pr.y), pr.w, pr.h, 2, fill);
-        d.drawRoundRect(pr.x, dY(pr.y), pr.w, pr.h, 2, laneC[c]);
+        // the target line keeps running through the pill area
+        d.drawFastVLine(x0 + c * colW, dY(pr.y), pr.h, laneC[c]);
+        const uint16_t fill = c == 1 ? (uint16_t)0x07FF : laneC[c]; // solid neon cell (bright cyan / gold)
+        const uint16_t ink = 0x0000;                           // dark digit
         const int n = strlen(num);
-        int ty = pr.y + (pr.h - n * 9) / 2;
-        for (int i = 0; i < n; i++, ty += 9)
+        const int stackH = n * pillCell + (n - 1) * pillGap;
+        const int divX = x0 + c * colW;
+        const int cx = divX - pillCell / 2; // stack centred on the divider pixel
+        int cy = pr.y + (pr.h - stackH) / 2;
+        // black strip behind the stack: hides the dashes in the gaps; the
+        // divider resumes cleanly above / below
+        d.fillRect(cx - 1, dY(cy - 2), pillCell + 2, stackH + 4, C_BG);
+        for (int i = 0; i < n; i++, cy += pillCell + pillGap)
         {
+          // Measured on the device: a size-9 digit drawn at y lands on rows
+          // y+3..y+9 (7 px). The cell starts at y+1, leaving 2 px above and below.
+          d.fillRoundRect(cx, dY(cy + 1), pillCell, pillCell, 2, fill);
           const char ch[2] = {num[i], 0};
-          text(d, ch, pr.x + pr.w / 2 + 1, dY(ty), 9, laneC[c], fill, Align::TopCenter);
+          text(d, ch, divX, dY(cy), 9, ink, fill, Align::TopCenter);
         }
       });
     }
@@ -2019,16 +2282,16 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         const int cx = r.x + gap + c * (cw + gap);
         const uint16_t col = cr[c].col;
         const int mid = cx + cw / 2;
-        // flat outlined crate, a small funnel from its lane, label + big count
+        // flat outlined crate, a small funnel from its lane, big count only
+        // (the lane names are already in the header band right above)
         d.fillRoundRect(cx, dY(cy0), cw, ch, 4, mix565(c == 1 ? 0x04DF : col, C_BG, 222));
         d.drawRoundRect(cx, dY(cy0), cw, ch, 4, col);
         d.fillTriangle(mid - 6, dY(cy0 - 3), mid + 6, dY(cy0 - 3), mid, dY(cy0 + 3), col);
         const uint16_t crBg = mix565(c == 1 ? 0x04DF : col, C_BG, 222);
         const bool showAcc = c == 1 && ac.accepted != ac.found;
-        text(d, cr[c].label, showAcc ? cx + 5 : mid, dY(cy0 + 5), 9, col, crBg, showAcc ? Align::TopLeft : Align::TopCenter);
         unsigned vs = 20;
         while (vs > 10 && textW(cr[c].val, vs) > cw - 8) vs--;
-        text(d, cr[c].val, mid, dY(cy0 + 17), vs, col, crBg, Align::TopCenter);
+        text(d, cr[c].val, mid, dY(cy0 + 9), vs, col, crBg, Align::TopCenter); // glyph ~cy0+16..+29: centred
         if (showAcc)
         {
           char ab[20], an[12];
@@ -3514,7 +3777,8 @@ enum TouchAction
   TA_NEXT,
   TA_PREV,
   TA_BACKLIGHT,
-  TA_ACCENT
+  TA_ACCENT,
+  TA_CHARTMODE // Mine: tap the MISS | SHARE | BLOCK band -> spectrogram <-> target ruler
 };
 static volatile int pendingTouch = TA_NONE;
 
@@ -3634,6 +3898,8 @@ static void touchTask(void *)
           pendingTouch = TA_BACKLIGHT; // dark screen: any touch wakes it
         else if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
           pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
+        else if (uiScreen == SCR_MINE && isPortrait() && mineChartBandHit(t_x, t_y))
+          pendingTouch = TA_CHARTMODE;
         else
           pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
       }
@@ -3693,11 +3959,26 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     break;
   case TA_ACCENT:
     break;
+  case TA_CHARTMODE:
+    g_mineChartReq = (int8_t)(g_mineChartMode ? 0 : 1);
+    break;
   case TA_NEXT:
   case TA_PREV:
     if (drv->num_cyclic_screens > 1)
       drv->current_cyclic_screen = (drv->current_cyclic_screen + 1) % drv->num_cyclic_screens;
     break;
+  }
+
+  // Mine chart 0 <-> 1 (band tap or /api/minechart): applied here, on the
+  // display task, under the display mutex; the frame key includes the mode,
+  // so the next paint redraws the chart once and then goes back to deltas.
+  if (g_mineChartReq >= 0)
+  {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    g_mineChartMode = (uint8_t)g_mineChartReq;
+    g_mineChartReq = -1;
+    if (!g_onb && uiLive && uiScreen == SCR_MINE)
+      repaintCached(SCR_MINE);
   }
 
   // Screen changed by touch or the boot button: draw the new page right away

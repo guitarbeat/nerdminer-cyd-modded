@@ -439,6 +439,22 @@ static void handleSetScreen()
   webCfgServer.send(200, "application/json", json);
 }
 
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+// Mine chart body: 0 = spectrogram, 1 = target ruler (same as tapping the
+// MISS | SHARE | BLOCK band). GET reads, POST ?mode=0|1 sets.
+extern void cydSetMineChartMode(int m);
+extern int cydGetMineChartMode();
+static void handleMineChart()
+{
+  if (webCfgServer.method() == HTTP_POST)
+  {
+    if (refuseForeign()) return;
+    if (webCfgServer.hasArg("mode")) cydSetMineChartMode(webCfgServer.arg("mode").toInt());
+  }
+  webCfgServer.send(200, "application/json", "{\"mode\":" + String(cydGetMineChartMode()) + "}");
+}
+#endif
+
 static void handleScreenshot()
 {
   int screenIdx = -1;
@@ -2167,6 +2183,9 @@ void setup_webConfig(void)
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);
   webCfgServer.on("/api/screen", HTTP_POST, handleSetScreen);
   webCfgServer.on("/api/screenshot", HTTP_GET, handleScreenshot);
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+  webCfgServer.on("/api/minechart", HTTP_ANY, handleMineChart);
+#endif
   webCfgServer.on("/restart", HTTP_POST, handleRestart);
   webCfgServer.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
 #ifdef TDISPLAY_UI_SCREENSHOT

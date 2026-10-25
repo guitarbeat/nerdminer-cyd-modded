@@ -98,6 +98,29 @@ def check(files):
     if bin_ms is None or bin_ms < MIN_MISS_BIN_MS:
         errs.append("display: ATT_MISS_BIN_MIN_MS missing or < %d (got %s)" % (MIN_MISS_BIN_MS, bin_ms))
 
+    # Spectrogram rows: the body is repainted in full only when a row scrolls
+    # (every ATT_ROW_MS); in between only the newest row is pushed.
+    row_ms = define_value(disp, "ATT_ROW_MS")
+    if row_ms is None:
+        m_rows = re.search(r"#define\s+ATT_ROWS\s+(\d+)", disp)
+        m_win = re.search(r"#define\s+ATT_WIN_SEC\s+(\d+)", disp)
+        if m_rows and m_win:
+            row_ms = int(m_win.group(1)) * 1000 // int(m_rows.group(1))
+    if row_ms is None or row_ms < 2 * MIN_DOTS_MS:
+        errs.append("display: ATT_ROW_MS missing or < %d ms (full spectrogram repaint too often)" % (2 * MIN_DOTS_MS))
+    if not re.search(r"rowEpoch\s*!=\s*s_lastRowEpoch", fig):
+        errs.append("display: spectrogram full repaint must be gated on a row scroll (rowEpoch != s_lastRowEpoch)")
+    # Screen 1 (target ruler): the staircase repaints at most every ATT_STAIR_MS,
+    # and the 60 s sweep is only fully repainted on a frame/screenshot redraw
+    # (each tick touches just the newest slots + cursor).
+    stair_ms = define_value(disp, "ATT_STAIR_MS")
+    if stair_ms is None or stair_ms < 5 * MIN_DOTS_MS:
+        errs.append("display: ATT_STAIR_MS missing or < %d ms (staircase repaint too often)" % (5 * MIN_DOTS_MS))
+    if not re.search(r"const\s+bool\s+fullE\s*=\s*s_dotsFull\s*\|\|\s*shotOn\s*;", fig):
+        errs.append("display: Screen 1 sweep full repaint must be gated on s_dotsFull || shotOn only")
+    if not re.search(r"stair\s*!=\s*s_lastStair", fig):
+        errs.append("display: Screen 1 staircase repaint must be gated on a new ATT_STAIR_MS bucket")
+
     # Layering: frame / dots / bins must be separate widgets.
     needs = set(re.findall(r"\bneed\(\s*(W_[A-Z0-9_]+)", fig))
     for w in ("W_PROTO_PLOT", "W_ATT_DOTS", "W_ATT_BINS"):
@@ -199,8 +222,16 @@ def selftest():
         ("dots 500 ms", DISPLAY, "#define ATT_DOTS_MIN_MS 1000", "#define ATT_DOTS_MIN_MS 500"),
         ("bins 1 s", DISPLAY, "#define ATT_MISS_BIN_MIN_MS 5000", "#define ATT_MISS_BIN_MIN_MS 1000"),
         ("text in dots layer", DISPLAY,
-         "        if (cand) d.fillRect(x - 1, dY(y - 1), 3, 3, candCol);",
-         '        text(d, "x", x, dY(y), 9, candCol, C_BG);\n        if (cand) d.fillRect(x - 1, dY(y - 1), 3, 3, candCol);'),
+         "            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);",
+         '            text(d, "x", x, dY(y), 9, C_TEXT, C_BG);\n            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);'),
+        ("spectrogram full repaint every tick", DISPLAY,
+         "const bool full = s_dotsFull || shotOn || rowEpoch != s_lastRowEpoch;",
+         "const bool full = true;"),
+        ("spectrogram rows too short", DISPLAY, "#define ATT_ROWS 16", "#define ATT_ROWS 120"),
+        ("staircase repaint every tick", DISPLAY, "#define ATT_STAIR_MS 5000", "#define ATT_STAIR_MS 200"),
+        ("sweep full repaint every tick", DISPLAY, "const bool fullE = s_dotsFull || shotOn;",
+         "const bool fullE = true;"),
+        ("staircase ungated", DISPLAY, "if (stair != s_lastStair)", "if (true)"),
         ("tap ungated", MINING, "if (--swTap == 0)", "if (true)"),
         ("tap every 1", MINING_H, "#define HASH_TAP_EVERY 256u", "#define HASH_TAP_EVERY 1u"),
         ("sampler in updateBestDiff", MINING,
