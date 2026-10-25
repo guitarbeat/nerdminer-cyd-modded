@@ -273,7 +273,7 @@ enum WidgetId
   W_CONVEYOR, // MINE: animated mini conveyor machine
   W_ATT_DOTS, // MINE RECENT ATTEMPTS: point layer
   W_ATT_BINS, // MINE RECENT ATTEMPTS: MISS/SHARE/BLOCK bins
-  W_ATT_PILLS, // MINE RECENT ATTEMPTS: window share/block pills on the lane dividers
+  W_ATT_PILLS, // MINE RECENT ATTEMPTS: live share/block target bits on the lane dividers
   W_COUNT
 };
 static String wkey[W_COUNT];
@@ -1739,11 +1739,12 @@ static void drawClosestTry(const Rect &r, const MineV &m)
 #define ATT_DOTS_MIN_MS 1000     // dot layer (text-free): at most once per second
 #define ATT_MISS_BIN_MIN_MS 5000 // MISS bin counter: at most every 5 s
 #define ATT_WIN_SEC 60 // fixed time window (the 15s/30s/60s tabs were removed)
-// Screen 0 (A) spectrogram: 16 rows of 3.75 s, anchored to absolute time
-// (row = nowMs / ATT_ROW_MS), so between scrolls only the newest row changes
-// and only it is repainted; the whole body only on a scroll (every 3.75 s).
-#define ATT_ROWS 16
-#define ATT_ROW_MS (ATT_WIN_SEC * 1000 / ATT_ROWS) // 3750
+// Screen 0 (A) spectrogram: 28 rows of ~2.14 s (square cells), anchored to
+// absolute time (row = nowMs / ATT_ROW_MS), so between scrolls only the newest
+// row changes and only it is repainted; the whole body only on a scroll.
+// Keep ATT_ROW_MS >= 2000 (starvation guard): more rows = more full repaints.
+#define ATT_ROWS 28
+#define ATT_ROW_MS (ATT_WIN_SEC * 1000 / ATT_ROWS) // 2142
 // Mine chart mode stub for the two-screen plan: 0 = A spectrogram (this),
 // 1 = E target ruler (Phase 2, not built yet).
 static uint8_t g_mineChartMode = 0;
@@ -1761,6 +1762,15 @@ static bool mineChartBandHit(int x, int y)
   const Rect r = mineChartRect();
   return x >= r.x && x < r.x + r.w && y >= r.y - 6 && y < r.y + 2 + 16 + 6;
 }
+static bool mineChartBodyHit(int x, int y)
+{
+  const Rect r = mineChartRect();
+  return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+// Last accepted tap (touch task writes, /api/touchdiag reads) so a tap that
+// "does nothing" can be checked against the drawn layout.
+struct LastTap { int16_t x = -1, y = -1; int8_t action = 0; uint32_t ms = 0, count = 0; };
+static volatile LastTap g_lastTap;
 static void fmtCompact(double v, char *out, size_t n)
 {
   if (v < 10000.0) snprintf(out, n, "%lu", (unsigned long)(v + 0.5));
@@ -1853,9 +1863,18 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   const int gridW = nCellX * GRID_CELL + 1, gridH = nCellY * GRID_CELL + 1;
   const int gox = (colW - gridW) / 2;                  // grid centred in each lane
   const int goy = yTop + (H + 1 - gridH) / 2;
+  // Screen 0 (K squares): 16 columns per lane at a 4 px pitch, ATT_ROWS (28)
+  // rows at a 5 px pitch; every cell is a 3x3 square. 28 x 5 px fills the body
+  // height for 60 s while keeping a row >= 2 s (full repaint at most every 2.1 s).
+  const int SPEC_PX = 4;                               // column pitch
+  const int SPEC_PY = 5;                               // row pitch
+  const int SPEC_NX = 16;                              // columns per lane
+  const int SPEC_W = 3, SPEC_H = 3;                    // square cell
+  const int gox0 = (colW - (SPEC_NX * SPEC_PX + 1)) / 2;
+  const int goyS = yTop + (H - ((ATT_ROWS - 1) * SPEC_PY + SPEC_H)) / 2; // top of row 0
 
   // lane look (mockup): faint per-lane tint, dashed dividers in the accent of
-  // the lane to their right, window share/block pills sitting on them
+  // the lane to their right, target-bit pills sitting on them
   const uint16_t laneC[3] = {C_BEST, C_CYAN, C_GOLD};
   // cyan washes start from a bluer cyan: 0x07FF darkened in RGB565 drifts green
   const uint16_t kCyanWash = 0x04DF;
@@ -1870,12 +1889,24 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   // the line, the first cell right of it; 5 rows) so no cell is ever cut in
   // half around a pill. The body never paints inside it; the pill layer
   // paints it solid background first, then the digit squares.
-  const int pillRows = 5;
-  const int pillRow0 = (yMid - goy) / GRID_CELL - pillRows / 2;
+  const int pillRows = 9; // 9 x 5 px rows: room for a 3-digit stack
+  const int pillRow0 = (yMid - goyS) / SPEC_PY - pillRows / 2;
   auto pillRect = [&](int c) -> Rect {
+    // horizontal: the pill's black strip spans divX - pillCell/2 - 1 ..
+    // divX - pillCell/2 + pillCell; widen it to whole 4 px bars on both sides
     const int divX = x0 + c * colW;
-    return Rect{divX - (colW - 1 - (nCellX - 1) * GRID_CELL), goy + pillRow0 * GRID_CELL + 1,
-                (colW - 1 - (nCellX - 1) * GRID_CELL) + GRID_CELL, pillRows * GRID_CELL - 1};
+    int L = divX - pillCell / 2 - 1, R = divX - pillCell / 2 + pillCell; // inclusive
+    for (int lane = c - 1; lane <= c; lane++)
+      for (int kk = 0; kk < SPEC_NX; kk++)
+      {
+        const int bx = x0 + lane * colW + gox0 + kk * SPEC_PX + 1, bxe = bx + SPEC_W - 1;
+        if (bxe >= divX - pillCell / 2 - 1 && bx <= divX - pillCell / 2 + pillCell)
+        {
+          if (bx < L) L = bx;
+          if (bxe > R) R = bxe;
+        }
+      }
+    return Rect{L, goyS + pillRow0 * SPEC_PY, R - L + 1, (pillRows - 1) * SPEC_PY + SPEC_H};
   };
   static uint16_t s_winShares = 0, s_winBlocks = 0; // counted on the dots tick (<= 1/s)
   static bool s_dotsFull = true;     // next dots pass repaints every row
@@ -1961,16 +1992,17 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     if (g_mineChartMode == 0)
     {
     // ---- Screen 0 (A): leading-zero-bit spectrogram ----
-    // Columns (8 per lane) are leading-zero-bit buckets of each real hash:
+    // Columns (16 per lane) are leading-zero-bit buckets of each real hash:
     // bits = 32 + log2(difficulty) (difficulty 1 = 32 leading zero bits).
-    //  MISS : 0 | 1 | 2-3 | 4-15 | four equal slices of [16, share target)
-    //  SHARE: one bit per column above the live share target (pool diff)
-    //  BLOCK: one bit per column above the live network target
+    // Equal bits per column WITHIN each lane (live thresholds Tb / Nb):
+    //  MISS : 16 equal slices of [0, Tb)            (2 bits/col at diff 1)
+    //  SHARE: 16 equal slices of [Tb, Nb)           (1 bit/col if net unknown)
+    //  BLOCK: one bit per column from Nb
     // Cell brightness = count in (row, column): 0 | 1 | 2-3 | 4-7 | 8+.
     const double Tb = 32.0 + log2(poolD); // share target, live from the pool
     const double Nb = 32.0 + log2(netD);  // network target (when known)
-    static uint16_t cnt[ATT_ROWS][24];
-    static uint8_t shf[ATT_ROWS][8]; // SHARE lane: bit0 accepted, bit1 refused
+    static uint16_t cnt[ATT_ROWS][48];
+    static uint8_t shf[ATT_ROWS][16]; // SHARE lane: bit0 accepted, bit1 refused
     memset(cnt, 0, sizeof(cnt));
     memset(shf, 0, sizeof(shf));
     const uint32_t rowEpoch = nowMs / ATT_ROW_MS;
@@ -1978,7 +2010,9 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       const uint32_t e = ms / ATT_ROW_MS;
       return e > rowEpoch ? -1 : (int)(rowEpoch - e); // 0 = newest
     };
-    auto clampCol = [](int k) { return k < 0 ? 0 : (k > 7 ? 7 : k); };
+    auto clampCol = [](int k) { return k < 0 ? 0 : (k > 15 ? 15 : k); };
+    const double missW = Tb > 0 ? Tb / 16.0 : 1.0;                       // bits per MISS column
+    const double shareW = (netKnown && Nb > Tb) ? (Nb - Tb) / 16.0 : 1.0; // bits per SHARE column
     for (int i = 0; i < nSamp; i++)
     {
       const bool cand = samp[i].diff < 0;
@@ -1987,17 +2021,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       const int j = rowOf(samp[i].ms);
       if (j < 0 || j >= ATT_ROWS) continue;
       const double bits = 32.0 + log2(dv);
-      int k;
-      if (bits < 1) k = 0;
-      else if (bits < 2) k = 1;
-      else if (bits < 4) k = 2;
-      else if (bits < 16 || Tb <= 16.0) k = 3;
-      else
-      {
-        int q = (int)((bits - 16.0) * 4.0 / (Tb - 16.0)); // 4 equal slices up to the share target
-        k = 4 + (q < 0 ? 0 : (q > 3 ? 3 : q));
-      }
-      cnt[j][k]++;
+      cnt[j][clampCol((int)floor(bits / missW))]++;
     }
     {
       const uint32_t nowU = m.nowUtc;
@@ -2011,11 +2035,11 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         if (j < 0 || j >= ATT_ROWS) continue;
         const double bits = 32.0 + log2(sr.diff);
         if (netKnown && sr.diff >= netD)
-          cnt[j][16 + clampCol((int)(bits - Nb))]++;
+          cnt[j][32 + clampCol((int)floor(bits - Nb))]++;
         else
         {
-          const int k = clampCol((int)(bits - Tb));
-          cnt[j][8 + k]++;
+          const int k = clampCol((int)floor((bits - Tb) / shareW));
+          cnt[j][16 + k]++;
           shf[j][k] |= sr.accepted ? 1 : 2;
         }
       }
@@ -2035,25 +2059,25 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     auto body = [&] {
       TFT_eSPI &d = out();
       if (full) d.fillRect(x0, dY(yTop - 1), x1 - x0 + 1, yBot - yTop + 2, C_BG);
-      for (int j = rowLo; j < rowHi && j < nCellY; j++)
+      for (int j = rowLo; j < rowHi; j++)
       {
-        const int y = goy + j * GRID_CELL + 1;
-        for (int k = 0; k < 24; k++)
+        const int y = goyS + j * SPEC_PY;
+        for (int k = 0; k < 48; k++)
         {
-          const int lane = k / 8, kk = k % 8;
-          const int x = x0 + lane * colW + gox + kk * GRID_CELL + 1;
+          const int lane = k / 16, kk = k % 16;
+          const int x = x0 + lane * colW + gox0 + kk * SPEC_PX + 1;
           const uint16_t n = cnt[j][k];
           if (lane == 1 && n)
           {
-            if (shf[j][kk] & 1) d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, (uint16_t)0x07FF);
+            if (shf[j][kk] & 1) d.fillRect(x, dY(y), SPEC_W, SPEC_H, (uint16_t)0x07FF);
             else
             {
-              d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[1][0]);
-              d.drawRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, (uint16_t)0x07FF); // refused: outlined
+              d.fillRect(x, dY(y), SPEC_W, SPEC_H, ramp[1][0]);
+              d.drawRect(x, dY(y), SPEC_W, SPEC_H, (uint16_t)0x07FF); // refused: outlined
             }
           }
           else
-            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);
+            d.fillRect(x, dY(y), SPEC_W, SPEC_H, ramp[lane][lvl(n)]);
         }
       }
       // live targets: cyan = share target, gold = network target
@@ -2072,7 +2096,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       banded(bx, p1.y + p1.h, bw, byB - (p1.y + p1.h), C_BG, body);
     }
     else
-      banded(x0, goy + 1, x1 - x0 + 1, GRID_CELL - 1, C_BG, body); // newest row only
+      banded(x0, goyS, x1 - x0 + 1, SPEC_H, C_BG, body); // newest row only
     if (!shotOn)
       s_lastRowEpoch = rowEpoch;
     }
@@ -2214,18 +2238,26 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     done(W_ATT_DOTS, kd);
   }
 
-  // ================= divider pills (window counts; tiny, only on change) =================
+  // ================= divider pills (live target bits; tiny, only on change) =================
+  // Each pill names the leading-zero bits its line stands for:
+  //  cyan = share target   32 + log2(pool diff)    (pool diff 1 -> 32)
+  //  gold = block target   32 + log2(network diff) (BTC ~1.4e14 -> 79)
+  // Bits per column differ between lanes (MISS Tb/16, SHARE (Nb-Tb)/16), so the
+  // lines' positions alone can't say this; the old 60 s window counts read as
+  // "00" / "000" and looked like a 0-bit target.
+  const int tBits = (int)floor(32.0 + log2(poolD));
+  const int nBits = netKnown ? (int)floor(32.0 + log2(netD)) : -1;
   char kp[32];
-  snprintf(kp, sizeof(kp), "p|%u|%u|%u|%u", (unsigned)win, (unsigned)s_winShares, (unsigned)s_winBlocks,
-           (unsigned)g_mineChartMode);
+  snprintf(kp, sizeof(kp), "p|%d|%d|%u", tBits, nBits, (unsigned)g_mineChartMode);
   if (g_mineChartMode == 0 && need(W_ATT_PILLS, kp))
   {
     for (int c = 1; c < 3; c++)
     {
       const Rect pr = pillRect(c);
       char num[6];
-      if (c == 1) snprintf(num, sizeof(num), "%02u", (unsigned)(s_winShares > 99 ? 99 : s_winShares));
-      else snprintf(num, sizeof(num), "%03u", (unsigned)(s_winBlocks > 999 ? 999 : s_winBlocks));
+      const int b = c == 1 ? tBits : nBits;
+      if (b < 0) snprintf(num, sizeof(num), "--"); // network target not known yet (no job)
+      else snprintf(num, sizeof(num), "%d", b > 999 ? 999 : b);
       banded(pr.x, pr.y, pr.w, pr.h, C_BG, [&] {
         TFT_eSPI &d = out();
         // the target line keeps running through the pill area
@@ -3850,13 +3882,17 @@ static void touchDiagTick()
 
 String cydTouchDiagJson()
 {
-  char b[260];
+  char b[360];
   snprintf(b, sizeof(b),
            "{\"bus\":\"shared 14/13/12 cs%d\",\"temp\":%u,\"xpt\":[%u,%u,%u,%u],\"reads\":%lu,\"nonZero\":%lu,"
-           "\"irqLowSamples\":%lu,\"samples\":%lu,\"irq\":%d}",
+           "\"irqLowSamples\":%lu,\"samples\":%lu,\"irq\":%d,"
+           "\"lastTap\":{\"x\":%d,\"y\":%d,\"action\":%d,\"agoMs\":%ld,\"count\":%lu},\"chartMode\":%d}",
            ETOUCH_CS, tdiag.temp, tdiag.xpt[0], tdiag.xpt[1], tdiag.xpt[2], tdiag.xpt[3],
            (unsigned long)tdiag.reads, (unsigned long)tdiag.nonZero, (unsigned long)tdiag.irq36Low,
-           (unsigned long)tdiag.samples, digitalRead(TOUCH_IRQ));
+           (unsigned long)tdiag.samples, digitalRead(TOUCH_IRQ),
+           (int)g_lastTap.x, (int)g_lastTap.y, (int)g_lastTap.action,
+           g_lastTap.count ? (long)(millis() - g_lastTap.ms) : -1L, (unsigned long)g_lastTap.count,
+           (int)g_mineChartMode);
   return String(b);
 }
 
@@ -3898,10 +3934,21 @@ static void touchTask(void *)
           pendingTouch = TA_BACKLIGHT; // dark screen: any touch wakes it
         else if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
           pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
-        else if (uiScreen == SCR_MINE && isPortrait() && mineChartBandHit(t_x, t_y))
+        // Mine (portrait): the band is the documented target, but with only
+        // one cyclic screen a tap anywhere else used to fall through to
+        // NEXT/PREV and do nothing. Any tap on the chart, or anywhere at all
+        // when there is no other page to cycle to, flips Screen 0 <-> 1.
+        else if (uiScreen == SCR_MINE && isPortrait() &&
+                 (mineChartBandHit(t_x, t_y) || mineChartBodyHit(t_x, t_y) ||
+                  currentDisplayDriver->num_cyclic_screens <= 1))
           pendingTouch = TA_CHARTMODE;
         else
           pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
+        g_lastTap.x = t_x;
+        g_lastTap.y = t_y;
+        g_lastTap.action = (int8_t)pendingTouch;
+        g_lastTap.ms = millis();
+        g_lastTap.count++;
       }
     }
     else

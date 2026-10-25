@@ -193,12 +193,13 @@ def check(files):
     if len(uses) > 1:
         errs.append("mining: hashTapSw() called from more than one site")
 
-    # Candidate sampler must be rate-gated before taking the lock.
+    # TAP-only sampler: noteCandidate() runs behind every HW/SW prefilter hit;
+    # it must stay accounting-only (no sampling, no lock, no clock read).
     nc = func_bodies(mine, r"\nvoid noteCandidate\s*\(double diff, const uint8_t \*hashLE\)\s*\{")
     if len(nc) != 1:
         errs.append("mining: noteCandidate() not found")
-    elif not re.search(r"\(\s*uint32_t\s*\)\s*\(\s*now\s*-\s*s_candLastMs\s*\)\s*>=\s*\d+", nc[0]):
-        errs.append("mining: noteCandidate() must rate-gate samples (now - s_candLastMs >= N)")
+    elif re.search(r"hashSample|hashTap|millis\(|portENTER_CRITICAL", nc[0]):
+        errs.append("mining: noteCandidate() must not sample, lock or read the clock (TAP-only)")
 
     # updateBestDiff is also called from the stratum task; it must not sample.
     ub = func_bodies(mine, r"\nvoid updateBestDiff\s*\(double diff, const uint8_t \*hashLE\)\s*\{")
@@ -222,18 +223,21 @@ def selftest():
         ("dots 500 ms", DISPLAY, "#define ATT_DOTS_MIN_MS 1000", "#define ATT_DOTS_MIN_MS 500"),
         ("bins 1 s", DISPLAY, "#define ATT_MISS_BIN_MIN_MS 5000", "#define ATT_MISS_BIN_MIN_MS 1000"),
         ("text in dots layer", DISPLAY,
-         "            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);",
-         '            text(d, "x", x, dY(y), 9, C_TEXT, C_BG);\n            d.fillRect(x, dY(y), GRID_CELL - 1, GRID_CELL - 1, ramp[lane][lvl(n)]);'),
+         "            d.fillRect(x, dY(y), SPEC_W, SPEC_H, ramp[lane][lvl(n)]);",
+         '            text(d, "x", x, dY(y), 9, C_TEXT, C_BG);\n            d.fillRect(x, dY(y), SPEC_W, SPEC_H, ramp[lane][lvl(n)]);'),
         ("spectrogram full repaint every tick", DISPLAY,
          "const bool full = s_dotsFull || shotOn || rowEpoch != s_lastRowEpoch;",
          "const bool full = true;"),
-        ("spectrogram rows too short", DISPLAY, "#define ATT_ROWS 16", "#define ATT_ROWS 120"),
+        ("spectrogram rows too short", DISPLAY, "#define ATT_ROWS 28", "#define ATT_ROWS 120"),
         ("staircase repaint every tick", DISPLAY, "#define ATT_STAIR_MS 5000", "#define ATT_STAIR_MS 200"),
         ("sweep full repaint every tick", DISPLAY, "const bool fullE = s_dotsFull || shotOn;",
          "const bool fullE = true;"),
         ("staircase ungated", DISPLAY, "if (stair != s_lastStair)", "if (true)"),
         ("tap ungated", MINING, "if (--swTap == 0)", "if (true)"),
         ("tap every 1", MINING_H, "#define HASH_TAP_EVERY 256u", "#define HASH_TAP_EVERY 1u"),
+        ("sampler in noteCandidate", MINING,
+         "    s_candidates++;\n",
+         "    s_candidates++;\n  hashSamplePut(-(float)diff, millis());\n"),
         ("sampler in updateBestDiff", MINING,
          "void updateBestDiff(double diff, const uint8_t *hashLE)\n{\n",
          "void updateBestDiff(double diff, const uint8_t *hashLE)\n{\n  hashSamplePut((float)diff, millis());\n"),

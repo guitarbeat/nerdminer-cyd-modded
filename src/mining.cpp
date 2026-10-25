@@ -173,14 +173,15 @@ static bool s_roundBestHashOk = false;
 char g_lastWinnerHashHex[65] = "";  // winning block hash, printed form (leading zeros first)
 
 // --- Attempt sampler (Mine "RECENT ATTEMPTS" MISS lane) -- see mining.h -------
-// Two real sources, both OFF the core-1 HW hot loop's per-hash path:
+// ONE source (TAP-only), OFF the core-1 HW hot loop's per-hash path:
 //  * uniform TAP from the core-0 SW miner (1 in HASH_TAP_EVERY nonces, full
-//    double-SHA recomputed for that one nonce), rate-capped at ~4/s;
-//  * prefilter CANDIDATES (already-computed real hashes), rate-capped ~2/s.
+//    double-SHA recomputed for that one nonce), rate-capped at ~4/s.
+// Prefilter candidates are counted (s_candidates) but NOT charted: they are
+// pre-selected at >=16 zero bits and drew a false second peak mid-lane.
 static HashSampleRec s_hsamp[HASH_SAMP_N];
 static uint16_t s_hsHead = 0, s_hsCount = 0;
 static volatile uint32_t s_hsSeq = 0;
-static uint32_t s_tapLastMs = 0, s_candLastMs = 0;
+static uint32_t s_tapLastMs = 0;
 static portMUX_TYPE s_hsMux = portMUX_INITIALIZER_UNLOCKED;
 static volatile uint32_t s_candidates = 0; // 16-bit prefilter hits (local miners)
 static volatile uint32_t s_sharesFound = 0, s_sharesSubmitted = 0;
@@ -217,19 +218,12 @@ static void __attribute__((noinline)) hashTapSw(const uint32_t *mid, const uint8
 }
 
 // Local miners: a hash that cleared the 16-bit prefilter (~12/s at 800 KH/s).
+// Accounting only: count it and feed best-diff. Not sampled into the chart
+// ring (TAP-only sampler), so no clock read and no lock here.
 void noteCandidate(double diff, const uint8_t *hashLE)
 {
   if (diff > 0.0)
-  {
     s_candidates++;
-    const uint32_t now = millis();
-    if (!s_candLastMs || (uint32_t)(now - s_candLastMs) >= 500)
-    {
-      s_candLastMs = now;
-      if (diff < 1e30)
-        hashSamplePut(-(float)diff, now);
-    }
-  }
   updateBestDiff(diff, hashLE);
 }
 
