@@ -536,216 +536,513 @@ static void handleUpdateUpload()
 }
 
 static const char DASH_STYLE[] PROGMEM = R"rawcss(
-:root{
---bg:#0b0d12;--card:#11151c;--card-border:#1e2530;--input-bg:#0b0e13;
---text:#e6ebf2;--muted:#8a96a6;--dim:#58636f;--amber:#f7931a;--green:#3fb950;--warn:#d29922;--red:#f85149;
---mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--r:6px;--ctl:38px;
+/* Data-terminal palette (taste-skill app sheet, seed 199590601, kind
+   markets, dark). Cards sit a step darker than the ground with one soft
+   shadow; colour goes on data only: the hashrate arc carries the one hue
+   (--accent), rejects use --negative, and every selection is a 1px accent
+   line. The older role names below alias these so existing rules keep
+   working. --amber is left to the device theme (set inline on <html>) and
+   is not used by the page. */
+:root{--ground: #171719; --surface: #131217; --raised: #212023; --border: #222224; --rule: #1b1a1f; --control: #3a3a3e; --text: #fff; --soft: #bdbdc0; --muted: #8a8c92; --accent: #4a8ad6; --positive: #44a282; --negative: #e5566f; --warning: #d9a441; --chart-1: #f2f2f3; --shadow: 0 12px 28px rgba(0,0,0,0.2);
+  --bg: var(--ground); --bg-2: var(--ground); --bg-rgb: 23,23,25; --card: var(--surface); --card-2: var(--raised); --card-border: var(--border); --input-bg: var(--ground); --track: var(--raised); --track-hi: var(--control); --text-soft: var(--soft); --dim: var(--muted); --gold: var(--soft); --gold-rgb: 189,189,192; --rose: var(--negative); --rose-rgb: 229,86,111; --periwinkle: var(--accent); --periwinkle-rgb: 138,140,146; --green: var(--positive); --warn: var(--warning); --red: var(--negative); --on-accent: #131217;
+  --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans: 'Public Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; --r: 6px; --ctl: 32px; --tbh: 70px; color-scheme: dark;}
+*{box-sizing: border-box; margin: 0; padding: 0;}
+html{-webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: calc(var(--tbh) + 8px);}
+body{background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); padding-bottom: 12px; -webkit-font-smoothing: antialiased;}
+a{color: var(--periwinkle);}
+code{font: 0.88em var(--mono); background: var(--input-bg); border: 1px solid var(--card-border); padding: 0 4px; border-radius: 3px; word-break: break-all;}
+.muted{color: var(--muted);}
+.skip{position: absolute; left: -999px; top: 0; z-index: 60; background: var(--periwinkle); color: var(--on-accent); padding: 6px 10px;}
+.skip:focus{left: 8px;}
+.container{max-width: 1240px; margin: 0 auto; padding: 8px max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));}
+
+/* Sticky status bar + anchor nav */
+.tb{position: sticky; top: 0; z-index: 50; background: var(--bg); border-bottom: 1px solid var(--card-border);}
+.tb-in{max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: max(5px,env(safe-area-inset-top)) 10px 3px; min-height: 38px;}
+.brand{display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; text-decoration: none; color: var(--text);}
+.brand-t{display: flex; flex-direction: column; min-width: 0; line-height: 1.15;}
+.logo-box{width: 24px; height: 24px; border-radius: var(--r); background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0;}
+.brand-title{font-size: 13px; font-weight: 700; letter-spacing: 0.05em;}
+.brand-subtitle{font: 11px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.tb-hr{font: 11px var(--mono); color: var(--muted); white-space: nowrap;}
+.tb-hr b{font-size: 16px; color: var(--accent); font-variant-numeric: tabular-nums;}
+.coin-pill{font: 600 11px var(--mono); color: var(--gold); border: 1px solid rgba(var(--gold-rgb),0.4); border-radius: 999px; padding: 2px 8px; white-space: nowrap; max-width: 15em; overflow: hidden; text-overflow: ellipsis;}
+.status-badge{display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; white-space: nowrap;}
+.status-badge::before{content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--muted);}
+.status-badge:has(.txt-green)::before{background: var(--green);}
+.status-badge:has(.txt-amber)::before{background: var(--warn);}
+.txt-green{color: var(--green);}.txt-amber{color: var(--warn);}.txt-gray{color: var(--muted);}
+@media (max-width: 640px){.coin-pill,.brand-subtitle{display: none;}}
+.an{max-width: 1240px; margin: 0 auto; display: flex; padding: 0 4px; overflow-x: auto; scrollbar-width: none;}
+.an::-webkit-scrollbar{display: none;}
+.an a{flex: 0 0 auto; color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 7px 10px 6px; border-bottom: 2px solid transparent;}
+.an a:hover{color: var(--text);}
+.an a.on{color: var(--periwinkle); border-bottom-color: var(--periwinkle);}
+
+/* KPI strip: big numbers, tiny labels (1px gap grid = hairline dividers) */
+.kpi{display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; background: var(--card-border); border: 1px solid var(--card-border); border-radius: var(--r); overflow: hidden; margin-bottom: 12px;}
+.k{padding: 5px 10px; min-width: 0; background: var(--card);}
+.kl{display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);}
+.kv{display: block; font: 600 14px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.kv small{font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 4px;}
+.k1 .kv{font-size: 22px; line-height: 1.2; font-weight: 700;}
+.k1:first-child .kv{color: var(--accent);}
+@media (min-width: 960px){.kpi{grid-template-columns: repeat(4,minmax(0,1.3fr)) repeat(4,minmax(0,1fr));}}
+@media (max-width: 560px){.k1{grid-column: span 2;}.k{padding: 4px 8px;}.kv{font-size: 12.5px;}.kv small{margin-left: 2px;}}
+
+.console-layout{display: grid; grid-template-columns: 290px minmax(0,1fr); gap: 14px; align-items: start;}
+@media (max-width: 960px){.console-layout{grid-template-columns: 1fr;}.console-sidebar{order: 2;}}
+.console-sidebar{display: flex; flex-direction: column; gap: 8px; min-width: 0;}
+@media (min-width: 961px){.console-sidebar{position: sticky; top: calc(var(--tbh) + 8px);}}
+.console-main{min-width: 0;}
+
+/* Sections: tiny uppercase title on a thin cyan rule, flat panels */
+.page-sec{display: flex; flex-direction: column; gap: 8px;}
+.page-sec+.page-sec,.settings-sec+.settings-sec{margin-top: 16px;}
+.settings-sec{display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; align-content: start;}
+.settings-h{grid-column: 1/-1; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--periwinkle); padding-bottom: 3px; border-bottom: 1px solid rgba(var(--periwinkle-rgb),0.3);}
+@media (min-width: 1100px){#pane-system{grid-template-columns: 1fr 1fr;}#pane-system>details{grid-column: 1/-1;}}
+.overview-grid{display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,250px),1fr)); gap: 8px; align-items: start;}
+.tele-card,.cfg-card,.pool-banner{background: var(--card); border: 1px solid var(--card-border); border-radius: var(--r); min-width: 0;}
+.tele-card{padding: 5px 10px 6px; display: flex; flex-direction: column;}
+.tele-card-hdr,.cfg-card-hdr{display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;}
+.tele-card-hdr{padding-bottom: 3px;}
+.cfg-card-hdr{padding: 6px 10px 0;}
+.tele-card-title,.cfg-card-title{font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--rose);}
+.tele-card-title .muted{text-transform: none; letter-spacing: 0; font-weight: 400;}
+.tele-hero-sub{font-size: 11.5px; color: var(--muted); padding: 1px 0 3px;}
+.unit{font-size: 12px; color: var(--muted); font-family: var(--sans);}
+.tele-row{display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 2px 0; border-top: 1px solid var(--card-border); font-size: 12px; color: var(--muted);}
+.tele-row>span:first-child{white-space: nowrap;}
+.hl-val{color: var(--text); font: 12px var(--mono); font-variant-numeric: tabular-nums; text-align: right;}
+.share-log{display: flex; flex-direction: column; border-top: 1px solid var(--card-border); max-height: 200px; overflow-y: auto; margin-top: 3px;}
+.sl-row{display: grid; grid-template-columns: 5.5em 1fr 6em 5.5em; gap: 8px; align-items: center; padding: 2px 6px; font: 12px var(--mono); font-variant-numeric: tabular-nums;}
+.sl-row:nth-child(even){background: rgba(255,255,255,0.03);}
+.sl-row:not(.hdr):hover{background: rgba(var(--periwinkle-rgb),0.08);}
+.sl-row.hdr{position: sticky; top: 0; background: var(--card); font: 600 10.5px var(--sans); color: var(--muted);}
+.sl-row.rej{color: var(--red);}
+.sl-row.best .sl-d{color: var(--gold);}
+.sl-bar{height: 5px; background: var(--card-border); border-radius: 3px; overflow: hidden;}
+.sl-bar>i{display: block; height: 100%; background: var(--muted);}
+.sl-r{text-align: right; color: var(--muted); white-space: nowrap;}
+.btn-reset-stats{background: transparent; border: 1px solid var(--card-border); border-radius: var(--r); color: var(--muted); padding: 2px 9px; font: 12px var(--sans); cursor: pointer; min-height: 26px;}
+.btn-reset-stats:hover{color: var(--text); border-color: var(--dim);}
+.btn-reset-stats:disabled{opacity: 0.6; cursor: wait;}
+.pool-banner{padding: 7px 10px; display: flex; flex-direction: column; gap: 6px;}
+.pool-info{font-size: 12.5px; min-width: 0; overflow-wrap: anywhere;}
+.pool-btn{display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(var(--periwinkle-rgb),0.4); color: var(--periwinkle); text-decoration: none; font-weight: 600; font-size: 12.5px; padding: 4px 10px; border-radius: var(--r); min-height: var(--ctl);}
+.pool-btn:hover{background: rgba(var(--periwinkle-rgb),0.08);}
+
+/* Disclosure */
+
+details.more>summary{cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; color: var(--text); user-select: none;}
+
+details.more>summary::-webkit-details-marker{display: none;}
+
+details.more>summary::after{content: '+'; font: 15px var(--mono); color: var(--periwinkle); flex-shrink: 0;}
+details.more[open]>summary::after{content: '\2212';}
+
+
+
+
+details.more{border-top: 1px solid var(--card-border); padding-top: 6px;}
+.more-body{padding-top: 8px; display: flex; flex-direction: column; gap: 8px;}
+
+/* Controls: label above field, one height */
+input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control{width: 100%; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: var(--r); color: var(--text); padding: 4px 9px; font: 13px var(--mono); outline: none; transition: border-color 0.15s; height: var(--ctl);}
+input[type=color]{padding: 3px; cursor: pointer;}
+input:focus,select:focus,.form-control:focus{border-color: var(--periwinkle); outline: 1px solid var(--periwinkle);}
+input::placeholder{color: var(--dim);}
+select{appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a8c92' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center;}
+select.ctl-auto{width: auto; display: inline-block;}
+.file-input{flex: 1; min-width: 0; width: 100%; font-size: 12.5px; color: var(--text); background: var(--input-bg); padding: 4px 6px; border: 1px solid var(--card-border); border-radius: var(--r); min-height: var(--ctl);}
+.cfg-card-body{padding: 6px 10px 9px; display: flex; flex-direction: column; gap: 8px;}
+.form-grid-3{display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px;}
+.form-grid-2{display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;}
+.form-grid-4{display: grid; grid-template-columns: repeat(4,1fr); gap: 8px;}
+@media (max-width: 720px){.form-grid-4{grid-template-columns: 1fr 1fr;}}
+@media (max-width: 560px){.form-grid-3,.form-grid-2{grid-template-columns: 1fr;}}
+.form-group{display: flex; flex-direction: column; gap: 3px; min-width: 0;}
+.form-label{display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--muted);}
+.form-label-sub{font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0;}
+.form-sublabel{display: block; font-size: 11px; color: var(--muted);}
+.form-hint{font-size: 11.5px; color: var(--muted); line-height: 1.35;}
+.row-between{display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;}
+.form-check{display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--text); cursor: pointer; user-select: none; line-height: 1.35;}
+.form-check input[type=checkbox]{accent-color: var(--periwinkle); width: 16px; height: 16px; margin-top: 1px; flex-shrink: 0; cursor: pointer;}
+.form-check input[type=checkbox]:disabled{cursor: wait;}
+.slider-track-wrap{display: flex; align-items: center; min-height: var(--ctl);}
+input[type=range]{-webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--card-border); border-radius: 2px; outline: none; accent-color: var(--periwinkle);}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--periwinkle); cursor: pointer;}
+input[type=range]::-moz-range-thumb{width: 16px; height: 16px; border-radius: 50%; background: var(--periwinkle); cursor: pointer; border: none;}
+.preset-bar{display: flex; flex-direction: column; gap: 5px;}
+.preset-pills{display: flex; flex-wrap: wrap; gap: 4px; align-items: center;}
+.preset-pill{background: transparent; border: 1px solid var(--card-border); color: var(--text); font: 11.5px var(--mono); padding: 3px 8px; border-radius: 999px; cursor: pointer; min-height: 26px;}
+.preset-pill:hover{border-color: var(--dim);}
+.preset-pill.active{border-color: var(--periwinkle); color: var(--periwinkle);}
+.preset-pill.sm{font-size: 11px; padding: 2px 7px; min-height: 24px;}
+.preset-comment{font-size: 11.5px; line-height: 1.35; color: var(--muted);}
+.active-pool-pill{display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted);}
+.active-pool-pill::before{content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green);}
+.active-pool-pill.fallback::before{background: var(--warn);}
+.theme-grid{display: flex; flex-wrap: wrap; gap: 6px;}
+.theme-card{display: inline-flex; align-items: center; gap: 6px; background: var(--input-bg); border: 1px solid var(--card-border); border-radius: 999px; padding: 3px 11px 3px 6px; min-height: 30px; font: 12px var(--sans); color: var(--text); cursor: pointer;}
+.theme-card:hover{border-color: var(--dim);}
+.theme-card.active{outline: 2px solid var(--accent); outline-offset: 2px;}
+.theme-card.busy{opacity: 0.6; cursor: wait;}
+.swatch-dot{width: 16px; height: 16px; border-radius: 50%; display: block; flex: none;}
+
+/* Sticky actions: Save primary, Reboot quiet */
+.actions{position: sticky; bottom: 0; z-index: 5; margin: 14px 0 4px; padding: 8px 0 max(8px,env(safe-area-inset-bottom)); display: flex; gap: 8px; background: rgba(var(--bg-rgb),0.94); border-top: 1px solid var(--card-border);}
+.btn-save{background: var(--accent); color: var(--on-accent); border: none; border-radius: var(--r); padding: 8px 14px; font: 700 14px var(--sans); letter-spacing: 0.03em; cursor: pointer; flex: 2 1 0; min-height: 42px;}
+.btn-save:hover{filter: brightness(1.08);}
+.btn-save:disabled{opacity: 0.6; cursor: wait;}
+.btn-restart{background: transparent; border: 1px solid var(--card-border); border-radius: var(--r); color: var(--muted); padding: 6px 10px; font: 12.5px var(--sans); cursor: pointer; flex: 1 1 0; min-height: 40px;}
+.btn-restart:hover{color: var(--red); border-color: rgba(var(--rose-rgb),0.5);}
+.btn-restart:disabled{opacity: 0.6; cursor: wait;}
+.ota-row{display: flex; flex-wrap: wrap; gap: 8px; align-items: center;}
+.btn-ota{background: transparent; border: 1px solid rgba(var(--periwinkle-rgb),0.45); border-radius: var(--r); color: var(--periwinkle); padding: 5px 12px; font: 600 12.5px var(--sans); cursor: pointer; min-height: var(--ctl);}
+.btn-ota:hover{background: rgba(var(--periwinkle-rgb),0.08);}
+.btn-ota:disabled{opacity: 0.6; cursor: wait;}
+.ota-progress-box{display: none;}
+.ota-progress-bar{height: 4px; border-radius: 2px; background: var(--input-bg); overflow: hidden;}
+.ota-progress-fill{height: 100%; width: 0%; background: var(--periwinkle); transition: width 0.1s linear;}
+.ota-status{font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums;}
+.guide-grid{display: grid; grid-template-columns: 1fr; gap: 10px;}
+@media (min-width: 480px){.guide-grid{grid-template-columns: repeat(2,1fr);}}
+.guide-card{font-size: 12px; color: var(--muted); min-width: 0;}
+.guide-title{font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--rose); margin-bottom: 2px;}
+.guide-row{display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-top: 1px solid var(--card-border);}
+.guide-key{color: var(--text);}
+.guide-val{color: var(--muted); text-align: right;}
+
+
+.toast{position: fixed; left: 50%; bottom: max(16px,env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--card); border: 1px solid var(--card-border); border-left: 3px solid var(--green); color: var(--text); padding: 8px 14px; border-radius: var(--r); font-size: 13px; z-index: 1000; max-width: calc(100vw - 28px); display: none;}
+.toast.err{border-left-color: var(--red);}
+.toast.show{display: block;}
+#overlay{display: none; position: fixed; inset: 0; background: rgba(var(--bg-rgb),0.96); z-index: 999; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;}
+#overlay h3{font-size: 16px; margin-bottom: 6px;}
+#overlay p{color: var(--muted); font-size: 13px;}
+.spinner{width: 32px; height: 32px; border: 3px solid var(--card-border); border-top-color: var(--periwinkle); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 14px;}
+@keyframes spin{to{transform: rotate(360deg);}}
+a:focus-visible,button:focus-visible,summary:focus-visible,input[type=range]:focus-visible,input[type=checkbox]:focus-visible,input[type=file]:focus-visible{outline: 2px solid var(--periwinkle); outline-offset: 2px;}
+/* Viewport app shell: the page never scrolls; panes do */
+html,body{height: 100%;}
+body{height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; padding: 0;}
+.tb{position: relative; flex: none;}
+.tb-in{min-height: 34px; padding-top: max(3px,env(safe-area-inset-top)); padding-bottom: 2px;}
+.an a{padding: 5px 10px 4px;}
+.container{flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-top: 6px; padding-bottom: 0;}
+.kpi{flex: none; margin-bottom: 6px;}
+.k{padding: 3px 9px;}
+.k1 .kv{font-size: 19px;}
+.console-layout{flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 62px; gap: 10px; scrollbar-width: thin;}
+.console-layout>*,#pane-telemetry,#pane-settings{scroll-padding-top: 6px;}
+.page-sec,.settings-sec{gap: 6px;}
+.page-sec+.page-sec,.settings-sec+.settings-sec{margin-top: 10px;}
+.tele-card{padding: 4px 9px 5px;}
+.tele-row{padding: 1px 0; font-size: 11.5px;}
+.hl-val{font-size: 11.5px;}
+.cfg-card-hdr{padding: 5px 9px 0;}
+.cfg-card-body{padding: 5px 9px 7px; gap: 6px;}
+input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control{font-size: 12px; padding: 3px 8px;}
+.form-hint{font-size: 11px;}
+details.more{padding-top: 4px;}
+details.more>summary{font-size: 12px; min-height: 24px;}
+
+.more-body{padding-top: 6px; gap: 6px;}
+.preset-bar.more{border-top: 0; padding-top: 0;}
+.theme-grid{gap: 5px;}
+.theme-card{font-size: 0; width: 28px; height: 28px; min-height: 28px; padding: 0; justify-content: center; border-radius: 50%;}
+.theme-card .swatch-dot{width: 16px; height: 16px;}
+.btn-restart{min-height: 34px; padding: 4px 8px; font-size: 12px;}
+#btn-recal-touch,#btn-recal-colors{min-height: 28px;}
+.actions{position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 6px max(10px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); z-index: 40;}
+.btn-save{min-height: 40px;}
+.actions .btn-restart{min-height: 40px;}
+.lx{color: var(--periwinkle); text-decoration: none; border: 1px solid rgba(var(--periwinkle-rgb),0.45); border-radius: var(--r); padding: 4px 12px; min-height: 32px; display: inline-flex; align-items: center; letter-spacing: 0.08em;}
+@media (max-width: 560px){.k1 .kv{font-size: 16px;}.kl{font-size: 9px;}}
+/* Desktop: three columns that fill the viewport, each scrolls on its own */
+@media (min-width: 1100px){
+.console-layout{display: grid; grid-template-columns: 250px minmax(0,1fr) minmax(0,1.25fr); grid-template-rows: minmax(0,1fr); overflow: hidden; padding-bottom: 8px; align-items: stretch;}
+.console-main,#cfg-form{display: contents;}
+.console-sidebar{position: static; top: auto; overflow-y: auto; min-height: 0; scrollbar-width: thin;}
+#pane-telemetry,#pane-settings{overflow-y: auto; min-height: 0; padding-right: 4px; scrollbar-width: thin;}
+#pane-settings{display: flex; flex-direction: column;}
+#pane-settings{margin-top: 0;}
+#pane-telemetry>.tele-card:last-child{flex: 1 1 auto; min-height: 140px;}
+#pane-telemetry .share-log{flex: 1 1 0; max-height: none; min-height: 60px;}
+.overview-grid{grid-template-columns: minmax(0,1fr);}
+#pane-system{grid-template-columns: minmax(0,1fr);}
+.actions{position: sticky; left: auto; right: auto; padding: 6px 0 0; margin-top: auto;}
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 40px max(14px,env(safe-area-inset-left));line-height:1.5;-webkit-font-smoothing:antialiased}
-a{color:var(--text)}
-code{font-family:var(--mono);font-size:.88em;background:var(--input-bg);border:1px solid var(--card-border);padding:0 4px;border-radius:3px;word-break:break-all}
-.muted{color:var(--muted)}
-.container{max-width:1160px;margin:0 auto}
+/* Infographic overview */
+.sr{position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;}
+.kb{display: block; height: 3px; background: var(--track); border-radius: 2px; margin-top: 2px; position: relative; overflow: hidden;}
+.kb>i{display: block; height: 100%; width: var(--v,0%); background: var(--accent); transition: width 0.6s;}
+.kb::after{content: ''; position: absolute; left: 79.2%; width: 8.3%; top: 0; bottom: 0; background: rgba(var(--periwinkle-rgb),0.45);}
+.kc{display: flex; align-items: center; gap: 7px;}
+.kc>span:last-child{min-width: 0;}
+.ic{flex: none; position: relative; display: inline-block;}
+.th{width: 8px; height: 22px; border: 1.5px solid var(--muted); border-radius: 4px; overflow: hidden;}
+.th::after{content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: var(--v,0%); background: var(--rose);}
+.th.hot::after{background: var(--red);}
+.wb{display: inline-flex; align-items: flex-end; gap: 2px; height: 18px;}
+.wb i{width: 3px; background: var(--track-hi); border-radius: 1px;}
+.wb i:nth-child(1){height: 5px;}.wb i:nth-child(2){height: 9px;}.wb i:nth-child(3){height: 13px;}.wb i:nth-child(4){height: 18px;}
+.wb[data-l='1'] i:nth-child(-n+1),.wb[data-l='2'] i:nth-child(-n+2),.wb[data-l='3'] i:nth-child(-n+3),.wb[data-l='4'] i{background: var(--periwinkle);}
+.pg{width: 12px; height: 12px; border-radius: 50%; background: var(--muted);}
+.pg.g{background: var(--green);}.pg.a{background: var(--warn);}.pg.r{background: var(--red);}
+.bt{width: 22px; height: 12px; border: 1.5px solid var(--muted); border-radius: 2px; padding: 1px;}
+.bt::before{content: ''; position: absolute; right: -4px; top: 2px; width: 2px; height: 5px; background: var(--muted);}
+.bt::after{content: ''; display: block; height: 100%; width: var(--v,0%); background: var(--green); border-radius: 1px;}
+.bt.low::after{background: var(--warn);}
+.vz2{display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px;}
+.vz-tag{font: 10px var(--mono); color: var(--muted); text-transform: none; letter-spacing: 0;}
+.vz-sub{font-size: 11px; color: var(--muted); line-height: 1.4;}
+.vz-sub b,.vz-sub span[id]{color: var(--text); font: 11px var(--mono);}
+.vz-k{font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap;}
+.gauge{display: block; width: 100%; max-width: 190px; margin: 0 auto;}
+.gauge path{fill: none; stroke-width: 9; stroke-linecap: round;}
+.g-trk{stroke: var(--track);}
+.gauge .g-band{stroke: rgba(var(--periwinkle-rgb),0.4); stroke-width: 13; stroke-linecap: butt;}
+.g-val{stroke: var(--accent); transition: stroke-dasharray 0.6s;}
+.g-num{fill: var(--text); font: 700 17px var(--mono); text-anchor: middle;}
+.g-u{fill: var(--muted); font: 7.5px var(--sans); letter-spacing: 0.12em; text-anchor: middle;}
+.g-ax{fill: var(--dim); font: 7px var(--mono); text-anchor: middle;}
+.dn-wrap{display: flex; align-items: center; gap: 10px; padding: 2px 0;}
+.donut{width: 84px; height: 84px; flex: none;}
+.donut circle{fill: none; stroke-width: 9;}
+.d-trk{stroke: var(--track);}
+.d-ok,.d-bad{transform: rotate(-90deg); transform-origin: 40px 40px; transition: stroke-dasharray 0.6s;}
+.d-ok{stroke: var(--accent);}
+.d-bad{stroke: var(--rose);}
+.d-n{fill: var(--text); font: 700 15px var(--mono); text-anchor: middle;}
+.d-l{fill: var(--muted); font: 6.5px var(--sans); letter-spacing: 0.1em; text-anchor: middle;}
+.dn-lg{display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; min-width: 0;}
+.dn-lg b{font-family: var(--mono);}
+.sw{display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px;}.sw.ok{background: var(--accent);}.sw.bad{background: var(--rose);}
+.lad{position: relative; height: 46px; margin: 2px 8px 2px;}
+.lad-bar{position: absolute; left: 0; right: 0; top: 17px; height: 10px; border-radius: 5px; background: var(--track);}
+#lad-t i{position: absolute; top: 16px; width: 3px; height: 12px; margin-left: -1.5px; background: var(--text); border-radius: 1px;}
+#lad-t i.rj{background: var(--red);}
+.mk{position: absolute; transform: translateX(calc(var(--sh,50)*-1%)); font: 600 9px var(--mono); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;}
+.mk::after{content: ''; position: absolute; left: calc(var(--sh,50)*1%); width: 2px; margin-left: -1px; height: 14px; background: currentColor;}
+.mk-best,.mk-win{top: 0;}.mk-best::after,.mk-win::after{top: 11px;}
+.mk-pool,.mk-rb,.mk-blk{top: 34px;}.mk-pool::after,.mk-rb::after,.mk-blk::after{bottom: 11px;}
+.mk-pool{color: var(--periwinkle);}.mk-best{color: var(--rose);}.mk-rb{color: var(--accent);}.mk-win{color: var(--text);}
+.mk-blk{color: var(--gold);}
+.kc .kl{white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.hs,.rnd{display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0;}
+.hs-v{font: 11px var(--mono); letter-spacing: 1px; overflow: hidden; white-space: nowrap; min-width: 0;}
+.rbar{flex: 1; min-width: 40px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden;}
+.rbar>div{height: 100%; width: 0;}
+.rnd>.vz-k:last-child{text-transform: none; letter-spacing: 0; white-space: normal; font: 10.5px var(--mono); max-width: 55%;}
+.bdgs{display: flex; flex-wrap: wrap; gap: 4px;}
+.bdg{display: inline-flex; align-items: baseline; gap: 5px; border: 1px solid var(--card-border); background: var(--input-bg); border-radius: 999px; padding: 2px 9px; font-size: 11px;}
+.bdg i{font-style: normal; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);}
+.bdg b{font: 600 11px var(--mono); color: var(--text);}
+.bdg-p{border-color: rgba(var(--periwinkle-rgb),0.4); align-items: center;}
+.bdg-p .glow{width: 8px; height: 8px; border-radius: 50%; background: var(--muted);}
+.bdg-p.on .glow{background: var(--green); animation: pl 2s infinite;}
+.bdg-p.wait .glow{background: var(--warn);}
+.bdg-p b{color: var(--gold);}
+@keyframes pl{50%{opacity: 0.45;}}
+@media (max-width: 560px){.kc{gap: 5px;}.kc .rs{display: none;}.donut{width: 68px; height: 68px;}.dn-wrap{gap: 6px;}}
+/* No section nav: one integrated view */
+.tb-in{min-height: 38px;}
+.stc{display: flex; align-items: center; gap: 8px; min-width: 0;}
+.lrn{color: var(--periwinkle); text-decoration: none; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid rgba(var(--periwinkle-rgb),0.45); border-radius: var(--r); padding: 5px 10px; min-height: 28px; display: inline-flex; align-items: center;}
+.lrn:hover{background: rgba(var(--periwinkle-rgb),0.08);}
+.kpi{grid-template-columns: repeat(5,minmax(0,1fr));}
+@media (min-width: 960px){.kpi{grid-template-columns: repeat(5,minmax(0,1fr));}}
+.k1{grid-column: auto;}
+.mk.nl{font-size: 0;}
+.mk.nl::after{height: 14px;}
+@media (max-width: 560px){.kpi{grid-template-columns: repeat(5,minmax(0,1fr));}.kc{flex-direction: column; align-items: flex-start; gap: 2px;}.k{padding: 3px 5px;}.kc .kl{font-size: 8.5px;}.kc .kv{font-size: 11.5px;}.brand-t{display: none;}.coin-pill{display: inline-block; max-width: 9em;}}
+@media (min-width: 1100px){
+.console-layout{grid-template-columns: 240px minmax(0,0.9fr) minmax(0,1.35fr);}
+#pane-system .form-grid-3,#pane-settings .form-grid-2{grid-template-columns: minmax(0,1fr) minmax(0,1fr);}
+#pane-system .form-grid-3>:first-child{grid-column: 1/-1;}
+#pane-display .form-grid-2{grid-template-columns: minmax(0,1fr);}
+#pane-settings .form-group:not(:focus-within)>.form-hint{display: none;}
+#pane-settings .settings-sec{gap: 5px;}
+}
+/* Tall enough: settings flow into two columns (Wallet+Display | System+Save), no pane scroll */
+@media (min-width: 1100px) and (min-height: 740px){
+#pane-settings{flex-wrap: wrap; align-content: flex-start; column-gap: 10px; overflow: hidden;}
+#pane-settings>*{width: calc(50% - 5px); flex: none;}
+#pane-settings>#pane-system{margin-top: 0;}
+#pane-settings>.actions{margin-top: auto; position: static; padding-top: 8px;}
+}
+/* Reduced motion: name the animated parts instead of a blanket override. */
+/* Merged speed + shares card; settings cards follow each other without headings */
+.tele-card>.vz2{gap: 12px;}
+.tele-card>.vz2>div{display: flex; flex-direction: column; min-width: 0;}
+.tele-card>.vz2>div+div{border-left: 1px solid var(--card-border); padding-left: 12px;}
+.bdgs{margin-top: 4px;}
+.shot-btn{font: inherit; font-size: 11px; font-weight: 700; background: none; cursor: pointer; margin-right: 6px;}
+/* Device view: hidden (no box, no column) until a screenshot has loaded */
+html:not(.shot-ok) .console-sidebar{display: none;}
+html.shot-ok .shot-btn{display: none;}
+@media (min-width: 1100px){html:not(.shot-ok) .console-layout{grid-template-columns: minmax(0,1fr) minmax(0,1.25fr);}}
+/* Health strip: four chips (mining time moved into the speed card) */
+.kpi,.kpi:has(.kc){grid-template-columns: repeat(4,minmax(0,1fr));}
+/* Type and alignment pass (taste-skill app rules): sentence case, no
+   tracking, nothing under 11px, tabular figures, one 4px spacing scale,
+   one inline card padding so titles, labels and values share a left edge. */
+body{font-variant-numeric: tabular-nums;}
+.brand-title{font-size: 15px; font-weight: 700; line-height: 1.2;}
+.kl,.tele-card-title,.cfg-card-title,.vz-k,.vz-tag,.bdg i,.sh-h,.mk,.lrn,.lx,.sheet-h,.settings-h,.sl-row.hdr,.form-label,.coin-pill,.brand-title{text-transform: none; letter-spacing: 0;}
+.kl{font-size: 12px;}
+.tele-card-title,.cfg-card-title,.sh-h{font-size: 13px; font-weight: 600; color: var(--text-soft);}
+.vz-tag,.vz-k,.bdg i,.mk{font-size: 11px;}
+.rnd>.vz-k:last-child{font-size: 11px;}
+.vz-sub,.vz-sub b,.vz-sub span[id]{font-size: 12px;}
+.sl-row.hdr{font-size: 12px; font-weight: 400;}
+.sl-row:nth-child(even){background: none;}
+.sl-row>:first-child,.sl-row>:nth-child(3){text-align: right;}
+.sl-bar{height: 3px;}
+.form-label,.form-label-sub,.form-hint,.brand-subtitle,.coin-pill,.preset-pill,.preset-pill.sm{font-size: 12px;}
+.lrn{height: 30px; min-height: 30px; font-size: 12px; font-weight: 600; align-items: center; justify-content: center;}
+.tele-card{padding: 8px 10px;}
+.cfg-card-hdr{padding: 8px 10px 0;}
+.cfg-card-body{padding: 6px 10px 10px;}
+/* Theme swatches: one 28px box each; the selection is an outline ring
+   that takes no layout space, so every dot sits on one centre line. */
+.theme-grid{display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 2px 4px;}
+.theme-card,.theme-card.active{box-sizing: border-box; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-height: 28px; padding: 0; gap: 0; border: 1px solid var(--track-hi); border-radius: 50%; font-size: 0; line-height: 0;}
+.theme-card .sr{font-size: 12px;}
+.theme-card .swatch-dot{width: 16px; height: 16px;}
+/* Controls in one row share one height */
+input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control,.file-input{height: var(--ctl); min-height: var(--ctl);}
+.btn-save,.actions .btn-restart{height: 40px; min-height: 40px;}
+.btn-restart,.btn-ota,.btn-reset-stats{display: inline-flex; align-items: center; justify-content: center;}
+/* Data-terminal surfaces and controls */
+.tele-card,.cfg-card,.pool-banner{border: 0; background: var(--surface); box-shadow: var(--shadow);}
+.btn-save{background: var(--text); color: var(--on-accent); border-radius: 999px; font-weight: 600; letter-spacing: 0;}
+.btn-restart,.btn-ota,.btn-reset-stats,.lrn,.lx,.preset-pill{border: 1px solid var(--control); border-radius: 999px; color: var(--text); background: none;}
+.btn-restart:hover,.btn-ota:hover,.btn-reset-stats:hover,.lrn:hover,.lx:hover,.preset-pill:hover{border-color: var(--muted); background: none;}
+.preset-pill.active{border-color: var(--control); color: var(--text); text-decoration: underline 1px var(--accent); text-underline-offset: 4px;}
+.theme-card.active{outline: 1px solid var(--accent); outline-offset: 3px;}
+.coin-pill{color: var(--soft); border-color: var(--control);}
+.logo-box{background: var(--accent); color: var(--on-accent);}
+.guide-title{font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--soft);}
+.g-val{stroke: var(--accent); filter: none;}
+.g-band{stroke: var(--control);}
+.g-sc{display: flex; justify-content: space-between; max-width: 190px; width: 100%; margin: 0 auto; padding: 0 2px; font: 11px var(--mono); color: var(--muted);}
+.g-sc>span:nth-child(2){font-family: var(--sans);}
+.d-ok,.sw.ok{stroke: var(--chart-1);}
+.sw.ok{background: var(--chart-1);}
+.d-bad,.sw.bad{stroke: var(--negative);}
+.sw.bad{background: var(--negative);}
+.th::after,.kb>i{background: var(--soft);}
+.mk-pool{color: var(--muted);}
+.mk-rb,.mk-win{color: var(--soft);}
+.mk-best{color: var(--accent);}
+.mk-blk{color: var(--chart-1);}
+#lad-t i{background: var(--soft);}
+.bdg{border-color: var(--border); background: var(--raised);}
+.bdg-p b,.sl-row.best .sl-d{color: var(--text);}
+.tb{background: var(--ground);}
+.wb[data-l='1'] i:nth-child(-n+1),.wb[data-l='2'] i:nth-child(-n+2),.wb[data-l='3'] i:nth-child(-n+3),.wb[data-l='4'] i{background: var(--soft);}
+details.more>summary::after{color: var(--muted);}
 
-/* Header: identity on the left, mining state on the right */
-.coin-pill{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--amber);border:1px solid var(--card-border);border-radius:999px;padding:3px 10px;white-space:nowrap}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 12px;margin-bottom:12px}
-.brand{display:flex;align-items:center;gap:10px;min-width:0}
-.brand>div{min-width:0}
-.logo-box{width:28px;height:28px;border-radius:var(--r);background:var(--amber);display:flex;align-items:center;justify-content:center;color:#000;font-weight:800;font-size:16px;flex-shrink:0}
-.brand-title{font-size:15px;font-weight:700}
-.brand-subtitle{font-size:12px;color:var(--muted);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.status-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--card-border);border-radius:var(--r);padding:3px 10px;font-size:13px;font-weight:600;flex-shrink:0}
-.status-badge::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor;color:var(--muted)}
-.status-badge:has(.txt-green)::before{color:var(--green)}
-.status-badge:has(.txt-amber)::before{color:var(--warn)}
-.txt-green{color:var(--green)}
-.txt-amber{color:var(--warn)}
-.txt-gray{color:var(--muted)}
+.sheet-h{color: var(--text);}
+.settings-h{font-size: 16px; font-weight: 600; color: var(--text); border-bottom-color: var(--border);}
 
-/* Status strip: hashrate is the biggest number on the page */
-.diag-strip{display:grid;grid-template-columns:repeat(2,1fr);background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);margin-bottom:16px}
-.diag-item{padding:9px 14px;display:flex;flex-direction:column;justify-content:center;min-width:0}
-.diag-item.primary{grid-column:1/-1;border-bottom:1px solid var(--card-border)}
-@media(min-width:720px){.diag-strip{grid-template-columns:1.6fr repeat(4,1fr)}.diag-item.primary{grid-column:auto;border-bottom:0;border-right:1px solid var(--card-border)}}
-.diag-label{display:block;font-size:12px;color:var(--muted)}
-.diag-val{font-size:15px;font-weight:600;color:var(--text);font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.diag-item.primary .diag-val{font-size:26px;line-height:1.2;color:var(--amber)}
-.diag-sub{font-size:12px;font-weight:400;color:var(--muted)}
-.share-log{display:flex;flex-direction:column;border-top:1px solid var(--card-border)}
-.sl-row{display:grid;grid-template-columns:5.5em 1fr 6.5em 5em;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--card-border);font-size:12.5px;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--text)}
-.sl-row.hdr{font-family:inherit;color:var(--muted);font-size:12px}
-.sl-row.rej{color:var(--red,#f85149)}
-.sl-row.best .sl-d{color:var(--amber)}
-.sl-bar{height:6px;background:var(--card-border);border-radius:3px;overflow:hidden}
-.sl-bar>i{display:block;height:100%;background:var(--amber)}
-.sl-r{text-align:right;color:var(--muted)}
-.btn-reset-stats{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--muted);padding:2px 9px;font-size:12px;font-family:inherit;cursor:pointer}
-.btn-reset-stats:hover{color:var(--text);border-color:var(--dim)}
-.btn-reset-stats:disabled{opacity:.6;cursor:wait}
+.dn-lg>span{white-space: nowrap;}
+.dn-lg>span.muted{white-space: normal;}
+.tb-in{padding-left: max(16px,env(safe-area-inset-left)); padding-right: max(16px,env(safe-area-inset-right));}
+.vz-sub,.vz-sub b,.vz-sub span[id],.dn-lg,.sl-row,.bdg,.bdg b,.form-check,.cyd-shot-cap,details.more>summary{font-size: 13px;}
+.btn-restart,.btn-reset-stats,.btn-ota{white-space: nowrap;}
+/* Share history lives inside the odds card */
+.sh-h{margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--text-soft);}
+.set-btn,.sheet-h{display: none;}
+.lrn .bt-t{pointer-events: none;}
+/* Phone (600px and below): the top bar and health strip stay put, the
+   dashboard pane scrolls on its own, settings open as a full-height sheet
+   from the top bar. Targets are 44px, text 13px+, inputs 16px (no iOS zoom). */
+@media (max-width: 600px){
+body{font-size: 14px;}
+.tb-in{gap: 8px; min-height: 56px; padding: max(6px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 6px max(16px,env(safe-area-inset-left));}
+.brand{flex: 1 1 auto; min-width: 0;}
+.brand-t{display: flex;}
+.brand-subtitle{display: none;}
+.brand-title{font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.logo-box{width: 30px; height: 30px; font-size: 16px;}
+.stc{flex: none; gap: 8px;}
+.coin-pill{display: none;}
+.status-badge{font-size: 14px; flex: none;}
+.lrn{flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; font-size: 19px; font-weight: 400;}
+.lrn::before{content: attr(data-i);}
+.lrn .bt-t{display: none;}
+.set-btn{display: inline-flex;}
+.container{padding: 8px max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));}
+.kpi,.kpi:has(.kc){grid-template-columns: repeat(2,minmax(0,1fr)); margin-bottom: 8px;}
+.k{padding: 0 12px; min-height: 40px;}
+.kc{flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px;}
+.kc>span:last-child{display: flex; flex: 1 1 auto; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0;}
+.kc .kl{font-size: 13px;}
+.kc .kv{font: 600 14px var(--sans); font-variant-numeric: tabular-nums;}
+.kc .kv small{font-size: 12px; margin-left: 2px;}
+.console-layout{gap: 8px; padding-bottom: calc(12px + env(safe-area-inset-bottom));}
+#pane-telemetry{gap: 8px;}
+.tele-card{padding: 12px;}
+.tele-card-title,.sh-h{font-size: 14px;}
+.vz-sub,.vz-sub b,.vz-sub span[id],.dn-lg{font-size: 13px;}
+.vz-k,.vz-tag,.bdg i,.rnd>.vz-k:last-child{font-size: 12px;}
+.mk{font-size: 11px;}
+.lad{height: 52px;}
+.mk-pool,.mk-rb,.mk-blk{top: 38px;}
+.hs-v{font-size: 13px; letter-spacing: 0;}
+.bdg{font-size: 13px; padding: 5px 10px;}
+.bdg b{font-size: 13px;}
+.sl-row{grid-template-columns: 5em minmax(0,1fr) 4.4em 5.4em; gap: 6px; padding: 4px 4px; font-size: 13px;}
+.sl-row.hdr{font-size: 12px;}
+#pane-telemetry .share-log{flex: none; max-height: none;}
+#pane-telemetry>.tele-card:last-child{min-height: 0;}
+.btn-reset-stats{min-height: 44px; min-width: 64px; font-size: 13px;}
+.cyd-btn-nav{min-height: 44px; padding: 0 16px; font-size: 14px;}
+.cyd-shot-cap{font-size: 13px;}
+#pane-settings{display: none;}
+#pane-settings:target{display: flex; flex-direction: column; gap: 8px; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 70; margin: 0; padding: 0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left)); overflow-y: auto; overscroll-behavior: contain; background: var(--bg);}
+.sheet-h{display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 3; padding: max(6px,env(safe-area-inset-top)) 0 6px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 17px; font-weight: 600; color: var(--text);}
+.lx{min-height: 44px; font-size: 14px;}
+#pane-settings .settings-sec+.settings-sec{margin-top: 0;}
+#pane-settings .settings-sec{gap: 8px;}
+#pane-settings>.actions{position: sticky; bottom: 0; left: auto; right: auto; margin: auto 0 0; padding: 8px 0 max(8px,env(safe-area-inset-bottom)); z-index: 3;}
+.btn-save,.actions .btn-restart{height: 48px; min-height: 48px; font-size: 15px;}
+.cfg-card-hdr{padding: 12px 12px 0;}
+.cfg-card-title{font-size: 14px;}
+.cfg-card-body{padding: 8px 12px 12px; gap: 12px;}
+.form-label,.form-label-sub{font-size: 13px;}
+input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control,.file-input{height: 44px;}
+.theme-grid{gap: 12px;}
+.theme-card,.theme-card.active{width: 44px; height: 44px; min-height: 44px;}
+.form-hint{font-size: 13px;}
+input[type=text],input[type=number],input[type=password],select,.form-control{font-size: 16px; min-height: 44px; padding: 8px 10px;}
+input[type=color]{min-height: 44px;}
+.file-input{font-size: 16px; min-height: 44px;}
+.btn-ota{min-height: 44px; font-size: 14px;}
+.form-check{align-items: center; min-height: 44px; font-size: 14px;}
+.form-check input[type=checkbox]{width: 22px; height: 22px; margin-top: 0;}
+details.more>summary{min-height: 44px; font-size: 14px;}
+.preset-pill{min-height: 44px; padding: 6px 12px; font-size: 13px;}
+.theme-card .swatch-dot{width: 22px; height: 22px;}
+.btn-restart{min-height: 44px; font-size: 14px;}
+input[type=range]{height: 6px; margin: 14px 0;}
+input[type=range]::-webkit-slider-thumb{width: 28px; height: 28px;}
+input[type=range]::-moz-range-thumb{width: 28px; height: 28px;}
+.form-grid-3{grid-template-columns: minmax(0,1fr) minmax(0,1fr);}
+.form-grid-3>:first-child{grid-column: 1/-1;}
+.form-grid-2{grid-template-columns: minmax(0,1fr);}
 
-.console-layout{display:grid;grid-template-columns:310px 1fr;gap:20px;align-items:start}
-@media(max-width:960px){.console-layout{grid-template-columns:1fr}.console-sidebar{order:2}}
-.console-sidebar{display:flex;flex-direction:column;gap:12px;min-width:0}
-@media(min-width:961px){.console-sidebar{position:sticky;top:14px}}
-.console-main{display:flex;flex-direction:column;min-width:0}
-
-/* Tabs: one scrolling row, never wraps */
-.console-tabs{display:flex;flex-wrap:nowrap;gap:2px;border-bottom:1px solid var(--card-border);margin-bottom:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.console-tabs::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 0;min-width:0;text-align:center;padding:8px 12px;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
-.tab-btn:hover{color:var(--text)}
-.tab-btn.active{color:var(--text);border-bottom-color:var(--amber)}
-.tab-pane{display:none}
-.tab-pane.active{display:flex;flex-direction:column;gap:12px}
-.settings-sec{display:flex;flex-direction:column;gap:12px}
-.settings-sec+.settings-sec{margin-top:14px}
-.settings-h{font-size:16px;font-weight:600;color:var(--text);margin:4px 0 0}
-
-/* Overview */
-.overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}
-.tele-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.tele-card-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.tele-card-title{font-size:13px;font-weight:600;color:var(--muted)}
-.tele-hero-val{font-size:22px;font-weight:700;color:var(--text);font-family:var(--mono);font-variant-numeric:tabular-nums;line-height:1.25;overflow-wrap:anywhere}
-.tele-hero-val.amber{color:var(--amber)}
-.tele-hero-sub{font-size:12px;color:var(--muted);margin-bottom:4px}
-.unit{font-size:13px;color:var(--muted);font-weight:500;font-family:var(--sans)}
-.tele-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--card-border);font-size:13px;color:var(--muted)}
-.tele-row>span:first-child{white-space:nowrap}
-.hl-val{color:var(--text);font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;text-align:right}
-
-.pool-banner{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.pool-info{font-size:13px;min-width:0;overflow-wrap:anywhere}
-.pool-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--card-border);color:var(--text);text-decoration:none;font-weight:600;font-size:13px;padding:7px 12px;border-radius:var(--r);min-height:var(--ctl)}
-.pool-btn:hover{border-color:var(--dim)}
-
-/* Disclosure: long explanations and advanced settings start closed */
-.section-hdr{font-size:13px;font-weight:600;color:var(--muted);margin:6px 0 0}
-details.edu-acc{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r);overflow:hidden}
-summary.edu-sum{padding:10px 14px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;user-select:none}
-summary.edu-sum::-webkit-details-marker{display:none}
-summary.edu-sum:hover{background:rgba(255,255,255,0.02)}
-summary.edu-sum::after,details.more>summary::after{content:'+';font-size:15px;color:var(--muted);flex-shrink:0}
-details.edu-acc[open] summary.edu-sum::after,details.more[open]>summary::after{content:'\2212'}
-.edu-body{padding:10px 14px 14px;border-top:1px solid var(--card-border);font-size:13px;line-height:1.6;color:#c3cbd5}
-.edu-body a{color:var(--text)}
-details.more{border-top:1px solid var(--card-border);padding-top:10px}
-details.more>summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:600;color:var(--text);user-select:none}
-details.more>summary::-webkit-details-marker{display:none}
-.more-body{padding-top:12px;display:flex;flex-direction:column;gap:12px}
-
-/* Controls: label -> control -> hint, one height everywhere */
-input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:8px 11px;font-size:14px;font-family:var(--mono);outline:none;transition:border-color .15s;min-height:var(--ctl);height:var(--ctl);box-sizing:border-box}
-input[type=color]{padding:4px;cursor:pointer}
-input[type=text]:focus,input[type=number]:focus,input[type=password]:focus,select:focus,.form-control:focus{border-color:var(--amber)}
-input::placeholder{color:var(--dim)}
-select{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238592a3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
-select.ctl-auto{width:auto;display:inline-block}
-.file-input{flex:1;min-width:0;width:100%;font-size:13px;color:var(--text);background:var(--input-bg);padding:8px;border:1px solid var(--card-border);border-radius:var(--r);min-height:var(--ctl)}
-.cfg-card{background:var(--card);border:1px solid var(--card-border);border-radius:var(--r)}
-.cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;gap:10px;flex-wrap:wrap}
-.cfg-card-title{font-size:14px;font-weight:600;color:var(--text)}
-.cfg-card-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:12px}
-.form-grid-3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
-.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.form-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-@media(max-width:720px){.form-grid-4{grid-template-columns:1fr 1fr}}
-@media(max-width:540px){.form-grid-3,.form-grid-2{grid-template-columns:1fr}}
-@media(max-width:400px){.form-grid-4{grid-template-columns:1fr}}
-.form-group{display:flex;flex-direction:column;gap:4px;min-width:0}
-.form-label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;color:var(--text)}
-.form-label-sub{font-size:12px;font-weight:400;color:var(--muted)}
-.form-sublabel{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
-.form-hint{font-size:12px;color:var(--muted);line-height:1.5}
-.row-between{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
-.form-check{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;padding:2px 0;line-height:1.45}
-.form-check input[type=checkbox]{accent-color:var(--amber);width:16px;height:16px;margin-top:2px;flex-shrink:0;cursor:pointer}
-.form-check input[type=checkbox]:disabled{cursor:wait}
-.slider-track-wrap{display:flex;align-items:center;gap:14px;min-height:var(--ctl)}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;background:var(--card-border);border-radius:2px;outline:none;accent-color:var(--amber)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer}
-input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--amber);cursor:pointer;border:none}
-.preset-bar{display:flex;flex-direction:column;gap:8px}
-.preset-pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.preset-pill{background:transparent;border:1px solid var(--card-border);color:var(--text);font-size:12px;font-family:inherit;padding:5px 10px;border-radius:var(--r);cursor:pointer}
-.preset-pill:hover{border-color:var(--dim)}
-.preset-pill.active{border-color:var(--amber)}
-.preset-pill.sm{font-size:12px;padding:3px 8px}
-.preset-comment{font-size:12px;line-height:1.45;color:var(--muted)}
-.active-pool-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-.active-pool-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green)}
-.active-pool-pill.fallback::before{background:var(--warn)}
-.theme-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-@media(min-width:520px){.theme-grid{grid-template-columns:repeat(3,1fr)}}
-.theme-card{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:9px 11px;cursor:pointer;user-select:none;position:relative}
-.theme-card:hover{border-color:var(--dim)}
-.theme-card.active{border-color:var(--amber)}
-.theme-card.busy{opacity:.6;cursor:wait}
-.theme-card.active::after{content:'\2713';position:absolute;top:8px;right:10px;font-size:12px;color:var(--text)}
-.theme-swatch{display:flex;align-items:center;gap:4px;margin-bottom:5px}
-.swatch-dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.15)}
-.theme-card h4{font-size:13px;font-weight:600;color:var(--text)}
-.theme-card p{font-size:12px;color:var(--muted);line-height:1.35}
-
-/* One primary action: Save. Everything else is bordered and quiet. */
-.actions{position:sticky;bottom:0;z-index:5;margin:16px 0 24px;padding:10px 0;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
-.btn-save{background:var(--amber);color:#000;border:none;border-radius:var(--r);padding:11px 16px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;width:100%;min-height:42px}
-.btn-save:hover{opacity:.92}
-.btn-save:disabled{opacity:.6;cursor:wait}
-.btn-restart{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--muted);padding:9px;font-size:13px;font-family:inherit;cursor:pointer;width:100%;min-height:var(--ctl)}
-.btn-restart:hover{color:var(--red);border-color:rgba(248,81,73,.45)}
-.btn-restart:disabled{opacity:.6;cursor:wait}
-.ota-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.btn-ota{background:transparent;border:1px solid var(--card-border);border-radius:var(--r);color:var(--text);padding:8px 14px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;min-height:var(--ctl)}
-.btn-ota:hover{border-color:var(--dim)}
-.btn-ota:disabled{opacity:.6;cursor:wait}
-.ota-progress-box{display:none}
-.ota-progress-bar{height:4px;border-radius:2px;background:var(--input-bg);overflow:hidden}
-.ota-progress-fill{height:100%;width:0%;background:var(--amber);transition:width .1s linear}
-.ota-status{font-size:12px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
-.guide-grid{display:grid;grid-template-columns:1fr;gap:16px}
-@media(min-width:480px){.guide-grid{grid-template-columns:repeat(2,1fr)}}
-.guide-card{font-size:13px;color:var(--muted);line-height:1.6;min-width:0}
-.guide-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
-.guide-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--card-border);font-size:13px}
-.guide-key{color:var(--text)}
-.guide-val{color:var(--muted);text-align:right}
-
-/* Proof-of-work simulator */
-.sim-intro{font-size:13px;color:var(--muted)}
-.sim-box{background:var(--input-bg);border:1px solid var(--card-border);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.sim-fields{border:1px solid var(--card-border);border-radius:4px;padding:8px;font-size:11px;color:var(--muted);word-break:break-all}
-.sim-k{color:var(--muted);font-size:11px;font-family:var(--sans)}
-.sim-v{word-break:break-all;margin-top:2px}
-.sim-nonce{font-size:14px;font-weight:700}
-.sim-hash{font-weight:700;color:var(--muted)}
-.sim-result{font-weight:700;color:var(--muted)}
-
-/* Live-action feedback: one toast for theme, invert, screenshot, OTA, reset */
-.toast{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--card);border:1px solid var(--card-border);border-left:3px solid var(--green);color:var(--text);padding:8px 14px;border-radius:var(--r);font-size:13px;z-index:1000;max-width:calc(100vw - 28px);display:none}
-.toast.err{border-left-color:var(--red)}
-.toast.show{display:block}
-
-#overlay{display:none;position:fixed;inset:0;background:rgba(11,13,18,0.96);z-index:999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
-#overlay h3{font-size:16px;margin-bottom:6px}
-#overlay p{color:var(--muted);font-size:13px}
-.spinner{width:32px;height:32px;border:3px solid var(--card-border);border-top-color:var(--amber);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px}
-@keyframes spin{to{transform:rotate(360deg)}}
-button:focus-visible,a:focus-visible,.theme-card:focus-visible,summary:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior: auto;}input[type=text],input[type=number],input[type=password],input[type=color],select,.form-control,.ota-progress-fill,.kb>i,.g-val,.d-ok,.d-bad{transition: none;}.spinner,.bdg-p.on .glow{animation: none;}}
 )rawcss";
 
 static const char DASH_JS[] PROGMEM = R"rawjs(
-const TAB_ALIAS={stratum:'settings',display:'settings',system:'settings',pow:'learn'};
-function switchTab(tId){
-tId=TAB_ALIAS[tId]||tId;if(!document.getElementById('pane-'+tId)||!document.getElementById('tbtn-'+tId))tId='telemetry';
-document.querySelectorAll('.tab-btn').forEach(b=>{const on=b.id==='tbtn-'+tId;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false');});
-document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+tId));
-try{localStorage.setItem('cyd_tab',tId);}catch(e){}
-}
 let toastTimer=null;
 function showToast(msg,isErr){
 const t=document.getElementById('thm-toast');if(!t)return;
@@ -854,9 +1151,25 @@ let h="<div class='sl-row hdr'><span>Difficulty</span><span>Pool floor \u2192 bl
 log.slice().reverse().forEach(s=>{const pct=Math.max(1,Math.min(100,(Math.log10(s.d)-lo)/span*100));const cls='sl-row'+(s.ok?'':' rej')+(s.d>=best*0.9999?' best':'');
 h+="<div class='"+cls+"'><span class='sl-d'>"+fmtDiffC(s.d)+(s.ok?'':' (rejected)')+"</span><span class='sl-bar' title='"+pct.toFixed(1)+"% of the way on a log scale'><i style='width:"+pct.toFixed(1)+"%'></i></span><span class='sl-r'>"+(net>0?Math.log10(net/s.d).toFixed(1):'--')+"</span><span class='sl-r'>"+fmtAgo(now,s.t)+"</span></div>";});
 box.innerHTML=h;}
+function viz(d){const $=id=>document.getElementById(id),sv=(e,k,v)=>{if(e)e.style.setProperty(k,v);},hr=parseFloat(d.hashrate)||0,gp=Math.max(0,Math.min(hr/1200*100,100));
+const ga=$('g-arc');if(ga)ga.setAttribute('stroke-dasharray',gp.toFixed(1)+' 100');const gh=$('g-hr');if(gh)gh.textContent=d.hashrate||'--';const g=$('g');if(g)g.setAttribute('aria-label','Hashrate '+(d.hashrate||'--')+' KH/s on a 0 to 1200 scale; expected band about 950 to 1050');sv($('k-hrb'),'--v',gp+'%');
+const ok=Number(d.shares_accepted)||0,bad=Number(d.shares_rejected)||0,tot=ok+bad,op=tot?ok/tot*100:0,a=$('dn-ok'),b=$('dn-bad');
+if(a)a.setAttribute('stroke-dasharray',op.toFixed(2)+' 100');if(b){b.setAttribute('stroke-dasharray',(tot?100-op:0).toFixed(2)+' 100');b.setAttribute('stroke-dashoffset',(-op).toFixed(2));}
+const st=(id,t)=>{const e=$(id);if(e)e.textContent=t;};st('dn-n',ok.toLocaleString());st('dn-okn',ok.toLocaleString());st('dn-badn',bad.toLocaleString());const dn=$('dn');if(dn)dn.setAttribute('aria-label',ok+' shares accepted, '+bad+' rejected');
+const pool=Number(d.pool_diff)||1,net=Number(d.net_diff)||0,lg=Array.isArray(d.share_log)?d.share_log:[],L=Math.log10,bd=Number(d.best_diff_raw)||0,top=Math.max(net,bd,Number(d.last_winner_diff)||0);let lo=L(pool)-1,hi=top>0?L(top)+0.15:L(pool)+6;if(hi-lo<1)hi=lo+1;
+const pos=x=>Math.max(0,Math.min(100,(L(x)-lo)/(hi-lo)*100)),mk=(id,x)=>{const e=$(id);if(!e)return;if(x>0){const p=pos(x);e.style.left=p+'%';e.style.setProperty('--sh',p.toFixed(1));e.style.display='';e.dataset.p=p;e.textContent=e.dataset.n+' '+fmtDiffC(x);e.classList.remove('nl');e.title=e.title.split(':')[0]+': '+fmtDiffC(x);}else e.style.display='none';};
+mk('mk-blk',net);mk('mk-pool',pool);mk('mk-best',bd);mk('mk-rb',Number(d.round_best)||0);mk('mk-win',Number(d.last_winner_diff)||0);const ov=(a,b)=>{const A=a.getBoundingClientRect(),B=b.getBoundingClientRect();return A.width&&B.width?(A.left<B.right+6&&B.left<A.right+6):Math.abs(a.dataset.p-b.dataset.p)<22;};[['mk-best','mk-win'],['mk-blk','mk-pool','mk-rb']].forEach(r=>{const k=r.map($).filter(e=>e&&e.style.display!=='none');k.forEach((e,i)=>{for(let j=0;j<i;j++)if(!k[j].classList.contains('nl')&&ov(e,k[j])){e.classList.add('nl');e.textContent='';break;}});});
+const t=$('lad-t');if(t)t.innerHTML=lg.map((s,i)=>"<i class='"+(s.ok?'':'rj')+"' style='left:"+pos(s.d).toFixed(1)+"%;opacity:"+(0.3+0.7*(i+1)/lg.length).toFixed(2)+"' title='share "+fmtDiffC(s.d)+"'></i>").join('');
+const ld=$('lad');if(ld)ld.setAttribute('aria-label','Log scale from pool target '+fmtDiffC(pool)+' to block '+(net>0?fmtDiffC(net):'unknown')+'; session best '+fmtDiffC(bd)+'; '+lg.length+' recent shares');
+const bp=$('bp');if(bp)bp.className='bdg bdg-p '+(d.status==='hashing'?'on':(d.status==='connecting'?'wait':'off'));if(d.pool){st('bp-c',d.coin||'');st('bp-n',d.pool+(d.using_fallback?' (fallback)':''));}
+const tc=parseFloat(d.temp),it=$('ic-t');if(it){sv(it,'--v',isNaN(tc)?'0%':Math.max(0,Math.min(100,(tc-20)/70*100))+'%');it.classList.toggle('hot',tc>70);}
+if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100),w=$('ic-w');if(w)w.dataset.l=q>=75?4:q>=50?3:q>=25?2:q>0?1:0;}
+const pg=Number(d.ping),ip=$('ic-p');if(ip)ip.className='ic pg '+(!(pg>=0)?'':pg<150?'g':pg<500?'a':'r');
+const im=$('ic-m');if(im&&d.free_heap){sv(im,'--v',Math.min(100,d.free_heap/65536*100)+'%');im.classList.toggle('low',d.free_heap<20480);}
+const hpd=hr*1000*86400,dayOdds=hpd>0&&net>0?net*4294967296/hpd:0;if(dayOdds>0&&dayOdds<1){st('dyn-dayodds','~'+(1/dayOdds).toFixed(1)+' / day');st('dyn-yrodds','~'+Math.round(365.25/dayOdds).toLocaleString()+' / yr');st('dyn-avgwait',(dayOdds*24).toFixed(1)+' h');}}
 function updateStats(d){
 const hr=parseFloat(d.hashrate)||0,hps=Math.round(hr*1000),hpd=hr*1000*86400;
-const eCoin=document.getElementById('st-coin');if(eCoin&&d.pool){let h=d.pool.split(':')[0].replace(/^((stratum|pool|solo|www|eu|us)\.)+(?=.*\.)/,'');h=/^shears\./.test(h)?'Shears':h.split('.')[0];eCoin.textContent=(d.coin||'')+' \u00b7 '+h;eCoin.title=d.pool;}const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;
+const eCoin=document.getElementById('st-coin');if(eCoin&&d.pool){let h=d.pool.split(':')[0].replace(/^((stratum|pool|solo|www|eu|us)\.)+(?=.*\.)/,'');h=/^shears\./.test(h)?'Shears':h.split('.')[0];eCoin.textContent=(d.coin||'')+' \u00b7 '+h;eCoin.title=d.pool;}const eTopHr=document.getElementById('st-top-hr');if(eTopHr&&d.hashrate)eTopHr.textContent=d.hashrate;const eK=document.getElementById('k-hr');if(eK&&d.hashrate)eK.textContent=d.hashrate;
 const mhashes=Number(d.mhashes)||0,totHashes=mhashes*1e6,shares=parseInt(d.shares)||0,diff=parseFloat(d.best_diff)||0;
 const eHps=document.getElementById('dyn-hps');if(eHps)eHps.textContent=hps.toLocaleString();
 const eHpd=document.getElementById('dyn-hpd');if(eHpd)eHpd.textContent=fmtNum(hpd);
@@ -883,11 +1196,11 @@ if(d.uptime){const u=document.getElementById('st-uptime');if(u){const m=d.uptime
 const ePing=document.getElementById('st-ping');if(ePing&&d.ping!==undefined)ePing.textContent=d.ping;
 const eJob=document.getElementById('dyn-lastjob');if(eJob&&d.last_job_s!==undefined){const s=d.last_job_s;eJob.textContent=s<0?'waiting for pool':(s<60?s+'s ago':(s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago'));}
 {const fd=v=>{v=Number(v);if(!(v>0))return '0';const u=['','K','M','B','T','P','E'];let i=0;while(v>=1000&&i<6){v/=1000;i++;}return (i===0?(v>=100?v.toFixed(0):v.toPrecision(3)):(v>=100?v.toFixed(0):v.toFixed(1)))+u[i];};
-const eRt=document.getElementById('dyn-rtries');if(eRt&&d.round_tries!==undefined){eRt.textContent=fd(d.round_tries);const ex=Number(d.round_expected)||0,p=ex>0?d.round_tries/ex*100:0;const eP=document.getElementById('dyn-rpct');if(eP)eP.textContent=ex>0?('('+p.toFixed(0)+'% of a '+(function(b){b=Number(b)||600;return b%60?b+'-s':(b/60)+'-min';})(d.block_s)+' round'+(d.round_partial?', since boot':'')+')'):'';const eB=document.getElementById('dyn-rbar');if(eB){eB.style.width=Math.min(p,100)+'%';eB.style.background=p>100?'#e5534b':'#f7931a';}}
+const eRt=document.getElementById('dyn-rtries');if(eRt&&d.round_tries!==undefined){eRt.textContent=fd(d.round_tries);const ex=Number(d.round_expected)||0,p=ex>0?d.round_tries/ex*100:0;const eP=document.getElementById('dyn-rpct');if(eP)eP.textContent=ex>0?('('+p.toFixed(0)+'% of a '+(function(b){b=Number(b)||600;return b%60?b+'-s':(b/60)+'-min';})(d.block_s)+' round'+(d.round_partial?', since boot':'')+')'):'';const eB=document.getElementById('dyn-rbar');if(eB){eB.style.width=Math.min(p,100)+'%';eB.style.background=p>100?'var(--accent)':'var(--accent)';}}
 const fr=fd;
 const eRb=document.getElementById('dyn-rbest');if(eRb&&d.round_best!==undefined){eRb.textContent=fr(d.round_best);eRb.title='score (difficulty) '+fd(d.round_best);}
 const eRw=document.getElementById('dyn-rwin');if(eRw&&d.last_winner_diff!==undefined){eRw.textContent=d.last_winner_diff>0?('#'+Number(d.last_winner_height).toLocaleString()+' score '+fr(d.last_winner_diff)):'waiting for a job';eRw.title='score (difficulty) '+fd(d.last_winner_diff)+(d.last_winner_ok?' - beats the network difficulty':'');}
-const eHs=document.getElementById('dyn-hstrip');if(eHs&&d.round_best_hash!==undefined){const h=(d.round_best_hash||'').slice(0,20),wz=((d.last_winner_hash||'').match(/^0*/)||[''])[0].length,wn=Math.min(wz,20);let o='';for(let i=0;i<20;i++){const c=h[i]||'-';o+=(c==='0'?'<span style="background:#ff50c8;color:#000">0</span>':'<span style="color:#9aa4b2">'+c+'</span>');if(i+1===wn)o+='<span style="color:#e5534b" title="winner zeros">|</span>';}eHs.innerHTML=o+(wn>0?' <span class="muted" style="font-family:system-ui;font-size:11px;letter-spacing:0">winner: '+wz+' zeros</span>':'');}
+const eHs=document.getElementById('dyn-hstrip');if(eHs&&d.round_best_hash!==undefined){const h=(d.round_best_hash||'').slice(0,20),wz=((d.last_winner_hash||'').match(/^0*/)||[''])[0].length,wn=Math.min(wz,20);let o='';for(let i=0;i<20;i++){const c=h[i]||'-';o+=(c==='0'?'<span style="background:var(--accent);color:var(--on-accent)">0</span>':'<span style="color:var(--muted)">'+c+'</span>');if(i+1===wn)o+='<span style="color:var(--accent)" title="winner zeros">|</span>';}eHs.innerHTML=o+(wn>0?' <span class="muted" style="font-family:system-ui;font-size:11px;letter-spacing:0">winner: '+wz+' zeros</span>':'');}
 const eRr=document.getElementById('dyn-rounds');if(eRr&&d.rounds)eRr.textContent=d.rounds.length?d.rounds.slice(0,5).map(r=>fr(r.my_best)+' vs '+fr(r.winner)).join(' | '):'none yet (one per block)';}
 const eOkBad=document.getElementById('dyn-okbad');if(eOkBad&&d.shares_accepted!==undefined)eOkBad.textContent=d.shares_accepted+' ok / '+d.shares_rejected+' bad';
 if(d.free_heap){const e=document.getElementById('st-heap');if(e)e.textContent=Math.round(d.free_heap/1024)+' KB';}
@@ -898,153 +1211,17 @@ else if(d.pool_error){txt.className='txt-amber';txt.textContent='Pool refused: '
 else if(d.status==='connecting'){txt.className='txt-amber';txt.textContent='Connecting';}
 else{txt.className='txt-gray';txt.textContent='Idle';}}
 if(!netKnown)['dyn-netdiff','dyn-netpct','dyn-dayodds','dyn-yrodds','dyn-avgwait','dyn-netpow','dyn-nethr'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='--';});
-renderShareLog(d,netKnown?netDiff:0);
-cydLastStats=d;if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();cydSyncInitialTab();}cydRender();}
-let simIsHist=true,simN=856192320,simAutoTimer=null;
-function toHex32LE(n){
-const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n>>>0,true);
-return Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');
-}
-function hexToBytes(hex){
-const b=new Uint8Array(hex.length/2);
-for(let i=0;i<hex.length;i+=2)b[i/2]=parseInt(hex.substr(i,2),16);
-return b;
-}
-async function sha256dBuffer(buf){
-try{
-const h1=await crypto.subtle.digest('SHA-256',buf);
-const h2=await crypto.subtle.digest('SHA-256',h1);
-return Array.from(new Uint8Array(h2)).reverse().map(b=>b.toString(16).padStart(2,'0')).join('');
-}catch(e){return'';}
-}
-async function simStep(){
-const curN=simN;
-const hexLE=toHex32LE(curN);
-const hexBE=(curN>>>0).toString(16).padStart(8,'0');
-const eN=document.getElementById('sim-nonce');if(eN)eN.textContent=curN.toLocaleString()+' (0x'+hexBE+')';
-const eNHex=document.getElementById('sim-nonce-hex');if(eNHex)eNHex.textContent=hexLE;
-let hash='',tgt='';
-if(simIsHist){
-tgt='00000000000000015f5300000000000000000000000000000000000000000000';
-const buf=new Uint8Array(80);
-const view=new DataView(buf.buffer);
-view.setInt32(0,2,true);
-buf.set(hexToBytes('000000000000000117c80378b8da0e33559b5997f2ad55e2f7d18ec1975b9717').reverse(),4);
-buf.set(hexToBytes('871714dcbae6c8193a2bb9b2a69fe1c0440399f38d94b3a0f1b447275a29978a').reverse(),36);
-view.setUint32(68,1392872245,true);
-view.setUint32(72,0x19015f53,true);
-view.setUint32(76,curN>>>0,true);
-hash=await sha256dBuffer(buf);
-}else{
-const zeros=parseInt(document.getElementById('sim-diff').value)||4;
-tgt='0'.repeat(zeros)+'f'.repeat(64-zeros);
-const raw=new TextEncoder().encode('020000000000000000000000000213a48e4a5e1e4baab89f3a325165b821a01704e6c3'+hexLE);
-hash=await sha256dBuffer(raw);
-}
-const isWin=(hash < tgt);
-const eHash=document.getElementById('sim-hash');
-const eRes=document.getElementById('sim-result');
-if(isWin){
-if(eHash)eHash.innerHTML='<span style="color:var(--green);font-weight:800;">'+hash.substring(0,18)+'</span>'+hash.substring(18);
-if(eRes){
-if(simIsHist)eRes.innerHTML='<span style="color:var(--green);">&#10003; Block #286,819 solved at nonce '+curN.toLocaleString()+' (hash &lt; target, 25 BTC subsidy)</span>';
-else eRes.innerHTML='<span style="color:var(--green);">&#10003; Hash below target</span>';
-}
-if(simAutoTimer)simToggleAuto();
-}else{
-if(eHash)eHash.innerHTML='<span style="color:var(--red);">'+hash.substring(0,6)+'</span>'+hash.substring(6);
-if(eRes)eRes.innerHTML='<span style="color:var(--red);">&#10005; Hash above target</span>';
-}
-simN++;
-}
-function simToggleAuto(){
-const btn=document.getElementById('sim-auto-btn');
-if(simAutoTimer){
-clearInterval(simAutoTimer);simAutoTimer=null;
-if(btn)btn.textContent='Auto (10 H/s)';
-}else{
-simAutoTimer=setInterval(simStep,100);
-if(btn)btn.textContent='Pause';
-}
-}
-function simSetMode(hist){
-simIsHist=hist;
-if(simAutoTimer)simToggleAuto();
-const bHist=document.getElementById('sim-mode-hist');
-const bRand=document.getElementById('sim-mode-rand');
-const zBox=document.getElementById('sim-zeros-box');
-const sBox=document.getElementById('sim-shirriff-box');
-const hTitle=document.getElementById('sim-hdr-title');
-const fVer=document.getElementById('sim-f-ver');
-const fPrev=document.getElementById('sim-f-prev');
-const fMrkl=document.getElementById('sim-f-mrkl');
-const fTime=document.getElementById('sim-f-time');
-const fBits=document.getElementById('sim-f-bits');
-const eTgt=document.getElementById('sim-target');
-if(hist){
-if(bHist)bHist.className='preset-pill active';
-if(bRand)bRand.className='preset-pill';
-if(zBox)zBox.style.display='none';
-if(sBox)sBox.style.display='flex';
-if(hTitle)hTitle.textContent='Block header #286,819 (80 bytes)';
-if(fVer)fVer.textContent='[Ver 4B: 02000000]'; 
-if(fPrev)fPrev.textContent='[Prev 32B: 00000000...9717]'; 
-if(fMrkl)fMrkl.textContent='[Merkle 32B: 871714...978a]'; 
-if(fTime)fTime.textContent='[Time 4B: 53059335]'; 
-if(fBits)fBits.textContent='[Bits 4B: 19015f53]'; 
-if(eTgt)eTgt.textContent='00000000000000015f5300000000000000000000000000000000000000000000';
-simN=856192320;
-}else{
-if(bHist)bHist.className='preset-pill';
-if(bRand)bRand.className='preset-pill active';
-if(zBox)zBox.style.display='flex';
-if(sBox)sBox.style.display='none';
-if(hTitle)hTitle.textContent='Block header, sandbox (80 bytes)';
-if(fVer)fVer.textContent='[Ver 4B: 02000000]'; 
-if(fPrev)fPrev.textContent='[Prev 32B: 00000000...a1b2]'; 
-if(fMrkl)fMrkl.textContent='[Merkle 32B: 4a5e1e...c3d4]'; 
-if(fTime)fTime.textContent='[Time 4B: 65b821a0]'; 
-if(fBits)fBits.textContent='[Bits 4B: 1704e6c3]'; 
-simN=0;
-}
-simUpdateTarget();
-simReset();
-}
-function simUpdateTarget(){
-const eFml=document.getElementById('sim-diff-formula');
-if(simIsHist){
-if(eFml)eFml.innerHTML='Difficulty = Target<sub>1</sub> / Target = <strong>3,129,573,174.52</strong> (Expected: ~1.34 &times; 10<sup>19</sup> hashes)';
-return;
-}
-const zeros=parseInt(document.getElementById('sim-diff').value)||4;
-const eTgt=document.getElementById('sim-target');
-if(eTgt)eTgt.textContent='0'.repeat(zeros)+'f'.repeat(64-zeros);
-const expH=Math.pow(16,zeros);
-const diff=(expH/4294967296);
-if(eFml)eFml.innerHTML='Difficulty = Target<sub>1</sub> / Target = <strong>'+diff.toExponential(4)+'</strong> (Expected: '+expH.toLocaleString()+' hashes = 16<sup>'+zeros+'</sup>)';
-}
-function simJump(n){
-if(simAutoTimer)simToggleAuto();
-simN=n;
-simStep();
-}
-function simReset(){
-if(simAutoTimer)simToggleAuto();
-simN=simIsHist?856192320:0;
-const hex=(simN>>>0).toString(16).padStart(8,'0');
-const eN=document.getElementById('sim-nonce');if(eN)eN.textContent=simN.toLocaleString()+' (0x'+hex+')';
-const eNHex=document.getElementById('sim-nonce-hex');if(eNHex)eNHex.textContent=toHex32LE(simN);
-const eH=document.getElementById('sim-hash');if(eH)eH.textContent='Press "Next nonce" to hash';
-const eR=document.getElementById('sim-result');if(eR)eR.textContent=simIsHist?'Ready. Solves at nonce 856,192,328.':'Ready.';
-}
-function calcFromBtc(v){const n=parseFloat(v);if(isNaN(n))return;document.getElementById('calc-sats').value=Math.round(n*1e8).toLocaleString();document.getElementById('calc-bits').value=(n*1e6).toLocaleString();document.getElementById('calc-mbtc').value=(n*1e3).toLocaleString();}
-function calcFromSats(v){const s=parseFloat(String(v).replace(/,/g,''));if(isNaN(s))return;document.getElementById('calc-btc').value=(s/1e8).toFixed(8);document.getElementById('calc-bits').value=(s/100).toLocaleString();document.getElementById('calc-mbtc').value=(s/1e5).toLocaleString();}
-function calcFromMbtc(v){const m=parseFloat(String(v).replace(/,/g,''));if(isNaN(m))return;document.getElementById('calc-btc').value=(m/1e3).toFixed(8);document.getElementById('calc-sats').value=Math.round(m*1e5).toLocaleString();document.getElementById('calc-bits').value=(m*1e3).toLocaleString();}
-function calcFromBits(v){const bt=parseFloat(String(v).replace(/,/g,''));if(isNaN(bt))return;document.getElementById('calc-btc').value=(bt/1e6).toFixed(8);document.getElementById('calc-sats').value=Math.round(bt*100).toLocaleString();document.getElementById('calc-mbtc').value=(bt/1000).toLocaleString();}
+viz(d);renderShareLog(d,netKnown?netDiff:0);
+cydLastStats=d;if(typeof cydRetry==='function')cydRetry();if(d.screen!==undefined){cydDevScr=d.screen;cydUpdateDevBadge();cydSyncInitialTab();}cydRender();}
 function pollStats(){fetch('/api/stats').then(r=>r.json()).then(updateStats).catch(()=>{});}
 document.getElementById('cfg-form').addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.tagName==='INPUT'&&!e.target.name)e.preventDefault();});
-(function(){let t='telemetry';try{const l=localStorage.getItem('cyd_tab');if(l)t=l;}catch(e){}switchTab(t);})();
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&location.hash==='#pane-settings')location.hash='ov';});
 )rawjs";
+
+// Bump the suffix when the page CSS/JS changes so browsers drop the 24 h cache.
+#define WEB_UI_V FW_GIT "-ux14"
+static const char *const kThemeAccent[] = {"#f7931a", "#22c55e", "#f59e0b", "#06b6d4", "#38bdf8", "#ffffff"};
+static const char *const kThemeName[] = {"Instrument Amber", "Matrix Green", "Cyber Amber", "Arcade Neon", "Ice Blue", "Monochrome"};
 
 // The settings as the page should show them: what is in use, or what was
 // saved and is still waiting for the stratum or monitor task to apply it.
@@ -1089,35 +1266,36 @@ static void handleRoot()
   };
 
   if (page.length() > 3500) flush();
-  page += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
+  int thIdx = Settings.displayTheme;
+  if (thIdx < 0 || thIdx > 5) thIdx = 0;
+  page += F("<!DOCTYPE html><html lang='en' style='--amber:");
+  page += kThemeAccent[thIdx];
+  page += F("'><head><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'>"
-            "<meta name='theme-color' content='#0b0d12'>"
+            "<meta name='theme-color' content='#171719'>"
             "<title>Aaron Miner</title>"
-            "<link rel='stylesheet' href='/dash.css?v=" FW_GIT "'>"
-            "<link rel='stylesheet' href='/cyd-twin.css?v=" FW_GIT "'></head><body>"
-            "<div class='container'>"
-            "<header>"
-            "<div class='brand'>"
-            "<div class='logo-box' id='site-logo'>&#8383;</div>"
-            "<div><div class='brand-title'>Aaron Miner</div><div class='brand-subtitle'>" CURRENT_VERSION " (" FW_GIT ") &bull; ");
-
-  page += htmlEscape(WiFi.localIP().toString()) + F(" &bull; ") + htmlEscape(WiFi.SSID()) + F("</div></div></div>");
+            "<link rel='stylesheet' href='/dash.css?v=" WEB_UI_V "'>"
+            "<link rel='stylesheet' href='/cyd-twin.css?v=" WEB_UI_V "'></head><body>"
+            "<a class='skip' href='#main'>Skip to settings</a>"
+            "<header class='tb'><div class='tb-in'>"
+            "<a class='brand' href='#ov' title='" CURRENT_VERSION " (" FW_GIT ")'>"
+            "<span class='logo-box' id='site-logo' aria-hidden='true'>&#8383;</span>"
+            "<span class='brand-t'><h1 class='brand-title'>Aaron Miner</h1><span class='brand-subtitle'>");
+  page += htmlEscape(WiFi.localIP().toString()) + F(" &middot; ") + htmlEscape(WiFi.SSID());
+  page += F("</span></span></a>");
   {
     char key[64], shortName[24];
     const char *coin = "BTC";
     getActivePool(key, sizeof(key), &coin);
     poolShortName(key, shortName, sizeof(shortName));
-    page += F("<div class='coin-pill' id='st-coin' title='");
+    page += F("<div class='stc'><div class='coin-pill' id='st-coin' title='");
     page += htmlEscape(String(key));
     page += F("'>");
     page += String(coin) + F(" &middot; ") + htmlEscape(String(shortName));
     page += F("</div>");
   }
   if (page.length() > 3500) flush();
-  page += F(""
-            "<div class='status-badge' role='status' aria-live='polite'>"
-            "<span id='st-txt' class='");
-
+  page += F("<div class='status-badge' role='status' aria-live='polite'><span id='st-txt' class='");
   bool isHashing = (mMonitor.NerdStatus == NM_hashing || (WiFi.status() == WL_CONNECTED && d.currentHashRate.toFloat() > 0));
   if (isHashing)
     page += F("txt-green'>Hashing</span>");
@@ -1125,133 +1303,117 @@ static void handleRoot()
     page += F("txt-amber'>Connecting</span>");
   else
     page += F("txt-gray'>Idle</span>");
-
-  page += F("</div></header>"
-            "<div class='diag-strip'>"
-            "<div class='diag-item primary'><span class='diag-label'>Speed</span><span class='diag-val'><span id='st-top-hr'>");
-  page += d.currentHashRate.length() ? d.currentHashRate : String("--");
-  if (page.length() > 3500) flush();
-  page += F("</span> <span class='diag-sub'>KH/s</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Temp</span><span class='diag-val'><span id='st-temp'>");
+  page += F("</div></div>"
+            "<button type='button' class='lrn shot-btn' data-i='&#9635;' onclick='cydSnapshot()' title='Load the device screen mirror' aria-label='Load device screen'><span class='bt-t'>Screen</span></button>"
+            "<a class='lrn set-btn' data-i='&#9881;&#65038;' href='#pane-settings' title='Settings' aria-label='Settings'><span class='bt-t'>Settings</span></a>"
+            "</div></header>"
+            "<div class='container'>"
+            "<div class='kpi' id='ov'>"
+            "<span class='sr'>Session shares <span id='dyn-shares'></span>, best difficulty <span id='dyn-diff'></span></span>"
+            "<div class='k kc'><span class='ic th' id='ic-t' aria-hidden='true'></span><span><span class='kl'>Temp</span><span class='kv'><span id='st-temp'>");
   page += d.temp.length() ? d.temp : String("--");
-  if (page.length() > 3500) flush();
-  page += F("</span>&deg;C</span></div>"
-            "<div class='diag-item'><span class='diag-label'>Wi-Fi</span><span class='diag-val'><span id='st-wifi'>");
-  page += String(getWifiQuality(WiFi.RSSI())) + F("%</span> <span class='diag-sub'>(<span id='st-rssi'>");
-  if (page.length() > 3500) flush();
-  page += String(WiFi.RSSI()) + F("</span> dBm)</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Pool ping</span><span class='diag-val'><span id='st-ping'>");
-  page += String(g_stratumPing) + F("</span> <span class='diag-sub'>ms</span></span></div>"
-            "<div class='diag-item'><span class='diag-label'>Free memory</span><span class='diag-val' id='st-heap'>");
-  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></div>"
+  page += F("</span><small>&deg;C</small></span></span></div>"
+            "<div class='k kc'><span class='ic wb' id='ic-w' aria-hidden='true'><i></i><i></i><i></i><i></i></span><span><span class='kl'>Wi-Fi</span><span class='kv'><span id='st-wifi'>");
+  page += String(getWifiQuality(WiFi.RSSI())) + F("%</span><small class='rs'><span id='st-rssi'>");
+  page += String(WiFi.RSSI()) + F("</span> dBm</small></span></span></div>"
+            "<div class='k kc'><span class='ic pg' id='ic-p' aria-hidden='true'></span><span><span class='kl'>Pool ping</span><span class='kv'><span id='st-ping'>");
+  page += String(g_stratumPing) + F("</span><small>ms</small></span></span></div>"
+            "<div class='k kc'><span class='ic bt' id='ic-m' aria-hidden='true'></span><span><span class='kl'>Free mem</span><span class='kv' id='st-heap'>");
+  page += String(ESP.getFreeHeap() / 1024) + F(" KB</span></span></div>"
             "</div>"
             "<div class='console-layout'>"
             "<aside class='console-sidebar'>");
   appendCydTwinHtml(page);
-  if (isPublicPool && cleanWallet.length() > 0)
-  {
-    page += F("<div class='pool-banner'>"
-              "<div class='pool-info'>"
-              "<strong>Mining on public-pool.io</strong><br>"
-              "<span class='muted'>Worker: ");
-    page += (worker.length() ? htmlEscape(worker) : F("(default)")) + F("</span></div>"
-              "<a href='https://web.public-pool.io/#/app/");
-    page += htmlEscape(cleanWallet) + F("' target='_blank' rel='noopener' class='pool-btn'>"
-              "View on public-pool.io &#8599;</a></div>");
-  }
   if (page.length() > 3500) flush();
   page += F("</aside>"
-            "<main class='console-main'>"
-            "<nav class='console-tabs' role='tablist'>"
-            "<button type='button' class='tab-btn active' id='tbtn-telemetry' onclick=\"switchTab('telemetry')\">Overview</button>"
-            "<button type='button' class='tab-btn' id='tbtn-settings' onclick=\"switchTab('settings')\">Settings</button>"
-            "<button type='button' class='tab-btn' id='tbtn-learn' onclick=\"switchTab('learn')\">Learn</button>"
-            "</nav>");
+            "<main class='console-main' id='main'>");
 
   page += "<form method='POST' action='/save' id='cfg-form' data-init-rot='" + String(Settings.screenRotation) + "'>";
 
-  // Tab 1: Overview
-  page += F("<section class='tab-pane active' id='pane-telemetry'>"
-            "<div class='overview-grid'>"
-            "<div class='tele-card'>"
-            "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Speed <span class='muted' style='font-weight:400'>guesses per second (hashrate)</span></div>"
-            "</div>"
-            "<div class='tele-hero-val amber'><span id='dyn-hps'>");
-  float hr = d.currentHashRate.toFloat();
-  unsigned long hps = (unsigned long)(hr * 1000.0f);
-  if (page.length() > 3500) flush();
-  page += (hps > 0 ? String(hps) : F("0"));
-  if (page.length() > 3500) flush();
-  page += F("</span> <span class='unit'>H/s</span></div>"
-            "<div class='tele-hero-sub'><span id='dyn-hpd'>--</span> hashes per day</div>"
-            "<div class='tele-row'><span>Total hashes</span><span class='hl-val'><span id='dyn-totwork'>");
+  // Section 1: Overview (single page, no tabs)
+  page += F("<section class='page-sec' id='pane-telemetry'>"
+            "<div class='tele-card'><div class='vz2'>"
+            "<div>"
+            "<div class='tele-card-hdr'><div class='tele-card-title' title='Shaded band: this chip tops out near 1 MH/s'>Speed</div></div>"
+            "<svg class='gauge' id='g' viewBox='0 0 120 67' role='img' aria-label='Hashrate gauge, 0 to 1.2 MH/s'>"
+            "<path class='g-trk' d='M10 62A50 50 0 0 1 110 62' pathLength='100'/>"
+            "<path class='g-band' d='M10 62A50 50 0 0 1 110 62' pathLength='100' stroke-dasharray='8.3 100' stroke-dashoffset='-79.2'/>"
+            "<path class='g-val' id='g-arc' d='M10 62A50 50 0 0 1 110 62' pathLength='100' stroke-dasharray='0 100'/>"
+            "<text class='g-num' id='g-hr' x='60' y='52'>--</text></svg>"
+            "<div class='g-sc'><span>0</span><span>KH/s</span><span>1.2M</span></div>"
+            "<span class='sr'><span id='dyn-hps'></span> H/s</span>"
+            "<div class='vz-sub'><span id='dyn-hpd'>--</span> hashes/day</div>"
+            "<div class='vz-sub'>Life <span id='dyn-totwork'>");
   uint64_t mhashes = (uint64_t)d.totalMHashes.toInt();
   if (mhashes >= 1000) page += String((float)mhashes / 1000.0f, 1) + F(" billion");
   else page += String((unsigned long)mhashes) + F(" million");
   if (page.length() > 3500) flush();
-  page += F("</span></span></div>"
-            "<div class='tele-row' title='Why it matters: the pool hands your miner a fresh puzzle (a job) every 30-60 s, and right away when anyone finds a block. Old puzzles are worthless, so a recent time means you are working on current work.'><span>New puzzle from pool</span><span class='hl-val' id='dyn-lastjob'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: every proof (share) is checked by the pool. ok = it counted; bad = refused (stale after a new block, or a duplicate). A few bad ones are normal.'><span>Proofs checked by pool</span><span class='hl-val' id='dyn-okbad'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: every new block starts a new round and all earlier work is thrown away - everyone starts over. The bar fills with your tries since the last block; 100% = what you try in an average round (one block time: 10 min on Bitcoin, 1 min on POL/FXTC, 20 min on EMB).'><span>Tries this round</span><span class='hl-val'><span id='dyn-rtries'>--</span> <span class='muted' id='dyn-rpct'></span></span></div>"
-            "<div style='height:6px;border-radius:3px;background:var(--card-border);overflow:hidden;margin:2px 0 4px'><div id='dyn-rbar' style='height:100%;width:0;background:#f7931a'></div></div>"
-            "<div class='tele-row' title='Why it matters: a hash is a random 64-digit hex number. A block needs one that starts with enough zeros (the red mark = how many the last winner had). Each extra zero is 16x rarer. This is your best hash since the last block.'><span>Best hash this round</span><span class='hl-val' id='dyn-hstrip' style='font-family:ui-monospace,monospace;font-size:12px;letter-spacing:1px'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: your closest hash since the last block. It resets every block, because old work cannot win the next one.'><span>My best this round</span><span class='hl-val' id='dyn-rbest'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: the winning block hash itself, scored like your proofs. It had to beat the network difficulty, which is why one CYD almost never wins.'><span>Last winner</span><span class='hl-val' id='dyn-rwin'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: each round you get a fresh lottery ticket. Your best vs the winner shows how far off a small miner is, round after round.'><span>Recent rounds (my best vs winner)</span><span class='hl-val' id='dyn-rounds'>--</span></div>"
-            "<div class='tele-row'><span>Uptime</span><span class='hl-val' id='dyn-uptime'>");
+  page += F("</span> &middot; job <span id='dyn-lastjob'>--</span></div>"
+            "<div class='vz-sub'>Mining for <span id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
-  if (page.length() > 3500) flush();
   page += F("</span></div>"
             "</div>"
+            "<div>"
+            "<div class='tele-card-hdr'><div class='tele-card-title'>Shares</div>"
+            "<button type='button' class='btn-reset-stats' id='btn-reset-session' onclick='resetSession()' title='Reset session shares and best difficulty'>Reset</button></div>"
+            "<div class='dn-wrap'>"
+            "<svg class='donut' id='dn' viewBox='0 0 80 80' role='img' aria-label='Shares checked by pool'>"
+            "<circle class='d-trk' cx='40' cy='40' r='31'/>"
+            "<circle class='d-ok' id='dn-ok' cx='40' cy='40' r='31' pathLength='100' stroke-dasharray='0 100'/>"
+            "<circle class='d-bad' id='dn-bad' cx='40' cy='40' r='31' pathLength='100' stroke-dasharray='0 100'/>"
+            "<text class='d-n' id='dn-n' x='40' y='46'>--</text>"
+            "</svg>"
+            "<div class='dn-lg'>"
+            "<span><i class='sw ok'></i>accepted</span>"
+            "<span><i class='sw bad'></i><b id='dn-badn'>--</b> bad</span>"
+            "<span class='muted'>1 per <b id='dyn-tpshare'>--</b></span>"
+            "</div></div>"
+            "<span class='sr'><span id='dyn-okbad'></span> <span id='dyn-hpshare'></span> <span id='dyn-poolcoin'></span></span>"
+            "</div>"
+            "</div>"
+            "</div>" // closes the speed + shares card
             "<div class='tele-card'>"
-            "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Shares <span class='muted' style='font-weight:400'>proofs of work</span> <span class='muted' id='dyn-poolcoin' style='font-weight:400'></span></div>"
-            "<button type='button' class='btn-reset-stats' id='btn-reset-session' onclick='resetSession()' title='Reset session shares and best difficulty'>Reset</button>"
+            "<div class='tele-card-hdr'><div class='tele-card-title'>Odds of a block</div>"
+            "<span class='vz-tag'>log scale</span></div>"
+            "<span class='sr'><span id='sl-coin'></span> pool <span id='sl-pool'></span> block <span id='sl-net'></span> best <span id='sl-best'></span> round <span id='dyn-rbest'></span> last block <span id='dyn-rwin'></span></span>"
+            "<div class='lad' id='lad' role='img' aria-label='Difficulty ladder'>"
+            "<div class='lad-bar'></div><div id='lad-t'></div>"
+            "<b class='mk mk-pool' id='mk-pool' title='Pool target: a share' data-n='pool'>pool</b>"
+            "<b class='mk mk-rb' id='mk-rb' title='Your best this round' data-n='round'>round</b>"
+            "<b class='mk mk-best' id='mk-best' title='Your best this session' data-n='best'>best</b>"
+            "<b class='mk mk-win' id='mk-win' title='Last block winner' data-n='winner'>winner</b>"
+            "<b class='mk mk-blk' id='mk-blk' title='Network difficulty: a block' data-n='block'>block</b>"
             "</div>"
-            "<div class='tele-hero-val'><span id='dyn-shares'>");
-  page += (d.completedShares.length() ? d.completedShares : F("0"));
-  if (page.length() > 3500) flush();
-  page += F("</span> <span class='unit'>shares</span></div>"
-            "<div class='tele-hero-sub' title='Why it matters: shares are easy proofs the pool asks for so it can see you are working. On a solo pool they do not pay.'>About 1 per <span id='dyn-hpshare'>--</span> (<span id='dyn-tpshare'>--</span>)</div>"
-            "<div class='tele-row' title='Why it matters: difficulty measures how good a guess is. A block needs the network difficulty; this is your best so far.'><span>Closest try (best difficulty, session)</span><span class='hl-val'><span id='dyn-diff'>");
-  page += (d.bestDiff.length() ? d.bestDiff : F("0.000"));
-  if (page.length() > 3500) flush();
-  page += F("</span></span></div>"
-            "<div class='tele-row'><span>Rarity</span><span class='hl-val'>1 in <span id='dyn-rarity'>--</span></span></div>"
+            "<div class='vz-sub'>Best to block: <b id='sl-best-gap'>--</b></div>"
+            "<div class='hs'><span class='vz-k'>Best hash</span><span id='dyn-hstrip' class='hs-v'>--</span></div>"
+            "<div class='rnd'><span class='vz-k'>Round</span><div class='rbar' role='presentation'><div id='dyn-rbar'></div></div><span class='vz-k'><span id='dyn-rtries'>--</span> <span id='dyn-rpct'></span></span></div>"
+            "<div class='vz-sub' title='Recent rounds: my best vs winner'>Rounds <span id='dyn-rounds'>--</span></div>"
+            "<div class='bdgs'>"
+            "<span class='bdg'><i>reward</i><b>3.125 BTC</b></span>"
+            "<span class='bdg'><i>daily</i><b id='dyn-dayodds'>--</b></span>"
+            "<span class='bdg'><i>yearly</i><b id='dyn-yrodds'>--</b></span>"
+            "<span class='bdg'><i>avg wait</i><b id='dyn-avgwait'>--</b></span>"
+            "<span class='bdg'><i>my share</i><b><span id='dyn-netpow'>--</span> of <span id='dyn-nethr'>--</span></b></span>"
+            "<span class='sr'><span id='dyn-netpct'></span> of <span id='dyn-netdiff'></span>, rarity <span id='dyn-rarity'></span></span>"
+            "<span class='bdg'><i>power</i><b>~1.2 W</b></span>"
             "</div>"
-            "<div class='tele-card'>"
-            "<div class='tele-card-hdr'>"
-            "<div class='tele-card-title'>Block reward</div>"
-            "</div>"
-            "<div class='tele-hero-val'>3.125 BTC <span class='unit'>+ fees</span></div>"
-            "<div class='tele-hero-sub'>Paid to your address if this miner finds a block</div>"
-            "<div class='tele-row'><span>Best vs. network</span><span class='hl-val'><span id='dyn-netpct'>--</span> <span class='muted'>of <span id='dyn-netdiff'>100T</span></span></span></div>"
-            "<div class='tele-row'><span>Daily odds</span><span class='hl-val'><span id='dyn-dayodds'>--</span></span></div>"
-            "<div class='tele-row'><span>Yearly odds</span><span class='hl-val'><span id='dyn-yrodds'>--</span></span></div>"
-            "<div class='tele-row' title='Why it matters: mining is a lottery. This is the average time for THIS miner to win one block at the current difficulty.'><span>Expected wait (avg)</span><span class='hl-val' id='dyn-avgwait'>--</span></div>"
-            "<div class='tele-row' title='Why it matters: your slice of all the guessing in the world. Blocks go to whoever guesses right first.'><span>Share of network</span><span class='hl-val'><span id='dyn-netpow'>--</span> of ~<span id='dyn-nethr'>--</span></span></div>"
-            "<div class='tele-row'><span>Power</span><span class='hl-val'>~1.2 W, under 1 kWh/month</span></div>"
-            "</div>"
-            "</div>"
-            "<div class='tele-card'>"
-            "<div class='tele-card-hdr'><div class='tele-card-title'>How close each share got <span class='muted' id='sl-coin' style='font-weight:400'></span></div>"
-            "<span class='muted' style='font-size:12px'>pool asks for <span id='sl-pool'>--</span></span></div>"
-            "<div class='tele-hero-sub'>A share proves work but pays nothing on a solo pool. Only a share that reaches the network difficulty (<span id='sl-net'>--</span>) is a block.</div>"
-            "<div class='tele-row'><span>Closest try</span><span class='hl-val'><span id='sl-best'>--</span> <span class='muted' id='sl-best-gap'></span></span></div>"
-            "<div id='share-log' class='share-log'><div class='muted' style='font-size:13px;padding:6px 0'>No shares yet.</div></div>"
+            "<div class='sh-h' title='Newest first'>Share history</div>"
+            "<div id='share-log' class='share-log'><div class='muted' style='font-size:12px;padding:6px 0'>No shares yet.</div></div>"
             "</div>"
             "</section>");
 
-  // Tab 2: Settings -- one form pane: Wallet & pool, Display, System
-  page += F("<section class='tab-pane' id='pane-settings'>"
-            "<section class='settings-sec' id='pane-stratum'>"
-            "<h2 class='settings-h'>Wallet &amp; pool</h2>");
+  // Section 2: Settings -- Wallet & pool, Display, System
+  page += F("<section class='page-sec' id='pane-settings'>"
+            "<div class='sheet-h'><span>Settings</span><a class='lx' href='#ov'>Close &times;</a></div>"
+            "<section class='settings-sec' id='pane-stratum'>");
 
   // Wallet: the one setting that decides where a block reward goes
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>Wallet</div>"
+            "<div class='cfg-card-title'>Wallet &amp; pool</div>"
+            "<span class='active-pool-pill");
+  page += (onBackupPool() ? F(" fallback'>Using fallback") : F("'>Using primary"));
+  page += F("</span>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-group'>"
@@ -1265,20 +1427,11 @@ static void handleRoot()
   page += String(coin.ticker) + F(" + fees straight to this address. Add <code>.name</code> to set a worker name, e.g. <code>");
   if (page.length() > 3500) flush();
   page += (cleanWallet.length() ? htmlEscape(cleanWallet) : F("bc1q...")) + F(".cyd</code>).</span>"
-            "</div>"
-            "</div></div>");
+            "</div>");
 
   // Pool: primary first, presets next to it, fallback folded away
-  page += F("<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>Pool</div>"
-            "<span class='active-pool-pill");
-  page += (onBackupPool() ? F(" fallback'>Using fallback") : F("'>Using primary"));
   if (page.length() > 3500) flush();
-  page += F("</span>"
-            "</div>"
-            "<div class='cfg-card-body'>"
-            "<div class='form-grid-3'>"
+  page += F("<div class='form-grid-3'>"
             "<div class='form-group'>"
             "<label class='form-label' for='f-pool'>Host</label>"
             "<input type='text' id='f-pool' class='form-control' name='pool' value='");
@@ -1301,9 +1454,8 @@ static void handleRoot()
   page += F("' placeholder='x'>"
             "</div>"
             "</div>"
-            "<div class='preset-bar'>"
-            "<div class='preset-pills'>"
-            "<span class='form-label-sub'>Presets</span>"
+            "<details class='more preset-bar'><summary>Pool presets</summary>"
+            "<div class='preset-pills more-body' style='flex-direction:row'>"
             "<button type='button' class='preset-pill active' onclick='choosePreset(\"public-pool.io\",3333,\"x\",\"public-pool.io:3333 is the recommended port.\")'>public-pool.io:3333</button>"
             "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.nerdminers.org\",3333,\"x\",\"pool.nerdminers.org is a solo pool for low-hashrate miners.\")'>pool.nerdminers.org:3333</button>"
             "<button type='button' class='preset-pill' onclick='choosePreset(\"pool.solomining.de\",3333,\"x\",\"pool.solomining.de is a European solo pool.\")'>pool.solomining.de:3333</button>"
@@ -1313,7 +1465,7 @@ static void handleRoot()
             "<button type='button' class='preset-pill' onclick='choosePreset(\"stratum.shears.co.uk\",3710,\"x\",\"Shears ESP32-only port for Fixed Trade Coin (FXTC). Mines an altcoin, not BTC; needs a free shears.co.uk account. Payout is to that account, not this BTC address.\")'>Shears ESP32 FXTC :3710 (needs free account)</button>"
             "</div>"
             "<div id='preset-note' class='preset-comment'>Presets fill in the pool above. Save to apply.</div>"
-            "</div>");
+            "</details>");
   page += (onBackupPool() ? F("<details class='more' open>") : F("<details class='more'>"));
   if (page.length() > 3500) flush();
   page += F("<summary>Fallback pool (optional)</summary>"
@@ -1344,10 +1496,20 @@ static void handleRoot()
             "</div>"
             "</div></details>"
             "</div></div>");
+  if (isPublicPool && cleanWallet.length() > 0)
+  {
+    page += F("<div class='pool-banner'>"
+              "<div class='pool-info'>"
+              "<strong>Mining on public-pool.io</strong><br>"
+              "<span class='muted'>Worker: ");
+    page += (worker.length() ? htmlEscape(worker) : F("(default)")) + F("</span></div>"
+              "<a href='https://web.public-pool.io/#/app/");
+    page += htmlEscape(cleanWallet) + F("' target='_blank' rel='noopener' class='pool-btn'>"
+              "View on public-pool.io &#8599;</a></div>");
+  }
 
   page += F("</section>" // closes pane-stratum
-            "<section class='settings-sec' id='pane-display'>"
-            "<h2 class='settings-h'>Display</h2>");
+            "<section class='settings-sec' id='pane-display'>");
 
   // Display
   page += F("<div class='cfg-card'>"
@@ -1394,47 +1556,16 @@ static void handleRoot()
             "<span class='form-hint'>Restarts the miner and runs that check on its screen. Mining resumes right away; hold BOOT to skip.</span>"
             "</div></div>"
             "<div class='form-group'>"
-            "<span class='form-label'>Theme <span class='form-label-sub'>applies immediately</span></span>"
+            "<span class='form-label'>Theme</span>"
             "<div class='theme-grid'>");
   int curTheme = Settings.displayTheme;
-  if (page.length() > 3500) flush();
-  page += F("<div class='theme-card");
-  if (curTheme == 0) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-0' onclick='selectTheme(0,\"#f7931a\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#f7931a'></span><span class='swatch-dot' style='background:#10141c'></span></div>"
-            "<h4>Instrument Amber</h4><p>Default</p></div>"
-            "<div class='theme-card");
-  if (curTheme == 1) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-1' onclick='selectTheme(1,\"#22c55e\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#22c55e'></span><span class='swatch-dot' style='background:#08140a'></span></div>"
-            "<h4>Matrix Green</h4><p>Green on black</p></div>"
-            "<div class='theme-card");
-  if (curTheme == 2) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-2' onclick='selectTheme(2,\"#f59e0b\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#f59e0b'></span><span class='swatch-dot' style='background:#181208'></span></div>"
-            "<h4>Cyber Amber</h4><p>Amber CRT</p></div>"
-            "<div class='theme-card");
-  if (curTheme == 3) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-3' onclick='selectTheme(3,\"#06b6d4\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#06b6d4'></span><span class='swatch-dot' style='background:#ec4899'></span></div>"
-            "<h4>Arcade Neon</h4><p>Cyan and magenta</p></div>"
-            "<div class='theme-card");
-  if (curTheme == 4) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-4' onclick='selectTheme(4,\"#38bdf8\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#38bdf8'></span><span class='swatch-dot' style='background:#111827'></span></div>"
-            "<h4>Ice Blue</h4><p>Slate and blue</p></div>"
-            "<div class='theme-card");
-  if (curTheme == 5) page += F(" active");
-  if (page.length() > 3500) flush();
-  page += F("' id='thm-5' onclick='selectTheme(5,\"#ffffff\")'>"
-            "<div class='theme-swatch'><span class='swatch-dot' style='background:#ffffff'></span><span class='swatch-dot' style='background:#181818'></span></div>"
-            "<h4>Monochrome</h4><p>White on black</p></div>"
-            "</div>"
+  for (int i = 0; i < 6; i++)
+  {
+    page += "<button type='button' class='theme-card" + String(curTheme == i ? " active" : "") + "' id='thm-" + String(i) +
+            "' title='" + kThemeName[i] + "' aria-label='" + kThemeName[i] + " theme' onclick='selectTheme(" + String(i) + ",\"" + kThemeAccent[i] + "\")'><span class='swatch-dot' style='background:" +
+            kThemeAccent[i] + "'></span><span class='sr'>" + kThemeName[i] + "</span></button>";
+  }
+  page += F("</div>"
             "<input type='hidden' id='f-theme' name='theme' value='");
   page += String(curTheme) + F("'>"
             "</div>");
@@ -1546,13 +1677,12 @@ static void handleRoot()
             "</section>"); // closes pane-display
 
 
-  page += F("<section class='settings-sec' id='pane-system'>"
-            "<h2 class='settings-h'>System</h2>");
+  page += F("<section class='settings-sec' id='pane-system'>");
 
   // Clock and data
   page += F("<div class='cfg-card'>"
             "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>Clock and data</div>"
+            "<div class='cfg-card-title'>System</div>"
             "</div>"
             "<div class='cfg-card-body'>"
             "<div class='form-grid-3'>"
@@ -1573,7 +1703,7 @@ static void handleRoot()
             "<option value='10'>UTC+10 (Sydney, Melbourne)</option>"
             "</select></div>"
             "<div class='form-group'>"
-            "<label class='form-label' for='f-tz'>UTC offset (hours)</label>"
+            "<label class='form-label' for='f-tz'>UTC offset</label>"
             "<input type='number' name='tz' id='f-tz' class='form-control' min='-12' max='14' value='");
   page += String(Settings.Timezone) + F("'></div>"
             "<div class='form-group'>"
@@ -1600,11 +1730,10 @@ static void handleRoot()
   if (Settings.saveStats) page += F(" checked");
   if (page.length() > 3500) flush();
   page += F("> <span>Keep lifetime hashes and shares across reboots (stored in flash)</span></label>"
-            "</div></div></div>"
-            "<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Firmware update</div></div>"
-            "<div class='cfg-card-body'>"
-            "<span class='form-hint'>Upload a <code>firmware.bin</code> over Wi-Fi. The miner flashes it and reboots.</span>"
+            "</div>"
+            "<details class='more'><summary>Firmware update (OTA)</summary>"
+            "<div class='more-body'>"
+            "<span class='form-hint'>Running <code>" CURRENT_VERSION " (" FW_GIT ")</code>. Upload a <code>firmware.bin</code> over Wi-Fi. The miner flashes it and reboots.</span>"
             "<div class='ota-row'>"
             "<input type='file' id='ota-file' class='file-input' accept='.bin'>"
             "<button type='button' class='btn-ota' id='btn-ota-start' onclick='uploadOta()'>Upload and flash</button>"
@@ -1613,10 +1742,10 @@ static void handleRoot()
             "<div class='ota-progress-bar'><div class='ota-progress-fill' id='ota-progress-fill'></div></div>"
             "<div class='ota-status' id='ota-status'>Ready</div>"
             "</div>"
-            "</div></div>"
-            "<details class='edu-acc'>"
-            "<summary class='edu-sum'>Touch and button controls</summary>"
-            "<div class='edu-body'>"
+            "</div></details>"
+            "<details class='more'>"
+            "<summary>Touch and button controls</summary>"
+            "<div class='more-body'>"
             "<div class='guide-grid'>"
             "<div class='guide-card'>"
             "<div class='guide-title'>Touch</div>"
@@ -1632,150 +1761,15 @@ static void handleRoot()
             "<div class='guide-row'><span class='guide-key'>Hold 5 s</span><span class='guide-val'>Factory reset and reboot</span></div>"
             "</div></div>"
             "</div></details>"
+            "</div></div>"
             "</section>"); // closes pane-system
 
   page += F("<div class='actions' id='form-actions'>"
             "<button type='submit' class='btn-save' id='btn-save'>Save settings</button>"
-            "<button type='button' class='btn-restart' id='btn-reboot' onclick='rebootDevice()'>Reboot without saving</button>"
+            "<button type='button' class='btn-restart' id='btn-reboot' onclick='rebootDevice()' title='Reboot without saving'>Reboot</button>"
             "</div>"
             "</section>"); // closes pane-settings
 
-  // Tab 3: Learn
-  page += F("<section class='tab-pane' id='pane-learn'>");
-  // Start here: the pictures on the CYD, explained (device screens only have room for a few words)
-  page += F("<section class='settings-sec' id='pane-start'>"
-            "<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Start here: what your CYD is showing</div></div>"
-            "<div class='cfg-card-body edu-body' style='line-height:1.55'>"
-            "<svg viewBox='0 0 520 70' width='100%' style='max-width:520px;display:block;margin:0 auto 10px' role='img' aria-label='Pool sends a job, the CYD guesses, good guesses go back as shares'>"
-            "<g font-family='system-ui,sans-serif' font-size='12' text-anchor='middle'>"
-            "<rect x='4' y='18' width='90' height='34' rx='8' fill='none' stroke='#8a96a8'/><text x='49' y='40' fill='#e6edf3'>Pool</text>"
-            "<rect x='214' y='18' width='90' height='34' rx='8' fill='none' stroke='#f7931a'/><text x='259' y='40' fill='#f7931a'>CYD guesses</text>"
-            "<rect x='424' y='18' width='90' height='34' rx='8' fill='none' stroke='#8a96a8'/><text x='469' y='40' fill='#e6edf3'>Pool</text>"
-            "<path d='M96 35H208' stroke='#8a96a8'/><path d='M208 35l-7-4v8z' fill='#8a96a8'/><text x='152' y='28' fill='#8a96a8'>job (puzzle)</text>"
-            "<path d='M306 35H418' stroke='#8a96a8'/><path d='M418 35l-7-4v8z' fill='#8a96a8'/><text x='362' y='28' fill='#8a96a8'>share (proof)</text>"
-            "</g></svg>"
-            "&bull; <strong>Guesses / sec</strong> (hashrate, KH/s = thousand per second). Each guess runs the block header through SHA-256 and checks if the result is small enough. It is a lottery: every guess is an independent ticket.<br>"
-            "&bull; <strong>Share</strong>: a guess good enough to clear the pool's easy bar. It proves your miner is really working. On a solo pool shares pay nothing.<br>"
-            "&bull; <strong>Closest try</strong> (best difficulty): your single best guess so far. Higher is closer to a block.<br>"
-            "&bull; <strong>Block</strong> = the jackpot. A guess must reach the network difficulty (about 140 trillion for Bitcoin today). Your CYD finds a share roughly every hour, a block maybe once in millions of years. Small coins on ESP32 pools have far lower difficulty.<br>"
-            "<svg viewBox='0 0 520 120' width='100%' style='max-width:520px;display:block;margin:10px auto' role='img' aria-label='Ladder: each rung is ten times harder; your closest try lit near the bottom, the block trophy at the top'>"
-            "<g font-family='system-ui,sans-serif' font-size='11'>"
-            "<line x1='30' y1='16' x2='30' y2='112' stroke='#3a4658'/><line x1='54' y1='16' x2='54' y2='112' stroke='#3a4658'/>"
-            "<g stroke-width='3'><line x1='31' y1='110' x2='53' y2='110' stroke='#f7931a'/><line x1='31' y1='103' x2='53' y2='103' stroke='#f7931a'/><line x1='31' y1='96' x2='53' y2='96' stroke='#3a4658'/><line x1='31' y1='89' x2='53' y2='89' stroke='#3a4658'/><line x1='31' y1='82' x2='53' y2='82' stroke='#3a4658'/><line x1='31' y1='75' x2='53' y2='75' stroke='#3a4658'/><line x1='31' y1='68' x2='53' y2='68' stroke='#3a4658'/><line x1='31' y1='61' x2='53' y2='61' stroke='#3a4658'/><line x1='31' y1='54' x2='53' y2='54' stroke='#3a4658'/><line x1='31' y1='47' x2='53' y2='47' stroke='#3a4658'/><line x1='31' y1='40' x2='53' y2='40' stroke='#3a4658'/><line x1='31' y1='33' x2='53' y2='33' stroke='#3a4658'/><line x1='31' y1='26' x2='53' y2='26' stroke='#3a4658'/><line x1='31' y1='18' x2='53' y2='18' stroke='#f59e0b'/></g>"
-            "<text x='66' y='22' fill='#f59e0b'>block (jackpot)</text><text x='66' y='113' fill='#f7931a'>your closest try</text>"
-            "<text x='200' y='50' fill='#e6edf3'>The shares figure is a ladder.</text>"
-            "<text x='200' y='68' fill='#8a96a8'>Each rung is 10x harder than the one below.</text>"
-            "<text x='200' y='86' fill='#8a96a8'>Lit rungs = how far your best guess climbed.</text>"
-            "<text x='200' y='104' fill='#8a96a8'>Dots = your shares, oldest to newest.</text>"
-            "</g></svg>"
-            "<p style='margin:10px 0 4px'><strong>The on-device screen (MINE)</strong>:</p>"
-            "&bull; <strong>MINE</strong> &ndash; unified live mining dashboard. The top bar shows your block trophy (blocks <em>your</em> CYD found) and the time; the coin and pool are shown here on the web page. The half-circle dial rises into the top bar: <em>guesses / sec</em> (outer orange arc), your best hash this round (middle ring, leading zeros lit magenta), and your guesses this round (inner blue ring). Under the dial, <strong>Closest try</strong> shows your best difficulty in magenta vs what a block needs, with <strong>1 in N</strong> to a block and your round <strong>Guesses</strong> in blue. Below it, the <strong>5m speed microchart</strong> plots your 8-second rolling mean speed inside a fixed &plusmn;15% band around your held average, switching to <em>NEW #N</em> and <em>ZEROS RESET</em> for 5 s when any network block lands. At the bottom, the <strong>Multifunctional shares ladder</strong> plots every share as a dot (magenta = your best), zero-record diamonds, and the gold <em>NEED</em> block target line.<br>"
-            "<p style='margin:10px 0 4px'><strong>Network numbers</strong> (here on the web page; the CYD no longer has a WORLD screen):</p>"
-            "&bull; <em>Share of network</em>: your slice of all the guessing in the world (computed from the difficulty, so it works offline). <em>Difficulty</em> = how hard the puzzle is; it adjusts so a block is found about once per block time (10 minutes on Bitcoin). <em>Block height</em> = blocks so far (read from the pool's job). <em>Next halving</em>: every 210,000 blocks (~4 years) the reward per block is cut in half. Price and fee show when the price service answers.<br>"
-            "<span class='muted'>Aaron Miner is built on the open-source <a href='https://github.com/BitMaker-hub/NerdMiner_v2' target='_blank' rel='noopener'>NerdMiner</a> project and its community forks. Thank you to everyone who built it.</span>"
-            "</div></div>"
-            "</section>");
-  page += F("<section class='settings-sec' id='pane-pow'>"
-            "<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'>"
-            "<div class='cfg-card-title'>Proof-of-work simulator</div>"
-            "</div>"
-            "<div class='cfg-card-body'>"
-            "<p class='sim-intro'>The 80-byte header your miner hashes about a million times a second. Step through a real block, or try a sandbox target.</p>"
-            "<div class='preset-pills'>"
-            "<button type='button' class='preset-pill active' id='sim-mode-hist' onclick='simSetMode(true)'>Block #286,819</button>"
-            "<button type='button' class='preset-pill' id='sim-mode-rand' onclick='simSetMode(false)'>Sandbox</button>"
-            "</div>"
-            "<div id='sim-shirriff-box' class='preset-pills' style='display:flex'>"
-            "<span class='form-label-sub'>Jump to nonce</span>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(0)'>0 (0 zeros)</button>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(39)'>39 (1 zero)</button>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(990)'>990 (3 zeros)</button>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(52117)'>52,117 (4 zeros)</button>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(856192320)'>856,192,320 (just before)</button>"
-            "<button type='button' class='preset-pill sm' onclick='simJump(856192328)'>856,192,328 (solves the block)</button>"
-            "</div>"
-            "<div class='sim-box'>"
-            "<div class='sim-k'><strong id='sim-hdr-title'>Block header #286,819 (80 bytes)</strong></div>"
-            "<div class='sim-fields'>"
-            "<span style='color:#79c0ff' id='sim-f-ver'>[Ver 4B: 02000000]</span> "
-            "<span style='color:#7ee787' id='sim-f-prev'>[Prev 32B: 00000000...9717]</span> "
-            "<span style='color:#d2a8ff' id='sim-f-mrkl'>[Merkle 32B: 871714...978a]</span> "
-            "<span style='color:#ffa657' id='sim-f-time'>[Time 4B: 53059335]</span> "
-            "<span style='color:#ff7b72' id='sim-f-bits'>[Bits 4B: 19015f53]</span> "
-            "<span style='color:var(--amber);font-weight:700;'>[Nonce 4B: <span id='sim-nonce-hex'>40750833</span>]</span>"
-            "</div>"
-            "<div class='row-between'>"
-            "<div>Nonce <span id='sim-nonce' class='sim-nonce'>856,192,320 (0x33087540)</span></div>"
-            "<div id='sim-zeros-box' class='preset-pills' style='display:none'>"
-            "<label class='sim-k' for='sim-diff'>Leading zeros</label>"
-            "<select id='sim-diff' class='ctl-auto' onchange='simUpdateTarget()'>"
-            "<option value='3'>3</option>"
-            "<option value='4' selected>4</option>"
-            "<option value='5'>5</option>"
-            "<option value='6'>6</option>"
-            "</select>"
-            "</div></div>"
-            "<div>"
-            "<div class='sim-k'>Target</div>"
-            "<div id='sim-target' class='sim-v'>00000000000000015f5300000000000000000000000000000000000000000000</div>"
-            "<div id='sim-diff-formula' class='sim-k sim-v'>Difficulty = Target<sub>1</sub> / Target = <strong>3,129,573,174.52</strong> (Expected: ~1.34 &times; 10<sup>19</sup> hashes)</div>"
-            "</div>"
-            "<div>"
-            "<div class='sim-k'>Hash (SHA256d, byte-reversed)</div>"
-            "<div id='sim-hash' class='sim-v sim-hash'>Press \"Next nonce\" to hash</div>"
-            "</div>"
-            "<div id='sim-result' class='sim-result'>Ready. Solves at nonce 856,192,328.</div>"
-            "</div>"
-            "<div class='preset-pills'>"
-            "<button type='button' class='preset-pill active' onclick='simStep()'>Next nonce</button>"
-            "<button type='button' class='preset-pill' id='sim-auto-btn' onclick='simToggleAuto()'>Auto (10 H/s)</button>"
-            "<button type='button' class='preset-pill' onclick='simReset()'>Reset</button>"
-            "</div>"
-            "</div></div>"
-            "<div class='cfg-card'>"
-            "<div class='cfg-card-hdr'><div class='cfg-card-title'>Unit converter</div></div>"
-            "<div class='cfg-card-body'>"
-            "<div class='form-grid-4'>"
-            "<div class='form-group'><label class='form-label' for='calc-btc'>BTC</label><input type='text' id='calc-btc' inputmode='decimal' autocomplete='off' value='1.0' oninput='calcFromBtc(this.value)'></div>"
-            "<div class='form-group'><label class='form-label' for='calc-sats'>Satoshis</label><input type='text' id='calc-sats' inputmode='numeric' autocomplete='off' value='100,000,000' oninput='calcFromSats(this.value)'></div>"
-            "<div class='form-group'><label class='form-label' for='calc-bits'>Bits (&mu;BTC)</label><input type='text' id='calc-bits' inputmode='numeric' autocomplete='off' value='1,000,000' oninput='calcFromBits(this.value)'></div>"
-            "<div class='form-group'><label class='form-label' for='calc-mbtc'>mBTC</label><input type='text' id='calc-mbtc' inputmode='decimal' autocomplete='off' value='1,000' oninput='calcFromMbtc(this.value)'></div>"
-            "</div>"
-            "<span class='form-hint'>1 BTC = 100,000,000 sats. Bitcoin stores every balance as a whole number of sats, which is why the supply tops out at 20,999,999.9769 BTC, not 21 million.</span>"
-            "</div></div>"
-            "<div class='section-hdr'>How mining works</div>"
-            "<details class='edu-acc' name='cyd-faq'>"
-            "<summary class='edu-sum'><span>Hashing and the target</span></summary>"
-            "<div class='edu-body'>"
-            "&bull; <strong>The Avalanche Effect:</strong> SHA-256 compresses arbitrary data into a deterministic 256-bit (32-byte) digest. Altering a single bit scrambles the output completely. Because preimage recovery is computationally intractable, finding candidate blocks requires exhaustive brute-force search.<br>"
-            "&bull; <strong>Double-SHA256 (<code>SHA256d</code>):</strong> Bitcoin executes two sequential SHA-256 rounds (<code>SHA256(SHA256(header))</code>) to prevent length-extension attacks on Merkel-Damg&aring;rd hash constructions.<br>"
-            "&bull; <strong>Target Unpacking:</strong> Mining requires <code>hash &lt; target</code>. The 4-byte <code>Bits</code> field unpacks via <code>Target = Mantissa &times; 256<sup>(Exponent - 3)</sup></code>. Base Target<sub>1</sub> (<code>0x1d00ffff</code>) requires an expected <strong>2<sup>32</sup> &approx; 4,294,967,296 hashes</strong> per difficulty unit."
-            "</div></details>"
-            "<details class='edu-acc' name='cyd-faq'>"
-            "<summary class='edu-sum'><span>Why this chip tops out near 1 MH/s</span></summary>"
-            "<div class='edu-body'>"
-            "&bull; <strong>The No-Midstate Hardware Constraint:</strong> An 80-byte block header spans two 64-byte SHA-256 blocks, plus a third block for the second hash pass. Unlike modern ASICs or ESP32-S3, the classic ESP32 (D0WD) cannot preload midstates: every nonce must grind all three 64-byte blocks from the standard IV constants ($H_0 \\dots H_7$).<br>"
-            "&bull; <strong>228-Cycle Gate Delay:</strong> Three blocks at 64 rounds each plus engine handshakes require <strong>&sim;228 CPU cycles</strong> of hardware gate execution. At 240 MHz, the theoretical silicon speed ceiling is <code>240M / 228 &approx; 1.05 MH/s</code>.<br>"
-            "&bull; <strong>247-Cycle Pipelined Assembly:</strong> The tuned assembly mining loop (<code>pipelined_hw_mine_classic_v2.S</code>) executes in 247 cycles per nonce&mdash;achieving <strong>92.3% hardware engine saturation</strong> (yielding <strong>~971.6 KH/s</strong> HW from Core 1). Core 0 contributes <strong>~25 KH/s</strong> in parallel software math for a verified <strong>~996–1,002 KH/s</strong> sustained throughput (Pham et al., 2026, <a href='https://arxiv.org/abs/2602.04415' target='_blank'>arXiv:2602.04415</a>; Pandya, 2024, <a href='https://arxiv.org/abs/2407.08284' target='_blank'>arXiv:2407.08284</a>)."
-            "</div></details>"
-            "<details class='edu-acc' name='cyd-faq'>"
-            "<summary class='edu-sum'><span>How the two cores share the SHA engine</span></summary>"
-            "<div class='edu-body'>"
-            "&bull; <strong>The 3-Cycle DPORT Bus Glitch:</strong> On dual-core ESP32, both cores share internal DPORT bus access to cryptographic peripherals. If Core 1 writes to the SHA registers with &lt;3 cycles between writes while Core 0 accesses peripheral memory, the internal bus arbiter silently drops the register write.<br>"
-            "&bull; <strong>The Vanity Counter Trap:</strong> When writes are dropped, hardware hashes stale or corrupted data. A naive miner increments its loop counter and claims high speed, but produces zero valid shares.<br>"
-            "&bull; <strong>Strict Core Decoupling:</strong> This firmware completely isolates peripherals: Core 1 monopolizes the hardware SHA engine with calibrated cycle-spacing instructions, while Core 0 runs purely in software math (<code>nerd_sha256d_baked</code>) for UI and worker tasks, preventing bus collisions entirely (Banicescu et al., 2024, <a href='https://arxiv.org/abs/2403.03876' target='_blank'>arXiv:2403.03876</a>; Ayyagari, 2019, <a href='https://arxiv.org/abs/1906.00834' target='_blank'>arXiv:1906.00834</a>)."
-            "</div></details>"
-            "<details class='edu-acc' name='cyd-faq'>"
-            "<summary class='edu-sum'><span>Share checks, the 21M cap and confirmations</span></summary>"
-            "<div class='edu-body'>"
-            "&bull; <strong>Zero Phantom Counters:</strong> Every candidate block found by hardware is re-verified bit-for-bit in software before pool submission. The firmware self-tests via Known-Answer Test (KAT) at boot and automatically demotes the engine via <code>pl_health</code> if any bit flips, guaranteeing that every reported hash represents genuine thermodynamic Proof-of-Work (Angulo de Lafuente et al., 2026, <a href='https://arxiv.org/abs/2601.12032' target='_blank'>arXiv:2601.12032</a>).<br>"
-            "&bull; <strong>Fixed 21M Supply:</strong> Fixed issuance cap of <strong>20,999,999.9769 BTC</strong>. Subsidy halves every 210,000 blocks via bitwise shift (<code>&gt;&gt; 1</code>), reaching zero at block 6,929,999 around <strong>Year 2140</strong>.<br>"
-            "&bull; <strong>Satoshi's Gambler's Ruin Finality:</strong> In Section 11 of the 2008 Whitepaper, Satoshi modeled double-spend races against a 10% hash attacker. After <strong>6 confirmations (~1 hour)</strong>, catch-up probability drops exponentially to <strong>P = 0.0002428 (&lt;0.024%)</strong>, establishing 6 confirmations as the worldwide benchmark for irreversible settlement."
-            "</div></details>"
-            "</section>"); // closes pane-pow
-  page += F("</section>"); // closes pane-learn
 
   page += F("</form>"
             "</main>"
@@ -1787,8 +1781,8 @@ static void handleRoot()
             "<p>Reconnecting in <span id='cd'>8</span> s</p>"
             "</div>"
             "<div id='thm-toast' class='toast' role='status' aria-live='polite'></div>"
-            "<script src='/cyd-twin.js?v=" FW_GIT "'></script>"
-            "<script src='/dash.js?v=" FW_GIT "'></script>");
+            "<script src='/cyd-twin.js?v=" WEB_UI_V "'></script>"
+            "<script src='/dash.js?v=" WEB_UI_V "'></script>");
   page += F("<script>const initStats=");
   if (page.length() > 3500) flush();
   page += buildStatsJson(d);
@@ -1976,7 +1970,7 @@ static void handleSave()
                       "<meta http-equiv='refresh' content='2;url=/'>"
                       "<style>body{background:#0b0d12;color:#e6ebf2;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
                       ".card{background:#11151c;padding:24px;border-radius:6px;border:1px solid #1e2530;max-width:360px}</style></head>"
-                      "<body><div class='card'><h3 style='color:#3fb950;margin-top:0'>Saved</h3><p>" + msg + "</p>"
+                      "<body><div class='card'><h3 style='color:#44a282;margin-top:0'>Saved</h3><p>" + msg + "</p>"
                       "<p><a href='/' style='color:#e6ebf2'>Back to dashboard</a></p></div></body></html>");
     return;
   }
@@ -1988,7 +1982,7 @@ static void handleSave()
                      "<style>body{background:#0b0d12;color:#e6ebf2;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}"
                      ".sp{width:40px;height:40px;border:3px solid #1e2530;border-top-color:#f7931a;border-radius:50%;animation:s 1s linear infinite;margin:0 auto 16px}"
                      "@keyframes s{to{transform:rotate(360deg)}}</style></head>"
-                     "<body><div><div class='sp'></div><h2>Saved</h2><p style='color:#8a96a6'>Orientation changed. Restarting…</p></div>"
+                     "<body><div><div class='sp'></div><h2>Saved</h2><p style='color:#8a8c92'>Orientation changed. Restarting…</p></div>"
                      "<script>function p(){fetch('/',{cache:'no-store'}).then(()=>location.replace('/')).catch(()=>setTimeout(p,1200))};setTimeout(p,5000);</script>"
                      "</body></html>");
 

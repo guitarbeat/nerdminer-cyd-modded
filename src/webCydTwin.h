@@ -5,17 +5,17 @@
 
 static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 :root{
-  --cyd-accent:var(--amber,#f7931a);
-  --cyd-accent-soft:rgba(247,147,26,0.10);
-  --cyd-card-bg:var(--card,#11151c);
-  --cyd-bezel-bg:var(--card,#11151c);
-  --cyd-border:var(--card-border,#1e2530);
-  --cyd-border-highlight:var(--dim,#58636f);
-  --cyd-text:var(--text,#e6ebf2);
-  --cyd-muted:var(--muted,#8a96a6);
-  --cyd-green:#22c55e;
-  --cyd-amber:#f59e0b;
-  --cyd-red:#ef4444;
+  --cyd-accent:var(--accent,#4a8ad6);
+  --cyd-accent-soft:rgba(74,138,214,0.1);
+  --cyd-card-bg:var(--surface,#131217);
+  --cyd-bezel-bg:var(--raised,#212023);
+  --cyd-border:var(--border,#222224);
+  --cyd-border-highlight:var(--control,#3a3a3e);
+  --cyd-text:var(--text,#fff);
+  --cyd-muted:var(--muted,#8a8c92);
+  --cyd-green:var(--positive,#44a282);
+  --cyd-amber:var(--warning,#d9a441);
+  --cyd-red:var(--negative,#e5566f);
   --cyd-mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
   --cyd-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color-scheme:dark;
@@ -74,7 +74,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   border-radius:50%;
   background:var(--cyd-green);
   display:inline-block;
-  transition:all .2s;
+  transition:background-color .2s,opacity .2s,transform .2s;
   flex-shrink:0;
 }
 .cyd-pulse-dot.loading{
@@ -108,6 +108,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   flex-wrap:wrap;
 }
 .cyd-lbl-tag{color:var(--cyd-muted);}
+.cyd-preview-card{padding:8px;}
 .cyd-screen-frame{
   width:100%;
   max-width:252px;
@@ -115,10 +116,10 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   margin:0 auto;
   position:relative;
   background:#000;
-  border:5px solid #141923;
+  border:5px solid #171719;
   border-radius:8px;
   overflow:hidden;
-  box-shadow:0 0 0 1px #222b38;
+  outline:1px solid #3a3a3e;
   transition:max-width .25s ease,aspect-ratio .25s ease;
 }
 .cyd-screen-frame.landscape{
@@ -155,7 +156,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
   font-size:12px;
   font-weight:500;
   cursor:pointer;
-  transition:all .15s ease;
+  transition:color .15s ease,border-color .15s ease;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -178,7 +179,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 .cyd-ctrls{
   display:flex;
   gap:8px;
-  margin-top:12px;
+  margin-top:8px;
   justify-content:center;
   align-items:center;
   width:100%;
@@ -202,13 +203,13 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 .cyd-btn-switch:hover{border-color:var(--cyd-border-highlight);}
 .cyd-btn-switch:disabled{opacity:.6;cursor:wait;}
 .cyd-btn-nav{
-  flex:1 1 65px;
+  flex:0 0 auto;
   background:transparent;
   border:1px solid var(--cyd-border);
   color:var(--cyd-text);
   border-radius:var(--r,6px);
-  padding:8px 12px;
-  min-height:38px;
+  padding:4px 10px;
+  min-height:28px;
   font-family:var(--cyd-sans);
   font-size:12px;
   font-weight:600;
@@ -221,7 +222,7 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 }
 .cyd-btn-nav:hover{border-color:var(--cyd-border-highlight);}
 .cyd-btn-snap{flex:0 0 auto;}
-.cyd-shot-cap{margin-top:8px;min-height:16px;font-size:12px;color:var(--cyd-muted);text-align:center;}
+.cyd-shot-cap{flex:1 1 auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--cyd-muted);}
 .cyd-shot-cap.err{color:var(--cyd-red);}
 .cyd-btn-snap:disabled{opacity:.6;cursor:wait;}
 @media(max-width:480px){
@@ -235,35 +236,14 @@ static const char CYD_TWIN_STYLE[] PROGMEM = R"rawcss(
 )rawcss";
 
 static const char CYD_TWIN_HTML[] PROGMEM = R"rawhtml(
-<div class='cyd-preview-card'>
-  <div class='cyd-preview-hdr'>
-    <div class='cyd-title-wrap'>
-      <div class='cyd-preview-title'>Live screen mirror</div>
-      <span id='cyd-device-badge' class='cyd-badge'>
-        <span id='cyd-live-pulse' class='cyd-pulse-dot'></span>On device: Mine
-      </span>
-    </div>
-    <div class='cyd-hdr-right'>
-      <button type='button' class='cyd-btn-nav cyd-btn-snap' id='cyd-snap-btn' onclick='cydSnapshot()' title='Grab the current device screen'>Take screenshot</button>
-    </div>
+<div class='cyd-preview-card' id='cyd-card'>
+  <div class='cyd-screen-frame' id='cyd-screen-frame'>
+    <img id='cyd-screen-img' src='/api/screenshot' fetchpriority='high' alt='Device screen' width='240' height='320'>
   </div>
-  <div class='cyd-bezel'>
-    <div class='cyd-bezel-lbl' id='cyd-bezel-lbl'>
-      240&times;320 <span class='cyd-lbl-tag'>&middot; portrait</span>
-    </div>
-    <div class='cyd-screen-frame' id='cyd-screen-frame'>
-      <img id='cyd-screen-img'
-           src='/api/screenshot'
-           fetchpriority='high'
-           alt='Device screen'
-           width='240'
-           height='320'>
-    </div>
-    <div class='cyd-shot-cap'><span id='cyd-shot-ts'></span></div>
-    <div class='cyd-ctrls'>
-      <button type='button' class='cyd-btn-switch' id='cyd-snap-btn' onclick='cydSnapshot()'>Refresh preview</button>
-      <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview is portrait; click to rotate'>Rotate preview</button>
-    </div>
+  <div class='cyd-ctrls'>
+    <span class='cyd-shot-cap'><span id='cyd-live-pulse' class='cyd-pulse-dot'></span> <span id='cyd-shot-ts'></span></span>
+    <button type='button' class='cyd-btn-nav' id='cyd-snap-btn' onclick='cydSnapshot()' title='Grab the current device screen'>Refresh</button>
+    <button type='button' class='cyd-btn-nav' id='cyd-orient-btn' onclick='cydToggleOrientation()' title='Preview is portrait; click to rotate'>Rotate</button>
   </div>
 </div>
 )rawhtml";
@@ -286,7 +266,26 @@ function cydGetScreenUrl(screenIdx) {
   return '/api/screenshot?screen=' + s + '&t=' + Date.now();
 }
 
-const CYD_SNAP_LABEL = 'Take screenshot';
+const CYD_SNAP_LABEL = 'Refresh';
+// The device view stays hidden (html lacks .shot-ok) until one capture has
+// loaded with real pixels. A failed or 0-byte capture keeps it hidden.
+let cydShown = false;
+let cydLastTry = 0;
+let cydAutoTries = 0;
+let cydQuiet = false;
+function cydShow() {
+  if (cydShown) return;
+  cydShown = true;
+  document.documentElement.classList.add('shot-ok');
+}
+// Called from the existing 3 s stats poll. While hidden, retry at most twice,
+// at least 60 s apart; never once the view is showing.
+function cydRetry() {
+  if (cydShown || cydIsLoading || cydAutoTries >= 2 || Date.now() - cydLastTry < 60000) return;
+  cydAutoTries++;
+  cydQuiet = true;
+  cydFetchScreenshot(false);
+}
 let cydErrTimer = null;
 
 function cydToast(msg, isErr) {
@@ -306,12 +305,13 @@ function cydSetShotCaption(ok) {
   const cap = ts.parentNode;
   if (cydErrTimer) { clearTimeout(cydErrTimer); cydErrTimer = null; }
   if (ok) {
-    ts.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour12: false });
+    ts.textContent = new Date().toLocaleTimeString([], { hour12: false });
+    ts.title = 'Last capture';
     if (cap) cap.classList.remove('err');
   } else {
     const prev = ts.textContent;
     ts.textContent = 'Capture failed';
-    cydToast('Screenshot failed. Try again.', true);
+    if (!cydQuiet) cydToast(cydShown ? 'Screenshot failed. Try again.' : 'Device screen unavailable right now.', true);
     if (cap) cap.classList.add('err');
     cydErrTimer = setTimeout(function() {
       ts.textContent = (prev && prev !== 'Capture failed') ? prev : '';
@@ -332,6 +332,7 @@ function cydFetchScreenshot(force) {
   if (!img) return;
 
   cydIsLoading = true;
+  cydLastTry = Date.now();
   const pulse = document.getElementById('cyd-live-pulse');
   if (pulse) pulse.classList.add('loading');
   cydSetSnapBtn(true);
@@ -340,7 +341,10 @@ function cydFetchScreenshot(force) {
   const targetUrl = cydGetScreenUrl(cydPreviewScr);
 
   next.onload = function() {
+    if (!(next.naturalWidth > 0)) { next.onerror(); return; }
     img.src = next.src;
+    cydShow();
+    cydQuiet = false;
     cydIsLoading = false;
     cydSetSnapBtn(false);
     cydSetShotCaption(true);
@@ -356,6 +360,7 @@ function cydFetchScreenshot(force) {
 
   next.onerror = function() {
     cydIsLoading = false;
+    cydQuiet = false;
     cydSetSnapBtn(false);
     cydSetShotCaption(false);
     if (pulse) {
@@ -370,6 +375,7 @@ function cydFetchScreenshot(force) {
 
 // "Take screenshot" button
 function cydSnapshot() {
+  cydQuiet = false;
   cydFetchScreenshot(true);
 }
 
@@ -496,8 +502,10 @@ function cydInit() {
   cydRender();
   const img = document.getElementById('cyd-screen-img');
   if (img) {
-    if (img.complete && img.naturalWidth > 0) cydSetShotCaption(true);
-    else img.addEventListener('load', function() { cydSetShotCaption(true); }, { once: true });
+    const ok = function() { if (img.naturalWidth > 0) { cydShow(); cydSetShotCaption(true); } };
+    cydLastTry = Date.now();
+    if (img.complete) ok();
+    else img.addEventListener('load', ok, { once: true });
   }
 }
 
