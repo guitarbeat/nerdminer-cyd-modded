@@ -3214,6 +3214,10 @@ static void selectPoolStatsKey(const char *key, bool adoptGlobals)
   std::lock_guard<std::recursive_mutex> lock(s_poolStatMutex);
   if (!strcmp(key, s_poolKey))
     return;
+  // New pool (maybe another coin): drop the old job height so the header
+  // doesn't show the previous coin's height until this pool's first notify.
+  if (s_poolKey[0])
+    resetJobHeight();
   if (!Settings.saveStats)
   { // nothing persisted: just don't mix pools
     if (s_poolKey[0])

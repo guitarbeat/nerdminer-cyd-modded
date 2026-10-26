@@ -230,6 +230,7 @@ enum WidgetId
 {
   W_HDR_BADGE,
   W_HDR_TIME,
+  W_HDR_SUB, // block height + JOB age, small, under the clock
   W_HERO,
   W_TOTAL,
   W_T0, // 4 tiles
@@ -935,6 +936,66 @@ static void roundRingDraw(TFT_eSPI &d, float v, int need)
   }
 }
 
+// Job-age ring: thin arc just inside the speed ring, same 180 degree sweep.
+// Fills as the current pool job ages (seconds since the last mining.notify)
+// and empties on each new job; past JOB_RING_FULL_S the whole ring turns the
+// stale tint. Same look as the old inner guesses ring (dim blue track, blue
+// lit cells, 20 cells). Redraw: at most once a second, and only cells whose
+// level changed (cache jobLvl); a new job repaints the cells that empty.
+#define JOB_RING_N 20
+#define JOB_RING_FULL_S 60
+static uint8_t jobLvl[JOB_RING_N];
+static bool jobRingDirty = true;     // cache invalid: next call checks every cell
+static uint32_t jobRingOverlap = 0;  // cells crossing the hero box (repainted after it)
+static int jobRingOvlP = -1;
+static inline int jRR()  { return isPortrait() ? 66 : 85; } // outer radius (speed ring inner = 68 / 88)
+static inline int jRRI() { return isPortrait() ? 63 : 82; }
+static void jobRingInvalidate() { memset(jobLvl, 0xFF, sizeof(jobLvl)); jobRingDirty = true; }
+// Cells whose arc passes through rect (x,y,w,h): computed once per orientation.
+static uint32_t jobRingCellsIn(int x, int y, int w, int h)
+{
+  uint32_t m = 0;
+  const float step = 180.0f / JOB_RING_N;
+  for (int i = 0; i < JOB_RING_N; i++)
+    for (int k = 0; k <= 4 && !(m & (1u << i)); k++)
+    {
+      const float a = (90.0f + i * step + k * step / 4.0f) * (float)M_PI / 180.0f;
+      for (int rr = jRRI(); rr <= jRR(); rr++)
+      {
+        const int px = G_CX - (int)lroundf(rr * sinf(a)), py = G_CY + (int)lroundf(rr * cosf(a));
+        if (px >= x && px < x + w && py >= y && py < y + h) { m |= 1u << i; break; }
+      }
+    }
+  return m;
+}
+static void jobRingDraw(TFT_eSPI &d)
+{
+  const long age = lastJobAgeSec(); // -1 = no job yet
+  static long lastAge = -2;
+  if (!shotOn && !jobRingDirty && age == lastAge)
+    return; // once a second at most: the value only changes per second
+  if (!shotOn) lastAge = age;
+  if (&d == (TFT_eSPI*)&tft) tft.dmaWait();
+  const bool stale = age >= JOB_RING_FULL_S;
+  const float v = age <= 0 ? 0.0f : (float)age * JOB_RING_N / JOB_RING_FULL_S;
+  const uint16_t trk = mix565(C_BG, C_GUESS, 60);
+  const int cy = dY(G_CY);
+  const float step = 180.0f / JOB_RING_N;
+  for (int i = 0; i < JOB_RING_N; i++)
+  {
+    const float f = v - i;
+    uint8_t lvl = stale ? 5 : (f >= 1.0f ? 4 : (f <= 0.05f ? 0 : 1 + (int)(f * 3.0f)));
+    if (!shotOn && lvl == jobLvl[i])
+      continue; // delta only: unchanged cells are not touched
+    const uint16_t col = lvl == 5 ? C_BAD : lvl == 0 ? trk : lvl < 4 ? mix565(trk, C_GUESS, lvl * 64) : C_GUESS;
+    const int a0 = (int)(90.0f + i * step + 1.0f);
+    d.drawArc(G_CX, cy, jRR(), jRRI(), a0, (int)(90.0f + (i + 1) * step - 1.0f), col, C_BG, true);
+    if (!shotOn)
+      jobLvl[i] = lvl;
+  }
+  if (!shotOn) jobRingDirty = false;
+}
+
 // Middle ring: the best hash this round, printed order, one hex digit per
 // cell around the dial. Leading zeros are orange cells; the rest stay dim.
 static void hexRingDraw(const String &hex)
@@ -980,12 +1041,34 @@ struct HdrV
   String time12;
   String blocks;
   String netHeight; // network block height being mined (thin header, left)
-  String job;       // seconds since the last mining.notify job (header, left)
+  String job;       // seconds since the last mining.notify job (under the clock)
+  String coin;      // active pool's coin symbol, e.g. "EMB" / "BTC" (header, left, large)
+  String poolHost;  // active pool host without the port (header, left, small)
   String ip;
   int bars;
   int status;
   int screen; // current screen index (0-3) for nav dots
 };
+
+// Pool name for the header: the first meaningful label of the host -- drop a
+// leading "stratum."/"pool."/"mine." and everything from the next dot
+// (domain + TLD), e.g. stratum.shears.co.uk -> "shears", public-pool.io ->
+// "public-pool". *size gets the largest of sizeHi..sizeLo that fits maxW; if
+// even sizeLo doesn't fit, the name is clipped with "..".
+static String shortPoolHost(const String &host, int maxW, unsigned sizeHi, unsigned sizeLo, unsigned *size)
+{
+  *size = sizeLo;
+  if (!host.length()) return String("--");
+  String s = host;
+  for (const char *pre : {"stratum.", "pool.", "mine."})
+    if (s.startsWith(pre) && s.length() > strlen(pre)) { s = s.substring(strlen(pre)); break; }
+  int dot = s.indexOf('.');
+  if (dot > 0) s = s.substring(0, dot);
+  for (unsigned z = sizeHi; z >= sizeLo && z > 0; z--)
+    if (textW(s.c_str(), z) <= maxW) { *size = z; return s; }
+  while (s.length() > 1 && textW((s + "..").c_str(), sizeLo) > maxW) s.remove(s.length() - 1);
+  return s + "..";
+}
 
 static void drawHeader(const HdrV &h)
 {
@@ -997,25 +1080,42 @@ static void drawHeader(const HdrV &h)
   const int wBadge = 48, hBadge = 22;
   const int wClock = 60, hClock = 21;
 
-  // Thin BLOCK / JOB header on the left (the dial arc owns the centre; the clock
-  // is on the right). No trophy: the block COUNT lives in the bottom BLOCK bin.
+  // Left: the active coin large (gold) with the shortened pool host under it.
+  // Keyed on coin|host only, so it repaints on a pool switch, not per second.
   (void)wBadge; (void)hBadge;
-  String kBlk = "hblk|" + h.netHeight + "|" + h.job + "|" + (P ? "P" : "L");
-  if (need(W_HDR_BADGE, kBlk))
+  // 58 px wide: at y 24..31 the dial's left arm starts at x >= 64.
+  const int wCoin = 58, hCoin = 30;
+  String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + (P ? "P" : "L");
+  if (need(W_HDR_BADGE, kCoin))
   {
-    if (wBegin(64, 22, C_BG))
+    if (wBegin(wCoin, hCoin, C_BG))
     {
-      // tiny gold block cube
-      wgt.fillRect(1, 4, 6, 6, C_GOLD);
-      wgt.drawRect(1, 4, 6, 6, mix565(C_GOLD, C_BG, 120));
-      String bn = "#" + h.netHeight;
-      unsigned bs = 10;
-      while (bs > 8 && textW(bn.c_str(), bs) > 52) bs--;
-      text(wgt, bn.c_str(), 10, 1, bs, C_GOLD, C_BG);
-      String jb = "JOB " + h.job;
-      text(wgt, jb.c_str(), 0, 12, 8, C_DIM, C_BG);
+      String c = h.coin.length() ? h.coin : String("--");
+      unsigned cs = 16;
+      while (cs > 10 && textW(c.c_str(), cs) > wCoin - 2) cs--;
+      text(wgt, c.c_str(), 0, -3, cs, C_GOLD, C_BG);
+      unsigned ps = 12;
+      String ph = shortPoolHost(h.poolHost, wCoin - 1, 12, 11, &ps);
+      text(wgt, ph.c_str(), 0, 12, ps, mix565(C_TEXT, C_BG, 40), C_BG);
       wEnd(bx, 2);
-      done(W_HDR_BADGE, kBlk);
+      done(W_HDR_BADGE, kCoin);
+    }
+  }
+
+  // Under the clock: the network height being mined (gold, size 12 -> 10 if
+  // it must fit). The job age is the inner ring of the dial (jobRingDraw).
+  const int wSub = 50, hSub = 14;
+  String kSub = "hsub|" + h.netHeight + "|" + (P ? "P" : "L");
+  if (need(W_HDR_SUB, kSub))
+  {
+    if (wBegin(wSub, hSub, C_BG))
+    {
+      String bn = h.netHeight == "--" ? String("#--") : "#" + h.netHeight;
+      unsigned bs = 12;
+      while (bs > 10 && textW(bn.c_str(), bs) > wSub - 1) bs--;
+      text(wgt, bn.c_str(), wSub - 1, -2, bs, C_GOLD, C_BG, Align::TopRight);
+      wEnd(tx + wClock - wSub, 2 + hClock + 1);
+      done(W_HDR_SUB, kSub);
     }
   }
 
@@ -1315,7 +1415,7 @@ static MinePanelG minePanelG()
 static void chromeMine(TFT_eSPI &d)
 {
   if (!shotOn)
-    memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
+    memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown)), jobRingInvalidate();
   gaugeDraw(d, gaugeShown);
   roundRingDraw(d, roundShown, winnerZeros());
   const Rect c = mineChartRect();
@@ -1871,6 +1971,10 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   const int SPEC_NX = 16;                              // columns per lane
   const int SPEC_W = 3, SPEC_H = 3;                    // square cell
   const int gox0 = (colW - (SPEC_NX * SPEC_PX + 1)) / 2;
+  // An odd spare pixel per lane can't be split: the right lane puts it on its
+  // left (mirror of the left lane) so the grid's outer margins are equal.
+  const int goxOdd = ((colW - 1) - ((SPEC_NX - 1) * SPEC_PX + SPEC_W)) & 1; // spare ink px between dividers
+  auto goxL = [&](int lane) { return gox0 + (lane == 2 ? goxOdd : 0); };
   const int goyS = yTop + (H - ((ATT_ROWS - 1) * SPEC_PY + SPEC_H)) / 2; // top of row 0
 
   // lane look (mockup): faint per-lane tint, dashed dividers in the accent of
@@ -1899,7 +2003,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     for (int lane = c - 1; lane <= c; lane++)
       for (int kk = 0; kk < SPEC_NX; kk++)
       {
-        const int bx = x0 + lane * colW + gox0 + kk * SPEC_PX + 1, bxe = bx + SPEC_W - 1;
+        const int bx = x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1, bxe = bx + SPEC_W - 1;
         if (bxe >= divX - pillCell / 2 - 1 && bx <= divX - pillCell / 2 + pillCell)
         {
           if (bx < L) L = bx;
@@ -1920,10 +2024,26 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       d.fillRect(r.x, dY(r.y), r.w, yTop - 1 - r.y, C_BG);
       // Header band: only the three lane names (thresholds live in /api/status)
       const char *colN[3] = {"MISS", "SHARE", "BLOCK"};
+      // Labels centred on their ink box (font metrics, not advance widths):
+      // horizontally between the lane's dividers, vertically inside the
+      // band's 1 px outline. One shared vertical offset keeps a common baseline.
+      const unsigned hdrFs = 11;
+      FT_BBox bb[3];
+      long inkTop = 1L << 20, inkBot = -(1L << 20);
+      for (int c = 0; c < 3; c++)
+      {
+        bb[c] = render.calculateBoundingBox(0, 0, hdrFs, Align::TopLeft, Layout::Horizontal, colN[c]);
+        if (bb[c].yMin < inkTop) inkTop = bb[c].yMin;
+        if (bb[c].yMax > inkBot) inkBot = bb[c].yMax;
+      }
+      const int inTop = yHdr + 1, inH = hdrH - 2;                   // inside the outline
+      const int ty = inTop + (inH - (int)(inkBot - inkTop)) / 2 - (int)inkTop;
       for (int c = 0; c < 3; c++)
       {
         d.fillRect(x0 + c * colW, dY(yHdr), colW, hdrH, hdrTint[c]);
-        text(d, colN[c], x0 + c * colW + colW / 2, dY(yHdr + 3), 11, laneC[c], hdrTint[c], Align::TopCenter);
+        const int inL = x0 + c * colW + 1, inW = colW - 1;            // between dividers
+        const int tx = inL + (inW - (int)(bb[c].xMax - bb[c].xMin)) / 2 - (int)bb[c].xMin;
+        text(d, colN[c], tx, dY(ty), hdrFs, laneC[c], hdrTint[c], Align::TopLeft);
       }
       d.drawRect(x0, dY(yHdr), 3 * colW + 1, hdrH, mix565(C_DIM, C_BG, 150));
       // target lines (share target cyan, network target gold) run through the band
@@ -2065,7 +2185,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         for (int k = 0; k < 48; k++)
         {
           const int lane = k / 16, kk = k % 16;
-          const int x = x0 + lane * colW + gox0 + kk * SPEC_PX + 1;
+          const int x = x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1;
           const uint16_t n = cnt[j][k];
           if (lane == 1 && n)
           {
@@ -2416,7 +2536,17 @@ static void paintMine(const MineV &m)
     text(wgt, "KH/s", c, hh - 13, 12, C_METER, C_BG, Align::TopCenter);
     wEnd(G_CX - c, G_CY - hh - 2);
     done(W_HERO, k);
+    // the hero's box corners overlap a few job-ring cells: repaint just those
+    if (jobRingOvlP != (P ? 1 : 0))
+    {
+      jobRingOverlap = jobRingCellsIn(G_CX - c, G_CY - hh - 2, hw, hh);
+      jobRingOvlP = P ? 1 : 0;
+    }
+    for (int i = 0; i < JOB_RING_N; i++)
+      if (jobRingOverlap & (1u << i)) jobLvl[i] = 0xFF;
+    jobRingDirty = true;
   }
+  jobRingDraw(out());
   hexRingDraw(m.bestHex);
   const MinePanelG g = minePanelG();
   if (g.top.w > 0)
@@ -2977,7 +3107,17 @@ static HdrV liveHeader(const String &time)
   h.time12 = fmt12HourTime(t);
   h.blocks = String(valids);
   {
-    uint32_t bh = getBlockHeightValue();
+    char pk[64];
+    const char *coin = nullptr;
+    getActivePool(pk, sizeof(pk), &coin);
+    h.coin = coin ? coin : "";
+    char *colon = strrchr(pk, ':');
+    if (colon) *colon = 0;
+    h.poolHost = pk;
+    // The mempool.space fallback height is Bitcoin's: on an alt coin show "--"
+    // until the pool's own job (coinbase) height arrives.
+    const bool btc = h.coin == "BTC";
+    uint32_t bh = btc ? getBlockHeightValue() : getJobHeightValue();
     h.netHeight = bh > 0 ? String(bh) : String("--");
     uint32_t lj = g_lastJobMs;
     if (lj > 0) { uint32_t age = (millis() - lj) / 1000; h.job = String(age) + "s"; }
@@ -3280,7 +3420,7 @@ static void obFinish()
   std::lock_guard<std::mutex> lock(g_displayMutex);
   tft.fillScreen(C_BG);
   resetWidgets();
-  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
+  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown)), jobRingInvalidate();
   if (uiLive)
   {
     uiScreen = -1; // next monitor tick repaints the whole page
@@ -3695,7 +3835,7 @@ void esp32_2432S028R_Init(void)
   pData.workersCount = 0;
 
   resetWidgets();
-  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown));
+  memset(segLvl, 0xFF, sizeof(segLvl)), memset(rndLvl, 0xFF, sizeof(rndLvl)), memset(hexShown, 0, sizeof(hexShown)), jobRingInvalidate();
 
 
   // Touch first (the colour step needs taps to land), then colours.

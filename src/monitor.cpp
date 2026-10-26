@@ -490,6 +490,8 @@ bool isTimeSynced(void)
   return utcNow(utc);
 }
 bool isBlockHeightKnown(void) { return mHeightUpdate != 0; }
+uint32_t getJobHeightValue(void) { return s_jobHeight; }
+void resetJobHeight(void) { s_jobHeight = 0; }
 uint32_t getBlockHeightValue(void) { return s_jobHeight ? s_jobHeight : (mHeightUpdate != 0 ? s_blockHeight : 0); }
 
 // Local date and time WITHOUT ever starting an NTP request (NTPClient is not

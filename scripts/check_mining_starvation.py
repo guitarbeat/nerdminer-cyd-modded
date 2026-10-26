@@ -156,6 +156,38 @@ def check(files):
     elif re.search(r"\btext\s*\(|drawString|\bprint\s*\(", m.group(0)):
         errs.append("display: dots layer draws text; keep text in the frame/bins layers")
 
+    # ---------------- display: header coin / pool badge ----------------
+    # The coin + pool badge measures text (shortPoolHost) on every repaint, so
+    # it must only repaint when the coin or host changes, never per second.
+    hdr = func_bodies(dispc, r"static void drawHeader\s*\(const HdrV &h\)\s*\{")
+    if len(hdr) != 1:
+        errs.append("display: drawHeader() not found exactly once")
+    else:
+        hb = hdr[0]
+        mk = re.search(r"String\s+kCoin\s*=\s*([^;]*);", hb)
+        if not mk:
+            errs.append("display: header coin badge key (kCoin) not found")
+        elif re.search(r"\bh\.(job|time|time12|blocks|netHeight|bars|status)\b|millis|nowMs", mk.group(1)):
+            errs.append("display: header coin badge key changes with time/counters: " + " ".join(mk.group(1).split())[:100])
+        mb = re.search(r"if\s*\(\s*need\(\s*W_HDR_BADGE.*?done\(\s*W_HDR_BADGE", hb, flags=re.S)
+        if "shortPoolHost(" in hb and (not mb or "shortPoolHost(" not in mb.group(0)
+                                       or hb.count("shortPoolHost(") != mb.group(0).count("shortPoolHost(")):
+            errs.append("display: shortPoolHost() must run only inside the need(W_HDR_BADGE) block")
+
+    # ---------------- display: job-age ring ----------------
+    jr = func_bodies(dispc, r"static void jobRingDraw\s*\(TFT_eSPI &d\)\s*\{")
+    if len(jr) != 1:
+        errs.append("display: jobRingDraw() not found exactly once")
+    else:
+        if not re.search(r"if\s*\(\s*!shotOn\s*&&\s*!jobRingDirty\s*&&\s*age\s*==\s*lastAge\s*\)\s*return", jr[0]):
+            errs.append("display: jobRingDraw() must return early unless the age (seconds) changed")
+        if not re.search(r"if\s*\(\s*!shotOn\s*&&\s*lvl\s*==\s*jobLvl\[i\]\s*\)\s*continue", jr[0]):
+            errs.append("display: jobRingDraw() must skip unchanged cells (delta-only redraw)")
+        if re.search(r"\btext\s*\(", jr[0]):
+            errs.append("display: jobRingDraw() must not render text")
+    if re.search(r"String\s+kSub\s*=[^;]*\bh\.job\b", dispc):
+        errs.append("display: header height widget key must not include the job age (ring shows it)")
+
     # ---------------- mining: sampler stays off the HW hot path ----------------
     hw = func_bodies(mine, r"\nvoid minerWorkerHw\s*\(void \* task_id\)\s*\{")
     if not hw:
@@ -233,6 +265,18 @@ def selftest():
         ("sweep full repaint every tick", DISPLAY, "const bool fullE = s_dotsFull || shotOn;",
          "const bool fullE = true;"),
         ("staircase ungated", DISPLAY, "if (stair != s_lastStair)", "if (true)"),
+        ("job age in coin badge key", DISPLAY,
+         'String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + (P ? "P" : "L");',
+         'String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + h.job + "|" + (P ? "P" : "L");'),
+        ("pool shortening outside its widget", DISPLAY,
+         "  const int wCoin = 58, hCoin = 30;\n",
+         "  const int wCoin = 58, hCoin = 30;\n  unsigned pz; String phx = shortPoolHost(h.poolHost, 57, 12, 11, &pz);\n"),
+        ("job ring ungated", DISPLAY,
+         "if (!shotOn && !jobRingDirty && age == lastAge)",
+         "if (false)"),
+        ("job ring full redraw", DISPLAY,
+         "if (!shotOn && lvl == jobLvl[i])",
+         "if (false)"),
         ("tap ungated", MINING, "if (--swTap == 0)", "if (true)"),
         ("tap every 1", MINING_H, "#define HASH_TAP_EVERY 256u", "#define HASH_TAP_EVERY 1u"),
         ("sampler in noteCandidate", MINING,

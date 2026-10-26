@@ -185,7 +185,9 @@ bool getUtcTime(time_t &utc, bool sync = false);
 bool isTimeSynced(void);
 bool isBlockHeightKnown(void);
 unsigned int getBTCpriceValue(void); // raw price in the selected currency, 0 = unknown
-uint32_t getBlockHeightValue(void);  // last block height fetched, 0 = unknown (any task)
+uint32_t getBlockHeightValue(void);
+uint32_t getJobHeightValue(void);    // height from the active pool's last job coinbase, 0 = none yet
+void resetJobHeight(void);           // forget it (pool switch: next notify sets the new coin's height)  // last block height fetched, 0 = unknown (any task)
 // Block height read from the pool job's coinbase (BIP34), so the height,
 // halving countdown and "last block" age work without any web API.
 void noteJobHeightFromCoinb1(const char *coinb1);
