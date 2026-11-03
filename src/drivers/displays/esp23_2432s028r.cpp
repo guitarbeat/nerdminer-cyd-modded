@@ -1053,9 +1053,11 @@ struct HdrV
 // Pool name for the header: the first meaningful label of the host -- drop a
 // leading "stratum."/"pool."/"mine." and everything from the next dot
 // (domain + TLD), e.g. stratum.shears.co.uk -> "shears", public-pool.io ->
-// "public-pool". *size gets the largest of sizeHi..sizeLo that fits maxW; if
-// even sizeLo doesn't fit, the name is clipped with "..".
-static String shortPoolHost(const String &host, int maxW, unsigned sizeHi, unsigned sizeLo, unsigned *size)
+// "public-pool". fits(name, size) says whether it fits; tried in order:
+// full label at sizeHi..sizeLo, then (general rule) its first hyphen part
+// ("public-pool" -> "public") at sizeHi..sizeLo, then clip with ".." at sizeLo.
+template <typename Fits>
+static String shortPoolHost(const String &host, unsigned sizeHi, unsigned sizeLo, unsigned *size, Fits fits)
 {
   *size = sizeLo;
   if (!host.length()) return String("--");
@@ -1064,10 +1066,50 @@ static String shortPoolHost(const String &host, int maxW, unsigned sizeHi, unsig
     if (s.startsWith(pre) && s.length() > strlen(pre)) { s = s.substring(strlen(pre)); break; }
   int dot = s.indexOf('.');
   if (dot > 0) s = s.substring(0, dot);
-  for (unsigned z = sizeHi; z >= sizeLo && z > 0; z--)
-    if (textW(s.c_str(), z) <= maxW) { *size = z; return s; }
-  while (s.length() > 1 && textW((s + "..").c_str(), sizeLo) > maxW) s.remove(s.length() - 1);
-  return s + "..";
+  String cand[2] = {s, s};
+  int hy = s.indexOf('-');
+  if (hy > 0) cand[1] = s.substring(0, hy);
+  for (int c = 0; c < (hy > 0 ? 2 : 1); c++)
+    for (unsigned z = sizeHi; z >= sizeLo && z > 0; z--)
+      if (fits(cand[c], z)) { *size = z; return cand[c]; }
+  String t = cand[0];
+  while (t.length() > 1 && !fits(t + "..", sizeLo)) t.remove(t.length() - 1);
+  return t + "..";
+}
+
+// First x the speed ring's left arm may touch on screen row y (its outer
+// radius, minus 1 px for the anti-aliased edge: matches the panel's first
+// faint ring pixel); a large value where the ring doesn't reach.
+static int dialLeftX(int y)
+{
+  const int R = G_R, dy = G_CY - y;
+  if (dy < 0 || dy >= R) return 10000;
+  return G_CX - (int)ceilf(sqrtf((float)(R * R - dy * dy))) - 1;
+}
+
+// wEnd() for a widget whose right edge must follow the dial's curve: each
+// row is pushed only up to 1 px left of the ring, so the widget's background
+// never erases ring pixels (rows of equal width go out in one push).
+static void wEndLeftOfDial(int x, int y, int w, int h)
+{
+  if (shotOn) { wEnd(x, y); return; } // the capture draws the ring afterwards
+  int r0 = 0;
+  while (r0 < h)
+  {
+    int wr = dialLeftX(y + r0) - 1 - x;
+    if (wr > w) wr = w;
+    int r1 = r0 + 1;
+    while (r1 < h)
+    {
+      int w2 = dialLeftX(y + r1) - 1 - x;
+      if (w2 > w) w2 = w;
+      if (w2 != wr) break;
+      r1++;
+    }
+    if (wr > 0) wgt.pushSprite(x, y + r0, 0, r0, wr, r1 - r0);
+    r0 = r1;
+  }
+  g_dmaTransferCount++;
 }
 
 static void drawHeader(const HdrV &h)
@@ -1083,8 +1125,10 @@ static void drawHeader(const HdrV &h)
   // Left: the active coin large (gold) with the shortened pool host under it.
   // Keyed on coin|host only, so it repaints on a pool switch, not per second.
   (void)wBadge; (void)hBadge;
-  // 58 px wide: at y 24..31 the dial's left arm starts at x >= 64.
-  const int wCoin = 58, hCoin = 30;
+  // The badge's right edge follows the dial's left arm (wEndLeftOfDial), so
+  // the pool name gets all the free width on its rows: ~63 px at its
+  // baseline, ~59 px at its descender row (measured on the panel).
+  const int wCoin = 66, hCoin = 27, yCoin = 2, yPool = 11;
   String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + (P ? "P" : "L");
   if (need(W_HDR_BADGE, kCoin))
   {
@@ -1094,10 +1138,29 @@ static void drawHeader(const HdrV &h)
       unsigned cs = 16;
       while (cs > 10 && textW(c.c_str(), cs) > wCoin - 2) cs--;
       text(wgt, c.c_str(), 0, -3, cs, C_GOLD, C_BG);
+      // Fit test on the real rendering: draw the candidate into the pool rows
+      // of the sprite and check every row's rightmost inked pixel against the
+      // ring on that screen row (1 px of air). Runs only on a coin/pool change.
+      const int pr0 = 14; // pool rows: 14..hCoin-1 (the coin ends above)
+      auto fits = [&](const String &t, unsigned z) {
+        wgt.fillRect(0, pr0, wCoin, hCoin - pr0, C_BG);
+        text(wgt, t.c_str(), 0, yPool, z, C_TEXT, C_BG);
+        for (int r = pr0; r < hCoin; r++)
+        {
+          int xr = -1;
+          for (int x = wCoin - 1; x >= 0; x--)
+            if (wgt.readPixel(x, r) != C_BG) { xr = x; break; }
+          if (xr < 0) continue;
+          if (xr >= wCoin - 1) return false;                         // cut by the sprite
+          if (bx + xr > dialLeftX(yCoin + r) - 2) return false;      // touches the ring
+        }
+        return true;
+      };
       unsigned ps = 12;
-      String ph = shortPoolHost(h.poolHost, wCoin - 1, 12, 11, &ps);
-      text(wgt, ph.c_str(), 0, 12, ps, mix565(C_TEXT, C_BG, 40), C_BG);
-      wEnd(bx, 2);
+      String ph = shortPoolHost(h.poolHost, 12, 11, &ps, fits);
+      wgt.fillRect(0, pr0, wCoin, hCoin - pr0, C_BG);
+      text(wgt, ph.c_str(), 0, yPool, ps, mix565(C_TEXT, C_BG, 40), C_BG);
+      wEndLeftOfDial(bx, yCoin, wCoin, hCoin);
       done(W_HDR_BADGE, kCoin);
     }
   }
@@ -1845,15 +1908,217 @@ static void drawClosestTry(const Rect &r, const MineV &m)
 // Keep ATT_ROW_MS >= 2000 (starvation guard): more rows = more full repaints.
 #define ATT_ROWS 28
 #define ATT_ROW_MS (ATT_WIN_SEC * 1000 / ATT_ROWS) // 2142
-// Mine chart mode stub for the two-screen plan: 0 = A spectrogram (this),
-// 1 = E target ruler (Phase 2, not built yet).
+// Mine chart modes (tap the chart / band to cycle 0 -> 1 -> 2 -> 0):
+//  0 = A spectrogram, 1 = rain piles (session leading-zero piles), 2 = E target ruler.
+#define MINE_CHART_N 3
 static uint8_t g_mineChartMode = 0;
 static volatile int8_t g_mineChartReq = -1; // web request, applied by the display task
-#define ATT_STAIR_MS 5000 // Screen 1 staircase row: repainted at most every 5 s
-// Screen 1 (E) target ruler geometry inside the chart body
+#define ATT_STAIR_MS 5000 // Screen 2 staircase row: repainted at most every 5 s
+// Screen 2 (E) target ruler geometry inside the chart body
 #define ATT_SPARK_H 62    // per-second max-bits sweep
 #define ATT_LABEL_H 10    // 0 / 16 / share / NET axis labels under the staircase
-void cydSetMineChartMode(int m) { g_mineChartReq = (int8_t)(m ? 1 : 0); }
+// ---- Screen 1 rain piles: session counts per chart column ----
+// Fed ONLY from the display/monitor task (rainTick, at most every RAIN_TICK_MS)
+// out of the existing TAP sample ring and share log: nothing new on any mining
+// path. Columns use the live thresholds when a sample lands (same mapping as
+// Screen 0). Pile height doubles per row: h = 1 + 27 * log2(hashes) / 40.
+#define RAIN_TICK_MS 1000
+#define RAIN_FULL_LOG2 40 // pile full scale: 2^40 hashes (~13 days at 1 MH/s); full = white cap
+struct RainPiles
+{
+  uint32_t ver;
+  uint32_t cnt[48];  // MISS: TAP samples per column; SHARE / BLOCK: shares per column
+  double hashes;     // hashes mined while counting (MISS hashes = cnt * hashes / taps)
+  uint32_t taps;     // TAP samples counted
+  uint32_t shareUtc; // newest share already counted (share log dedupe)
+  uint32_t crc;
+};
+static RainPiles g_rain;
+static bool s_rainInit = false;
+static uint32_t s_rainSampSeq = 0, s_rainShareSeq = 0, s_rainLastMs = 0;
+static uint64_t s_rainLastHashes = 0;
+static volatile bool g_rainResetReq = false; // web reset-session -> applied by rainTick
+static HashSampleRec s_sampBuf[HASH_SAMP_N]; // display task only (figure + rainTick, under g_displayMutex)
+static int8_t s_rainPend = -1;      // column of the newest landing (next drop to show)
+static bool s_rainPendShare = false; // pending drop is a share / block (wins over samples)
+#define RAIN_DROP_STEP 7             // rows a drop falls per dots tick (4 ticks top to bottom)
+void cydRainReset() { g_rainResetReq = true; }
+
+// Persistence (Preferences, from rainTick on the display/monitor task only):
+// the piles at most every RAIN_SAVE_MS and only if they changed; the chart
+// view once it has stayed put for CHART_SAVE_DEBOUNCE_MS (not on every tap).
+#define RAIN_SAVE_MS 600000          // 10 min
+#define CHART_SAVE_DEBOUNCE_MS 10000 // view must be stable this long before it is saved
+#define RAIN_PREFS_NS "cyd_rain"
+#define RAIN_VER 0x5241494Eu         // 'RAIN' v1 layout
+static uint32_t rainCrc(const RainPiles &r)
+{
+  // FNV-1a over everything before the crc field
+  const uint8_t *b = (const uint8_t *)&r;
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < offsetof(RainPiles, crc); i++) h = (h ^ b[i]) * 16777619u;
+  return h;
+}
+static void rainLoad()
+{
+  Preferences p;
+  memset(&g_rain, 0, sizeof(g_rain));
+  if (!p.begin(RAIN_PREFS_NS, true))
+    return;
+  RainPiles r;
+  const size_t n = p.getBytes("p1", &r, sizeof(r));
+  p.end();
+  if (n == sizeof(r) && r.ver == RAIN_VER && r.crc == rainCrc(r))
+    g_rain = r;
+  else if (n)
+    Serial.println("[CYD] rain piles: saved blob rejected (size/version/checksum)");
+}
+static void rainSave()
+{
+  g_rain.ver = RAIN_VER;
+  g_rain.crc = rainCrc(g_rain);
+  Preferences p;
+  if (p.begin(RAIN_PREFS_NS, false))
+  {
+    p.putBytes("p1", &g_rain, sizeof(g_rain));
+    p.end();
+  }
+}
+static void rainErase()
+{
+  Preferences p;
+  if (p.begin(RAIN_PREFS_NS, false))
+  {
+    p.remove("p1");
+    p.end();
+  }
+}
+static int s_chartSaved = -1; // view stored in cyd_ui/"chart"
+static void chartModeSave(int mode)
+{
+  Preferences p;
+  if (p.begin("cyd_ui", false))
+  {
+    p.putUChar("chart", (uint8_t)mode);
+    p.end();
+  }
+  s_chartSaved = mode;
+}
+
+static void rainTick(const MineV &m)
+{
+  const uint32_t now = millis();
+  if (s_rainInit && (uint32_t)(now - s_rainLastMs) < RAIN_TICK_MS)
+    return;
+  s_rainLastMs = now;
+  const uint32_t sseq = getHashSampleSeq(), hseq = getShareHistorySeq();
+  const uint64_t tot = getTotalHashes();
+  const ShareRec *sh = m.shares; // fillMine just copied the share log (no second copy: RAM)
+  static uint32_t s_rainSavedMs = 0, s_chartSeenMs = 0;
+  static bool s_rainDirty = false;
+  static int s_chartSeen = -1;
+  if (g_rainResetReq)
+  {
+    g_rainResetReq = false;
+    memset(&g_rain, 0, sizeof(g_rain));
+    s_rainInit = false;
+    s_rainDirty = false;
+    rainErase(); // once per user reset (web Reset)
+  }
+  // persistence: debounced view, piles at most every RAIN_SAVE_MS when changed
+  if ((int)g_mineChartMode != s_chartSeen) { s_chartSeen = g_mineChartMode; s_chartSeenMs = now; }
+  if (s_chartSeen != s_chartSaved && (uint32_t)(now - s_chartSeenMs) >= CHART_SAVE_DEBOUNCE_MS)
+    chartModeSave(s_chartSeen);
+  if (s_rainDirty && (uint32_t)(now - s_rainSavedMs) >= RAIN_SAVE_MS)
+  {
+    rainSave();
+    s_rainSavedMs = now;
+    s_rainDirty = false;
+  }
+  if (!s_rainInit)
+  {
+    // baselines: count only what lands from now on (old log shares are skipped)
+    s_rainInit = true;
+    s_rainSampSeq = sseq;
+    s_rainShareSeq = hseq;
+    s_rainLastHashes = tot;
+    if (!g_rain.shareUtc)
+    {
+      const int c = m.nShares;
+      for (int i = 0; i < c; i++)
+        if (sh[i].utc > g_rain.shareUtc) g_rain.shareUtc = sh[i].utc;
+      if (!g_rain.shareUtc) g_rain.shareUtc = 1;
+    }
+    return;
+  }
+  const double poolD = m.poolDiff > 0 ? m.poolDiff : 0.0008;
+  const bool netKnown = m.netDiffRaw > 0;
+  double netD = netKnown ? m.netDiffRaw : poolD * 1e6;
+  if (netD <= poolD) netD = poolD * 16.0;
+  const double Tb = 32.0 + log2(poolD), Nb = 32.0 + log2(netD);
+  const double missW = Tb > 0 ? Tb / 16.0 : 1.0;
+  const double shareW = (netKnown && Nb > Tb) ? (Nb - Tb) / 16.0 : 1.0;
+  auto clampCol = [](int k) { return k < 0 ? 0 : (k > 15 ? 15 : k); };
+  const uint32_t newS = sseq - s_rainSampSeq;
+  s_rainSampSeq = sseq;
+  int got = 0;
+  if (newS)
+  {
+    got = getHashSamples(s_sampBuf, newS > HASH_SAMP_N ? HASH_SAMP_N : (int)newS);
+    for (int i = 0; i < got; i++)
+    {
+      const double dv = s_sampBuf[i].diff;
+      if (!(dv > 0)) continue;
+      g_rain.taps++;
+      if (dv >= poolD) continue; // a share: counted from the share log
+      const int col = clampCol((int)floor((32.0 + log2(dv)) / missW));
+      g_rain.cnt[col]++;
+      s_rainDirty = true;
+      if (!s_rainPendShare) s_rainPend = (int8_t)col;
+    }
+  }
+  // hashes behind the samples actually read (a ring overrun drops both)
+  const double dh = (double)(tot - s_rainLastHashes);
+  s_rainLastHashes = tot;
+  g_rain.hashes += newS ? dh * ((double)got / (double)newS) : dh;
+  if (hseq != s_rainShareSeq)
+  {
+    // new log entries: newer than the last counted one (a pool switch reloads
+    // that pool's older log, which is skipped)
+    const uint32_t newH = hseq - s_rainShareSeq;
+    s_rainShareSeq = hseq;
+    const int c = m.nShares;
+    uint32_t top = g_rain.shareUtc;
+    for (int i = c - 1; i >= 0; i--)
+    {
+      const ShareRec &r = sh[i];
+      if (r.utc && r.utc <= g_rain.shareUtc) break;
+      if (!r.utc && i < c - (int)(newH < (uint32_t)c ? newH : (uint32_t)c)) break; // clock unset: newest only
+      if (!(r.diff > 0)) continue;
+      const double bits = 32.0 + log2(r.diff);
+      const int col = (netKnown && r.diff >= netD) ? 32 + clampCol((int)floor(bits - Nb))
+                                                   : 16 + clampCol((int)floor((bits - Tb) / shareW));
+      g_rain.cnt[col]++;
+      s_rainDirty = true;
+      if (!s_rainPendShare || col >= 32) { s_rainPend = (int8_t)col; s_rainPendShare = true; }
+      if (r.utc > top) top = r.utc;
+    }
+    g_rain.shareUtc = top;
+  }
+}
+
+// Pile height in rows (0..ATT_ROWS) for n hashes; *cap when past full scale.
+static int rainHeight(double n, bool *cap)
+{
+  *cap = false;
+  if (!(n >= 1.0)) return 0;
+  const double l = log2(n);
+  if (l >= RAIN_FULL_LOG2) { *cap = true; return ATT_ROWS; }
+  const int h = 1 + (int)lround((ATT_ROWS - 1) * l / RAIN_FULL_LOG2);
+  return h > ATT_ROWS ? ATT_ROWS : h;
+}
+
+void cydSetMineChartMode(int m) { g_mineChartReq = (int8_t)(m < 0 ? 0 : (m >= MINE_CHART_N ? MINE_CHART_N - 1 : m)); }
 int cydGetMineChartMode() { return g_mineChartMode; }
 // Tap target for the 0 <-> 1 switch: the MISS | SHARE | BLOCK band (the old
 // 15s/30s/60s tab row sat here), with a few px of slop.
@@ -1886,7 +2151,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
 
   // Samples read directly here (not carried in MineV): keeps the paint struct
   // small so the screenshot path doesn't overflow the web task stack.
-  static HashSampleRec samp[HASH_SAMP_N];
+  HashSampleRec *samp = s_sampBuf; // shared with rainTick (same task / display mutex)
   const uint32_t nowMs = millis();
 
   const bool netKnown = m.netDiffRaw > 0;
@@ -2054,9 +2319,9 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       TFT_eSPI &d = out();
       d.fillRect(x1 + 1, dY(yTop - 1), r.x + r.w - x1 - 1, yBot - yTop + 2, C_BG);
     });
-    if (g_mineChartMode == 1)
+    if (g_mineChartMode == 2)
     {
-      // Screen 1 axis: bucket ticks + sparse labels at the live thresholds
+      // Screen 2 axis: bucket ticks + sparse labels at the live thresholds
       const int yLab = yBot - ATT_LABEL_H + 1;
       char tl[8];
       snprintf(tl, sizeof(tl), "%d", (int)floor(32.0 + log2(poolD)));
@@ -2220,9 +2485,126 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     if (!shotOn)
       s_lastRowEpoch = rowEpoch;
     }
+    else if (g_mineChartMode == 1)
+    {
+    // ---- Screen 1: rain piles (session, doubling per row) ----
+    // Full paint only on a frame / screenshot; otherwise only the cells whose
+    // colour changed (a pile top moving up) are pushed, at most once per dots tick.
+    static uint8_t s_rainDrawn[48]; // drawn height | 0x80 when capped
+    uint8_t hNow[48];
+    {
+      const double sc = g_rain.taps ? g_rain.hashes / (double)g_rain.taps : 0.0;
+      for (int k = 0; k < 48; k++)
+      {
+        bool cap = false;
+        const int h = rainHeight(k < 16 ? (double)g_rain.cnt[k] * sc : (double)g_rain.cnt[k], &cap);
+        hNow[k] = (uint8_t)(h | (cap ? 0x80 : 0));
+      }
+    }
+    const uint16_t emptyC[3] = {mix565(C_BEST, C_BG, 232), mix565(0x04DF, C_BG, 205), mix565(C_GOLD, C_BG, 232)};
+    const uint16_t pileC[3] = {mix565(C_BEST, C_BG, 118), mix565(0x04DF, C_BG, 90), mix565(C_GOLD, C_BG, 118)};
+    const uint16_t topC[3] = {C_BEST, (uint16_t)0x07FF, C_GOLD};
+    auto cellC = [&](uint8_t hv, int lane, int j) -> uint16_t {
+      const int h = hv & 0x7F, jb = ATT_ROWS - 1 - j; // jb 0 = bottom row
+      if (jb >= h) return emptyC[lane];
+      if (jb == h - 1) return (hv & 0x80) ? (uint16_t)0xFFFF : topC[lane];
+      return pileC[lane];
+    };
+    const Rect p1 = pillRect(1), p2 = pillRect(2);
+    auto inPill = [&](int x, int y) {
+      for (const Rect *p : {&p1, &p2})
+        if (x + SPEC_W > p->x && x < p->x + p->w && y + SPEC_H > p->y && y < p->y + p->h) return true;
+      return false;
+    };
+    const bool fullR = s_dotsFull || shotOn;
+    if (fullR)
+    {
+      auto body = [&] {
+        TFT_eSPI &d = out();
+        d.fillRect(x0, dY(yTop - 1), x1 - x0 + 1, yBot - yTop + 2, C_BG);
+        for (int j = 0; j < ATT_ROWS; j++)
+          for (int k = 0; k < 48; k++)
+          {
+            const int lane = k / 16, kk = k % 16;
+            d.fillRect(x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1, dY(goyS + j * SPEC_PY), SPEC_W, SPEC_H,
+                       cellC(hNow[k], lane, j));
+          }
+        for (int c = 1; c < 3; c++) d.drawFastVLine(x0 + c * colW, dY(yTop - 1), yBot - yTop + 2, laneC[c]);
+      };
+      const int bx = x0, bw = x1 - x0 + 1, byT = yTop - 1, byB = yBot + 1;
+      banded(bx, byT, bw, p1.y - byT, C_BG, body);
+      banded(bx, p1.y, p1.x - bx, p1.h, C_BG, body);
+      banded(p1.x + p1.w, p1.y, p2.x - (p1.x + p1.w), p1.h, C_BG, body);
+      banded(p2.x + p2.w, p1.y, bx + bw - (p2.x + p2.w), p1.h, C_BG, body);
+      banded(bx, p1.y + p1.h, bw, byB - (p1.y + p1.h), C_BG, body);
+    }
     else
     {
-    // ---- Screen 1 (E): target ruler ----
+      for (int k = 0; k < 48; k++)
+      {
+        if (hNow[k] == s_rainDrawn[k]) continue; // unchanged pile: nothing to push
+        const int lane = k / 16, kk = k % 16;
+        const int x = x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1;
+        for (int j = 0; j < ATT_ROWS; j++)
+        {
+          const uint16_t cn = cellC(hNow[k], lane, j);
+          const int y = goyS + j * SPEC_PY;
+          if (cn == cellC(s_rainDrawn[k], lane, j) || inPill(x, y)) continue;
+          banded(x, y, SPEC_W, SPEC_H, C_BG, [&] { out().fillRect(x, dY(y), SPEC_W, SPEC_H, cn); });
+        }
+      }
+    }
+    // Drop sprite: the newest landing falls RAIN_DROP_STEP rows per tick into
+    // its column (one bright cell + a dim trail cell), then merges into the
+    // pile. Each tick touches at most 4 cells (old drop + trail, new drop + trail).
+    static int8_t s_dropK = -1;
+    static int8_t s_dropJ = 0;
+    auto dropCells = [&](int k, int j, bool on) {
+      const int lane = k / 16, kk = k % 16;
+      const int x = x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1;
+      for (int t = 0; t < 2; t++)
+      {
+        const int jj = j - t;
+        if (jj < 0 || jj >= ATT_ROWS) continue;
+        const int y = goyS + jj * SPEC_PY;
+        if (inPill(x, y)) continue;
+        const uint16_t c = on ? (t == 0 ? topC[lane] : pileC[lane]) : cellC(hNow[k], lane, jj);
+        banded(x, y, SPEC_W, SPEC_H, C_BG, [&] { out().fillRect(x, dY(y), SPEC_W, SPEC_H, c); });
+      }
+    };
+    if (shotOn)
+    {
+      if (s_dropK >= 0) dropCells(s_dropK, s_dropJ, true); // screenshot shows the drop where it is
+    }
+    else
+    {
+      if (s_dropK >= 0 && s_rainPendShare && s_rainPend >= 0) // a share cuts in
+      {
+        dropCells(s_dropK, s_dropJ, false);
+        s_dropK = -1;
+      }
+      if (s_dropK >= 0)
+      {
+        dropCells(s_dropK, s_dropJ, false);
+        s_dropJ += RAIN_DROP_STEP;
+        if (s_dropJ >= ATT_ROWS - (hNow[s_dropK] & 0x7F)) s_dropK = -1; // landed on the pile
+        else dropCells(s_dropK, s_dropJ, true);
+      }
+      if (s_dropK < 0 && s_rainPend >= 0)
+      {
+        s_dropK = s_rainPend;
+        s_dropJ = 0;
+        s_rainPend = -1;
+        s_rainPendShare = false;
+        if (ATT_ROWS - (hNow[s_dropK] & 0x7F) <= 0) s_dropK = -1; // full column: nothing to fall through
+        else dropCells(s_dropK, s_dropJ, true);
+      }
+      memcpy(s_rainDrawn, hNow, sizeof(s_rainDrawn));
+    }
+    }
+    else
+    {
+    // ---- Screen 2 (E): target ruler ----
     // Top: 60 s sweep, one slot per second (slot = second % 60, so a slot never
     // moves): bar height = most leading-zero bits seen that second; a cursor
     // gap marks "now" and runs left -> right. Each tick repaints only the two
@@ -2369,7 +2751,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   const int nBits = netKnown ? (int)floor(32.0 + log2(netD)) : -1;
   char kp[32];
   snprintf(kp, sizeof(kp), "p|%d|%d|%u", tBits, nBits, (unsigned)g_mineChartMode);
-  if (g_mineChartMode == 0 && need(W_ATT_PILLS, kp))
+  if (g_mineChartMode != 2 && need(W_ATT_PILLS, kp))
   {
     for (int c = 1; c < 3; c++)
     {
@@ -3059,6 +3441,11 @@ static void loadUiPrefs()
     int old = p.getUChar("page", 0);
     page = (old >= 0 && old < 4) ? map4[old] : SCR_MINE;
   }
+  {
+    const int cm = p.getUChar("chart", 0); // last Mine chart view (debounced save)
+    g_mineChartMode = (uint8_t)(cm >= 0 && cm < MINE_CHART_N ? cm : 0);
+    s_chartSaved = g_mineChartMode;
+  }
   p.end();
   if (page < 0 || page >= SCR_COUNT)
     page = SCR_MINE;
@@ -3185,6 +3572,7 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   MineV m;
   m.hdr = liveHeader(data.currentTime);
   fillMine(m, data.currentHashRate, sh, data.blockTimeSec, (double)data.blockHashes);
+  rainTick(m); // Screen 1 piles: reads the sample ring / share log (<= 1/s)
   lastMine = m;
   lastMineMs = millis();
   haveMine = true;
@@ -3812,6 +4200,7 @@ void esp32_2432S028R_Init(void)
   xTaskCreatePinnedToCore(touchTask, "cydTouch", 4096, NULL, 1, NULL, 0);
 
   loadUiPrefs();
+  rainLoad(); // Screen 1 piles survive a reboot
   esp32_2432S028R_SetTheme(Settings.displayTheme);
 
   if (render.loadFont(NotoSans_Bold, sizeof(NotoSans_Bold)))
@@ -3950,7 +4339,7 @@ enum TouchAction
   TA_PREV,
   TA_BACKLIGHT,
   TA_ACCENT,
-  TA_CHARTMODE // Mine: tap the MISS | SHARE | BLOCK band -> spectrogram <-> target ruler
+  TA_CHARTMODE // Mine: tap the MISS | SHARE | BLOCK band -> spectrogram -> rain -> target ruler
 };
 static volatile int pendingTouch = TA_NONE;
 
@@ -4077,7 +4466,7 @@ static void touchTask(void *)
         // Mine (portrait): the band is the documented target, but with only
         // one cyclic screen a tap anywhere else used to fall through to
         // NEXT/PREV and do nothing. Any tap on the chart, or anywhere at all
-        // when there is no other page to cycle to, flips Screen 0 <-> 1.
+        // when there is no other page to cycle to, cycles Screen 0 -> 1 -> 2.
         else if (uiScreen == SCR_MINE && isPortrait() &&
                  (mineChartBandHit(t_x, t_y) || mineChartBodyHit(t_x, t_y) ||
                   currentDisplayDriver->num_cyclic_screens <= 1))
@@ -4147,7 +4536,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
   case TA_ACCENT:
     break;
   case TA_CHARTMODE:
-    g_mineChartReq = (int8_t)(g_mineChartMode ? 0 : 1);
+    g_mineChartReq = (int8_t)((g_mineChartMode + 1) % MINE_CHART_N);
     break;
   case TA_NEXT:
   case TA_PREV:
@@ -4156,7 +4545,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     break;
   }
 
-  // Mine chart 0 <-> 1 (band tap or /api/minechart): applied here, on the
+  // Mine chart 0 -> 1 -> 2 (band tap or /api/minechart): applied here, on the
   // display task, under the display mutex; the frame key includes the mode,
   // so the next paint redraws the chart once and then goes back to deltas.
   if (g_mineChartReq >= 0)
@@ -4221,11 +4610,19 @@ bool esp32_2432S028R_CaptureBmp(Print &client, int screenIdx)
   bool portrait = (rot == 0 || rot == 2);
   int w = portrait ? 240 : 320;
   int h = portrait ? 320 : 240;
-  const int nSlices = 4;
-  int sliceH = h / nSlices; // 80 portrait, 60 landscape (only 19.2 KB!)
+  // 4 slices (19.2 KB) normally; if the heap is fragmented (largest free
+  // block too small, seen after a pool switch) retry with 8 / 16 slices.
+  int nSlices = 4;
+  int sliceH = h / nSlices; // 80 portrait, 60 landscape
 
   shot.setColorDepth(8);
-  shot.createSprite(w, sliceH);
+  for (;;)
+  {
+    shot.createSprite(w, sliceH);
+    if (shot.created() || nSlices >= 16) break;
+    nSlices *= 2;
+    sliceH = h / nSlices;
+  }
   if (!shot.created())
   {
     Serial.printf("[ui] shot sprite %dx%d alloc failed (free %u, max %u)\n",

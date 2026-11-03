@@ -340,6 +340,10 @@ static void handleResetSession()
   if (refuseForeign())
     return;
   resetSessionStats();
+#if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
+  extern void cydRainReset();
+  cydRainReset(); // Screen 1 piles: cleared by the display task
+#endif
   webCfgServer.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Session stats reset\"}");
 }
 
@@ -440,8 +444,8 @@ static void handleSetScreen()
 }
 
 #if (defined(ESP32_2432S028R) || defined(ESP32_2432S028_2USB)) && !defined(CYD_THEME_CLASSIC)
-// Mine chart body: 0 = spectrogram, 1 = target ruler (same as tapping the
-// MISS | SHARE | BLOCK band). GET reads, POST ?mode=0|1 sets.
+// Mine chart body: 0 = spectrogram, 1 = rain piles, 2 = target ruler (same as
+// tapping the MISS | SHARE | BLOCK band). GET reads, POST ?mode=0|1|2 sets.
 extern void cydSetMineChartMode(int m);
 extern int cydGetMineChartMode();
 static void handleMineChart()

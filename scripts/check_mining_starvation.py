@@ -110,16 +110,61 @@ def check(files):
         errs.append("display: ATT_ROW_MS missing or < %d ms (full spectrogram repaint too often)" % (2 * MIN_DOTS_MS))
     if not re.search(r"rowEpoch\s*!=\s*s_lastRowEpoch", fig):
         errs.append("display: spectrogram full repaint must be gated on a row scroll (rowEpoch != s_lastRowEpoch)")
-    # Screen 1 (target ruler): the staircase repaints at most every ATT_STAIR_MS,
+    # Screen 2 (target ruler): the staircase repaints at most every ATT_STAIR_MS,
     # and the 60 s sweep is only fully repainted on a frame/screenshot redraw
     # (each tick touches just the newest slots + cursor).
     stair_ms = define_value(disp, "ATT_STAIR_MS")
     if stair_ms is None or stair_ms < 5 * MIN_DOTS_MS:
         errs.append("display: ATT_STAIR_MS missing or < %d ms (staircase repaint too often)" % (5 * MIN_DOTS_MS))
     if not re.search(r"const\s+bool\s+fullE\s*=\s*s_dotsFull\s*\|\|\s*shotOn\s*;", fig):
-        errs.append("display: Screen 1 sweep full repaint must be gated on s_dotsFull || shotOn only")
+        errs.append("display: Screen 2 sweep full repaint must be gated on s_dotsFull || shotOn only")
     if not re.search(r"stair\s*!=\s*s_lastStair", fig):
-        errs.append("display: Screen 1 staircase repaint must be gated on a new ATT_STAIR_MS bucket")
+        errs.append("display: Screen 2 staircase repaint must be gated on a new ATT_STAIR_MS bucket")
+
+    # Screen 1 (rain piles): counters fed at most every RAIN_TICK_MS from the
+    # display task; the body is fully repainted only on a frame / screenshot,
+    # otherwise only cells of piles whose height changed are pushed.
+    rain_ms = define_value(disp, "RAIN_TICK_MS")
+    if rain_ms is None or rain_ms < MIN_DOTS_MS:
+        errs.append("display: RAIN_TICK_MS missing or < %d (rain counters ticked too often)" % MIN_DOTS_MS)
+    rt = func_bodies(dispc, r"static void rainTick\s*\(const MineV &m\)\s*\{")
+    if len(rt) != 1:
+        errs.append("display: rainTick() not found exactly once")
+    elif not re.search(r"if\s*\(\s*s_rainInit\s*&&\s*\(uint32_t\)\(now\s*-\s*s_rainLastMs\)\s*<\s*RAIN_TICK_MS\s*\)\s*return", rt[0]):
+        errs.append("display: rainTick() must return early inside RAIN_TICK_MS")
+    if len(re.findall(r"\brainTick\s*\(m\)", dispc)) != 1:
+        errs.append("display: rainTick() must be called from exactly one place (the Mine data tick)")
+    if not re.search(r"const\s+bool\s+fullR\s*=\s*s_dotsFull\s*\|\|\s*shotOn\s*;", fig):
+        errs.append("display: Screen 1 rain full repaint must be gated on s_dotsFull || shotOn only")
+    if not re.search(r"if\s*\(\s*hNow\[k\]\s*==\s*s_rainDrawn\[k\]\s*\)\s*continue", fig):
+        errs.append("display: Screen 1 rain must skip unchanged piles (delta-only redraw)")
+
+    # Persistence: piles saved at most every 10 min (only when changed), the
+    # view only after it has been stable; both from rainTick (display task).
+    save_ms = define_value(disp, "RAIN_SAVE_MS")
+    if save_ms is None or save_ms < 600000:
+        errs.append("display: RAIN_SAVE_MS missing or < 600000 (pile save too often: flash wear / stalls)")
+    deb = define_value(disp, "CHART_SAVE_DEBOUNCE_MS")
+    if deb is None or deb < 5000:
+        errs.append("display: CHART_SAVE_DEBOUNCE_MS missing or < 5000 (view saved on every tap)")
+    for fn in ("rainSave", "chartModeSave"):
+        calls = [m for m in re.finditer(r"\b" + fn + r"\s*\(", dispc)
+                 if not dispc[max(0, m.start() - 16):m.start()].rstrip().endswith("void")]
+        if len(calls) != 1 or (rt and fn + "(" not in rt[0]):
+            errs.append("display: %s() must be called exactly once, from rainTick()" % fn)
+    if rt and not re.search(r"if\s*\(\s*s_rainDirty\s*&&\s*\(uint32_t\)\(now\s*-\s*s_rainSavedMs\)\s*>=\s*RAIN_SAVE_MS\s*\)", rt[0]):
+        errs.append("display: pile save must be gated on s_rainDirty && RAIN_SAVE_MS elapsed")
+    if rt and not re.search(r"\(uint32_t\)\(now\s*-\s*s_chartSeenMs\)\s*>=\s*CHART_SAVE_DEBOUNCE_MS", rt[0]):
+        errs.append("display: chart view save must be debounced by CHART_SAVE_DEBOUNCE_MS")
+
+    step = define_value(disp, "RAIN_DROP_STEP")
+    if step is None or step < 3:
+        errs.append("display: RAIN_DROP_STEP missing or < 3 rows (drop animation too many ticks)")
+    i0 = fig.find("static int8_t s_dropK"); i1 = fig.find("ATT_SPARK_H", i0)
+    if i0 < 0 or i1 < i0:
+        errs.append("display: rain drop sprite state (s_dropK) not found before the ruler")
+    elif re.search(r"millis\(|nowMs", fig[i0:i1]):
+        errs.append("display: rain drop sprite must advance on the dots tick only (no own clock)")
 
     # Layering: frame / dots / bins must be separate widgets.
     needs = set(re.findall(r"\bneed\(\s*(W_[A-Z0-9_]+)", fig))
@@ -233,6 +278,18 @@ def check(files):
     elif re.search(r"hashSample|hashTap|millis\(|portENTER_CRITICAL", nc[0]):
         errs.append("mining: noteCandidate() must not sample, lock or read the clock (TAP-only)")
 
+    # No flash (NVS / Preferences) writes or display-side rain work on any mining path.
+    hot = []
+    for sig in (r"\nvoid minerWorkerHw\s*\(void \* task_id\)\s*\{", r"\nvoid minerWorkerSw\s*\(void \* task_id\)\s*\{",
+                r"\nvoid noteCandidate\s*\(double diff, const uint8_t \*hashLE\)\s*\{",
+                r"\nvoid updateBestDiff\s*\(double diff, const uint8_t \*hashLE\)\s*\{",
+                r"static void[^;{]*\bhashTapSw\s*\([^)]*\)\s*\{"):
+        hot += func_bodies(mine, sig)
+    for b in hot:
+        mm = re.search(r"\bnvs_\w+|\bPreferences\b|\bput(?:Bytes|UChar|UInt|ULong)\b|\bsaveStat\b|\brainTick\b|\bcydRain\w*", b)
+        if mm:
+            errs.append("mining: flash/NVS or rain call on a mining path: " + mm.group(0))
+
     # updateBestDiff is also called from the stratum task; it must not sample.
     ub = func_bodies(mine, r"\nvoid updateBestDiff\s*\(double diff, const uint8_t \*hashLE\)\s*\{")
     if ub and re.search(r"hashSample|hashTap|millis\(", ub[0]):
@@ -269,14 +326,29 @@ def selftest():
          'String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + (P ? "P" : "L");',
          'String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + h.job + "|" + (P ? "P" : "L");'),
         ("pool shortening outside its widget", DISPLAY,
-         "  const int wCoin = 58, hCoin = 30;\n",
-         "  const int wCoin = 58, hCoin = 30;\n  unsigned pz; String phx = shortPoolHost(h.poolHost, 57, 12, 11, &pz);\n"),
+         "  const int wCoin = 66, hCoin = 27, yCoin = 2, yPool = 11;\n",
+         "  const int wCoin = 66, hCoin = 27, yCoin = 2, yPool = 11;\n  unsigned pz; String phx = shortPoolHost(h.poolHost, 12, 11, &pz, [](const String &, unsigned) { return true; });\n"),
         ("job ring ungated", DISPLAY,
          "if (!shotOn && !jobRingDirty && age == lastAge)",
          "if (false)"),
         ("job ring full redraw", DISPLAY,
          "if (!shotOn && lvl == jobLvl[i])",
          "if (false)"),
+        ("rain tick 200 ms", DISPLAY, "#define RAIN_TICK_MS 1000", "#define RAIN_TICK_MS 200"),
+        ("rain tick ungated", DISPLAY, "if (s_rainInit && (uint32_t)(now - s_rainLastMs) < RAIN_TICK_MS)", "if (false)"),
+        ("rain full repaint every tick", DISPLAY, "const bool fullR = s_dotsFull || shotOn;", "const bool fullR = true;"),
+        ("rain delta ungated", DISPLAY, "if (hNow[k] == s_rainDrawn[k]) continue;", "if (false) continue;"),
+        ("pile save every minute", DISPLAY, "#define RAIN_SAVE_MS 600000", "#define RAIN_SAVE_MS 60000"),
+        ("pile save ungated", DISPLAY, "if (s_rainDirty && (uint32_t)(now - s_rainSavedMs) >= RAIN_SAVE_MS)", "if (true)"),
+        ("view save on every tap", DISPLAY, "#define CHART_SAVE_DEBOUNCE_MS 10000", "#define CHART_SAVE_DEBOUNCE_MS 100"),
+        ("pile save outside rainTick", DISPLAY, "  rainLoad(); // Screen 1 piles", "  rainSave(); rainLoad(); // Screen 1 piles"),
+        ("NVS write in HW miner", MINING, "  uint32_t pipelined_swapped_cursor = 0;\n",
+         "  uint32_t pipelined_swapped_cursor = 0;\n  nvs_commit(stat_handle);\n"),
+        ("drop sprite on its own clock", DISPLAY, "        s_dropJ += RAIN_DROP_STEP;",
+         "        s_dropJ += RAIN_DROP_STEP; (void)millis();"),
+        ("NVS write in noteCandidate", MINING,
+         "    s_candidates++;\n",
+         "    s_candidates++;\n  nvs_set_u32(stat_handle, \"x\", 1);\n"),
         ("tap ungated", MINING, "if (--swTap == 0)", "if (true)"),
         ("tap every 1", MINING_H, "#define HASH_TAP_EVERY 256u", "#define HASH_TAP_EVERY 1u"),
         ("sampler in noteCandidate", MINING,
