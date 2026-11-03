@@ -8,6 +8,7 @@
 #include "ShaTests/nerdSHA256plus.h"
 #include "stratum.h"
 #include "mining.h"
+#include "bootInfo.h"
 #include "utils.h"
 #include "monitor.h"
 #include "timeconst.h"
@@ -3527,6 +3528,7 @@ void runMonitor(void *name)
       g_khTickMs = now_millis;
       g_khTickSeq++;
       statusRateSample(currentKHashes, now_millis);
+      bootInfoTick((uint32_t)(esp_timer_get_time() / 1000000ULL)); // two RTC words: next boot's "previous uptime / heap"
 
       uptime_frac += mElapsed;
       while (uptime_frac >= 1000)

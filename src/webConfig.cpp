@@ -20,6 +20,22 @@
 #ifdef M5STICK_C_PLUS2
 #include "m5stickPlus2Hw.h"
 #endif
+#include "bootInfo.h"
+
+// mDNS name http://nerdminer.local/ -- OFF by default: build with -DCYD_MDNS=1.
+// Measured on the CYD (Nov 2026): the IDF mdns responder costs ~11 KB of the
+// ~54 KB free heap, and the lowest free heap already dips to ~3 KB during the
+// periodic HTTPS fetches; that headroom matters more than a .local name. A
+// DHCP reservation on the router gives the same stable address for free.
+// The DHCP hostname is left unchanged either way.
+#ifndef CYD_MDNS
+#define CYD_MDNS 0
+#endif
+#if CYD_MDNS
+#include <ESPmDNS.h>
+#endif
+#define CYD_MDNS_NAME "nerdminer"
+static bool s_mdnsUp = false;
 
 // Settings page login (optional change via webpass/webpass2 form fields).
 #define WEBCFG_USER "admin"
@@ -139,6 +155,13 @@ static String buildStatsJson(const mining_data &d)
   json += ",\"rssi\":" + String(WiFi.RSSI());
   json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
+  {
+    char bj[640];
+    bootInfoJson(bj, sizeof(bj));
+    json += ",\"boot\":";
+    json += bj;
+    json += ",\"mdns\":\"" + String(s_mdnsUp ? CYD_MDNS_NAME ".local" : "") + "\"";
+  }
   json += ",\"theme\":" + String(Settings.displayTheme);
   json += ",\"ping\":" + String(g_stratumPing);
   {
@@ -1208,6 +1231,8 @@ const eHs=document.getElementById('dyn-hstrip');if(eHs&&d.round_best_hash!==unde
 const eRr=document.getElementById('dyn-rounds');if(eRr&&d.rounds)eRr.textContent=d.rounds.length?d.rounds.slice(0,5).map(r=>fr(r.my_best)+' vs '+fr(r.winner)).join(' | '):'none yet (one per block)';}
 const eOkBad=document.getElementById('dyn-okbad');if(eOkBad&&d.shares_accepted!==undefined)eOkBad.textContent=d.shares_accepted+' ok / '+d.shares_rejected+' bad';
 if(d.free_heap){const e=document.getElementById('st-heap');if(e)e.textContent=Math.round(d.free_heap/1024)+' KB';}
+if(d.boot){const b=d.boot,e=document.getElementById('dyn-boot');if(e){const pu=Number(b.prev_uptime_s)||0,pd=pu>=86400?Math.floor(pu/86400)+'d':pu>=3600?Math.floor(pu/3600)+'h':pu>=60?Math.floor(pu/60)+'m':pu+'s';e.textContent='boot '+b.count+' \u00b7 '+b.reason;e.title='Last start: '+b.reason+(pu?'; previous boot ran '+pd+', lowest free heap '+Math.round((b.prev_min_heap||0)/1024)+' KB':'')+'. Recent starts: '+(b.history||[]).map(h=>'#'+h.boot+' '+h.reason).join(', ')+(d.mdns?'. Also at http://'+d.mdns+'/':'');}}
+if(Array.isArray(d.pool_stats)){const t={};d.pool_stats.forEach(p=>{t[p.coin]=(t[p.coin]||0)+(Number(p.blocks)||0);});const e=document.getElementById('dyn-blkcoin');if(e){const k=Object.keys(t);e.textContent=k.length?k.map(c=>c+' '+t[c].toLocaleString()).join(' \u00b7 '):'--';}}
 if(d.rssi!==undefined){const q=Math.min(Math.max(2*(d.rssi+100),0),100);const w=document.getElementById('st-wifi'),r=document.getElementById('st-rssi');if(w)w.textContent=q+'%';if(r)r.textContent=d.rssi;}
 const txt=document.getElementById('st-txt');if(txt){
 if(d.status==='hashing'){txt.className='txt-green';txt.textContent=d.using_fallback?'Hashing (fallback)':'Hashing';}
@@ -1355,7 +1380,7 @@ static void handleRoot()
   page += F("</span> &middot; job <span id='dyn-lastjob'>--</span></div>"
             "<div class='vz-sub'>Mining for <span id='dyn-uptime'>");
   page += (d.timeMining.length() ? d.timeMining : F("--"));
-  page += F("</span></div>"
+  page += F("</span> &middot; <span id='dyn-boot' title='Why the miner last started'>--</span></div>"
             "</div>"
             "<div>"
             "<div class='tele-card-hdr'><div class='tele-card-title'>Shares</div>"
@@ -1393,6 +1418,7 @@ static void handleRoot()
             "<div class='rnd'><span class='vz-k'>Round</span><div class='rbar' role='presentation'><div id='dyn-rbar'></div></div><span class='vz-k'><span id='dyn-rtries'>--</span> <span id='dyn-rpct'></span></span></div>"
             "<div class='vz-sub' title='Recent rounds: my best vs winner'>Rounds <span id='dyn-rounds'>--</span></div>"
             "<div class='bdgs'>"
+            "<span class='bdg' title='Blocks found, lifetime, per coin (pool stats on the device)'><i>blocks</i><b id='dyn-blkcoin'>--</b></span>"
             "<span class='bdg'><i>reward</i><b>3.125 BTC</b></span>"
             "<span class='bdg'><i>daily</i><b id='dyn-dayodds'>--</b></span>"
             "<span class='bdg'><i>yearly</i><b id='dyn-yrodds'>--</b></span>"
@@ -1998,7 +2024,7 @@ static void handleSave()
 static void handleStatus()
 {
   const MinerStatus m = getMinerStatus();
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(3072);
   doc["version"] = CURRENT_VERSION;
   doc["fw"] = FW_GIT;
   doc["uptime_s"] = (uint32_t)(esp_timer_get_time() / 1000000ULL); // 64-bit clock: millis() wraps after 49.7 days
@@ -2050,6 +2076,14 @@ static void handleStatus()
   wifi["rssi"] = WiFi.RSSI();
   wifi["ip"] = WiFi.localIP().toString();
   doc["free_heap"] = ESP.getFreeHeap();
+  {
+    // why the chip last started (esp_reset_reason), boot counter, and how the
+    // boot before it ended (uptime / lowest heap, from RTC memory)
+    char bj[640];
+    bootInfoJson(bj, sizeof(bj));
+    doc["boot"] = serialized(String(bj));
+    doc["mdns"] = s_mdnsUp ? CYD_MDNS_NAME ".local" : "";
+  }
 
   // Cached values only: nothing here may start an HTTPS fetch or an NTP
   // request (those run on the monitor task and pause the miner).
@@ -2211,6 +2245,14 @@ void setup_webConfig(void)
   });
   webCfgServer.begin();
   webCfgStarted = true;
+#if CYD_MDNS
+  if (!s_mdnsUp && MDNS.begin(CYD_MDNS_NAME))
+  {
+    MDNS.addService("http", "tcp", 80);
+    s_mdnsUp = true;
+    Serial.println("[WEBCFG] mDNS: http://" CYD_MDNS_NAME ".local/");
+  }
+#endif
 
   Serial.print("[WEBCFG] Dashboard at http://");
   Serial.print(WiFi.localIP());

@@ -1917,17 +1917,27 @@ static volatile int8_t g_mineChartReq = -1; // web request, applied by the displ
 // Screen 2 (E) target ruler geometry inside the chart body
 #define ATT_SPARK_H 62    // per-second max-bits sweep
 #define ATT_LABEL_H 10    // 0 / 16 / share / NET axis labels under the staircase
-// ---- Screen 1 rain piles: session counts per chart column ----
+// ---- Screen 1 rain piles: session counts per leading-zero bit ----
 // Fed ONLY from the display/monitor task (rainTick, at most every RAIN_TICK_MS)
 // out of the existing TAP sample ring and share log: nothing new on any mining
-// path. Columns use the live thresholds when a sample lands (same mapping as
-// Screen 0). Pile height doubles per row: h = 1 + 27 * log2(hashes) / 40.
+// path. Counts are kept per bit (bits = 32 + log2(diff), in fixed sub-bit
+// bins), NOT per chart column: the 16 MISS / SHARE / BLOCK columns are mapped
+// at draw time from the live pool / network targets (same mapping as
+// Screen 0), so a pool switch (BTC Tb 32 <-> Shears Tb ~23) never mixes bins.
+// Pile height doubles per row: h = 1 + 27 * log2(hashes) / 40.
 #define RAIN_TICK_MS 1000
 #define RAIN_FULL_LOG2 40 // pile full scale: 2^40 hashes (~13 days at 1 MH/s); full = white cap
+// Half-bit bins (a MISS column is Tb / 16 = 1.4 .. 2 bits wide). Kept small:
+// the heap is tight (a web screenshot needs a ~10 KB block on top of WiFi).
+#define RAIN_TAP_PER_BIT 2   // TAP samples: half-bit bins
+#define RAIN_TAP_BINS 96     //  0 .. 48 bits (a 2^16-diff hash; higher clamps to the last bin)
+#define RAIN_SHR_PER_BIT 2   // shares / blocks: half-bit bins
+#define RAIN_SHR_BINS 224    //  0 .. 112 bits (BTC block ~79)
 struct RainPiles
 {
   uint32_t ver;
-  uint32_t cnt[48];  // MISS: TAP samples per column; SHARE / BLOCK: shares per column
+  uint32_t tap[RAIN_TAP_BINS]; // TAP samples per bit bin (any diff; MISS uses those below the live target)
+  uint16_t shr[RAIN_SHR_BINS]; // shares (incl. blocks) per bit bin, from the share log (saturating)
   double hashes;     // hashes mined while counting (MISS hashes = cnt * hashes / taps)
   uint32_t taps;     // TAP samples counted
   uint32_t shareUtc; // newest share already counted (share log dedupe)
@@ -1950,7 +1960,7 @@ void cydRainReset() { g_rainResetReq = true; }
 #define RAIN_SAVE_MS 600000          // 10 min
 #define CHART_SAVE_DEBOUNCE_MS 10000 // view must be stable this long before it is saved
 #define RAIN_PREFS_NS "cyd_rain"
-#define RAIN_VER 0x5241494Eu         // 'RAIN' v1 layout
+#define RAIN_VER 0x33494152u         // "RAI3": per-bit layout (older per-column blobs are discarded)
 static uint32_t rainCrc(const RainPiles &r)
 {
   // FNV-1a over everything before the crc field
@@ -1965,7 +1975,7 @@ static void rainLoad()
   memset(&g_rain, 0, sizeof(g_rain));
   if (!p.begin(RAIN_PREFS_NS, true))
     return;
-  RainPiles r;
+  static RainPiles r; // ~1.7 KB: off the caller stack
   const size_t n = p.getBytes("p1", &r, sizeof(r));
   p.end();
   if (n == sizeof(r) && r.ver == RAIN_VER && r.crc == rainCrc(r))
@@ -2003,6 +2013,50 @@ static void chartModeSave(int mode)
     p.end();
   }
   s_chartSaved = mode;
+}
+
+// Bit bin <-> chart column mapping (draw time and the drop sprite).
+static int rainBin(double bits, int perBit, int nBins)
+{
+  int q = (int)floor(bits * perBit);
+  return q < 0 ? 0 : (q >= nBins ? nBins - 1 : q);
+}
+static int rainClampCol(int k) { return k < 0 ? 0 : (k > 15 ? 15 : k); }
+static double rainMissW(double Tb) { return Tb > 0 ? Tb / 16.0 : 1.0; }
+static int rainMissCol(double bits, double Tb) { return rainClampCol((int)floor(bits / rainMissW(Tb))); }
+// SHARE: (Nb - Tb) / 16 bits per column from Tb; BLOCK: one bit per column from Nb.
+// A share below the live target (mined on an easier pool) sits in SHARE column 0.
+static int rainShareCol(double bits, double Tb, double Nb, bool netKnown)
+{
+  if (netKnown && bits >= Nb) return 32 + rainClampCol((int)floor(bits - Nb));
+  const double shareW = (netKnown && Nb > Tb) ? (Nb - Tb) / 16.0 : 1.0;
+  return 16 + rainClampCol((int)floor((bits - Tb) / shareW));
+}
+// The 48 column counts for the live targets. MISS: TAP samples whose bin
+// centre is below Tb (cnt * hashes / taps = hashes); SHARE / BLOCK: shares.
+// rare[k]: MISS column k expects < 1 TAP sample over the counted taps
+// (P(bits >= b) = 2^-b per sample), i.e. too rare to sample at ~4 / s --
+// shaded, so it reads as "out of the sampler's reach", not as a hole.
+static void rainColumns(double Tb, double Nb, bool netKnown, float col[48], bool rare[16])
+{
+  for (int k = 0; k < 48; k++) col[k] = 0;
+  const double sc = g_rain.taps ? g_rain.hashes / (double)g_rain.taps : 0.0;
+  for (int q = 0; q < RAIN_TAP_BINS; q++)
+  {
+    if (!g_rain.tap[q]) continue;
+    const double b = (q + 0.5) / RAIN_TAP_PER_BIT;
+    if (b >= Tb) continue; // at / above the share target: not a miss here
+    col[rainMissCol(b, Tb)] += (float)((double)g_rain.tap[q] * sc);
+  }
+  for (int h = 0; h < RAIN_SHR_BINS; h++)
+    if (g_rain.shr[h]) col[rainShareCol((h + 0.5) / RAIN_SHR_PER_BIT, Tb, Nb, netKnown)] += g_rain.shr[h];
+  const double w = rainMissW(Tb), taps = (double)g_rain.taps;
+  for (int k = 0; k < 16; k++)
+  {
+    const double lo = k * w, hi = (k + 1) * w;
+    const double expect = taps * (exp2(-lo) - exp2(-hi));
+    rare[k] = expect < 1.0;
+  }
 }
 
 static void rainTick(const MineV &m)
@@ -2056,9 +2110,6 @@ static void rainTick(const MineV &m)
   double netD = netKnown ? m.netDiffRaw : poolD * 1e6;
   if (netD <= poolD) netD = poolD * 16.0;
   const double Tb = 32.0 + log2(poolD), Nb = 32.0 + log2(netD);
-  const double missW = Tb > 0 ? Tb / 16.0 : 1.0;
-  const double shareW = (netKnown && Nb > Tb) ? (Nb - Tb) / 16.0 : 1.0;
-  auto clampCol = [](int k) { return k < 0 ? 0 : (k > 15 ? 15 : k); };
   const uint32_t newS = sseq - s_rainSampSeq;
   s_rainSampSeq = sseq;
   int got = 0;
@@ -2070,11 +2121,11 @@ static void rainTick(const MineV &m)
       const double dv = s_sampBuf[i].diff;
       if (!(dv > 0)) continue;
       g_rain.taps++;
-      if (dv >= poolD) continue; // a share: counted from the share log
-      const int col = clampCol((int)floor((32.0 + log2(dv)) / missW));
-      g_rain.cnt[col]++;
+      const int q = rainBin(32.0 + log2(dv), RAIN_TAP_PER_BIT, RAIN_TAP_BINS);
+      g_rain.tap[q]++;
       s_rainDirty = true;
-      if (!s_rainPendShare) s_rainPend = (int8_t)col;
+      if (dv >= poolD) continue; // a share: its drop comes from the share log
+      if (!s_rainPendShare) s_rainPend = (int8_t)rainMissCol(32.0 + log2(dv), Tb);
     }
   }
   // hashes behind the samples actually read (a ring overrun drops both)
@@ -2096,9 +2147,8 @@ static void rainTick(const MineV &m)
       if (!r.utc && i < c - (int)(newH < (uint32_t)c ? newH : (uint32_t)c)) break; // clock unset: newest only
       if (!(r.diff > 0)) continue;
       const double bits = 32.0 + log2(r.diff);
-      const int col = (netKnown && r.diff >= netD) ? 32 + clampCol((int)floor(bits - Nb))
-                                                   : 16 + clampCol((int)floor((bits - Tb) / shareW));
-      g_rain.cnt[col]++;
+      { uint16_t &c = g_rain.shr[rainBin(bits, RAIN_SHR_PER_BIT, RAIN_SHR_BINS)]; if (c != 0xFFFF) c++; }
+      const int col = rainShareCol(bits, Tb, Nb, netKnown);
       s_rainDirty = true;
       if (!s_rainPendShare || col >= 32) { s_rainPend = (int8_t)col; s_rainPendShare = true; }
       if (r.utc > top) top = r.utc;
@@ -2490,22 +2540,31 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
     // ---- Screen 1: rain piles (session, doubling per row) ----
     // Full paint only on a frame / screenshot; otherwise only the cells whose
     // colour changed (a pile top moving up) are pushed, at most once per dots tick.
-    static uint8_t s_rainDrawn[48]; // drawn height | 0x80 when capped
+    static uint8_t s_rainDrawn[48]; // drawn height | 0x80 when capped | 0x40 when too rare to sample
     uint8_t hNow[48];
     {
-      const double sc = g_rain.taps ? g_rain.hashes / (double)g_rain.taps : 0.0;
+      // static: a web screenshot renders this from the web server task, whose
+      // stack has no room for 400 more bytes (it crashed); both callers hold
+      // g_displayMutex, so one shared copy is safe.
+      static float colN[48];
+      static bool rare[16];
+      rainColumns(32.0 + log2(poolD), 32.0 + log2(netD), netKnown, colN, rare);
       for (int k = 0; k < 48; k++)
       {
         bool cap = false;
-        const int h = rainHeight(k < 16 ? (double)g_rain.cnt[k] * sc : (double)g_rain.cnt[k], &cap);
-        hNow[k] = (uint8_t)(h | (cap ? 0x80 : 0));
+        const int h = rainHeight(colN[k], &cap);
+        hNow[k] = (uint8_t)(h | (cap ? 0x80 : 0) | ((k < 16 && rare[k] && h == 0) ? 0x40 : 0));
       }
     }
     const uint16_t emptyC[3] = {mix565(C_BEST, C_BG, 232), mix565(0x04DF, C_BG, 205), mix565(C_GOLD, C_BG, 232)};
     const uint16_t pileC[3] = {mix565(C_BEST, C_BG, 118), mix565(0x04DF, C_BG, 90), mix565(C_GOLD, C_BG, 118)};
     const uint16_t topC[3] = {C_BEST, (uint16_t)0x07FF, C_GOLD};
-    auto cellC = [&](uint8_t hv, int lane, int j) -> uint16_t {
-      const int h = hv & 0x7F, jb = ATT_ROWS - 1 - j; // jb 0 = bottom row
+    // too rare to sample: neutral grey hatch (every third diagonal) instead of
+    // the lane tint, so an empty top-of-MISS column reads as "out of reach"
+    const uint16_t rareC = mix565(0x8410, C_BG, 205), rareBg = mix565(0x8410, C_BG, 244);
+    auto cellC = [&](uint8_t hv, int lane, int j, int kk) -> uint16_t {
+      const int h = hv & 0x3F, jb = ATT_ROWS - 1 - j; // jb 0 = bottom row
+      if (jb >= h && (hv & 0x40)) return ((j + kk) % 3 == 0) ? rareC : rareBg;
       if (jb >= h) return emptyC[lane];
       if (jb == h - 1) return (hv & 0x80) ? (uint16_t)0xFFFF : topC[lane];
       return pileC[lane];
@@ -2527,7 +2586,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
           {
             const int lane = k / 16, kk = k % 16;
             d.fillRect(x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1, dY(goyS + j * SPEC_PY), SPEC_W, SPEC_H,
-                       cellC(hNow[k], lane, j));
+                       cellC(hNow[k], lane, j, kk));
           }
         for (int c = 1; c < 3; c++) d.drawFastVLine(x0 + c * colW, dY(yTop - 1), yBot - yTop + 2, laneC[c]);
       };
@@ -2547,9 +2606,9 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         const int x = x0 + lane * colW + goxL(lane) + kk * SPEC_PX + 1;
         for (int j = 0; j < ATT_ROWS; j++)
         {
-          const uint16_t cn = cellC(hNow[k], lane, j);
+          const uint16_t cn = cellC(hNow[k], lane, j, kk);
           const int y = goyS + j * SPEC_PY;
-          if (cn == cellC(s_rainDrawn[k], lane, j) || inPill(x, y)) continue;
+          if (cn == cellC(s_rainDrawn[k], lane, j, kk) || inPill(x, y)) continue;
           banded(x, y, SPEC_W, SPEC_H, C_BG, [&] { out().fillRect(x, dY(y), SPEC_W, SPEC_H, cn); });
         }
       }
@@ -2568,7 +2627,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         if (jj < 0 || jj >= ATT_ROWS) continue;
         const int y = goyS + jj * SPEC_PY;
         if (inPill(x, y)) continue;
-        const uint16_t c = on ? (t == 0 ? topC[lane] : pileC[lane]) : cellC(hNow[k], lane, jj);
+        const uint16_t c = on ? (t == 0 ? topC[lane] : pileC[lane]) : cellC(hNow[k], lane, jj, kk);
         banded(x, y, SPEC_W, SPEC_H, C_BG, [&] { out().fillRect(x, dY(y), SPEC_W, SPEC_H, c); });
       }
     };
@@ -2587,7 +2646,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
       {
         dropCells(s_dropK, s_dropJ, false);
         s_dropJ += RAIN_DROP_STEP;
-        if (s_dropJ >= ATT_ROWS - (hNow[s_dropK] & 0x7F)) s_dropK = -1; // landed on the pile
+        if (s_dropJ >= ATT_ROWS - (hNow[s_dropK] & 0x3F)) s_dropK = -1; // landed on the pile
         else dropCells(s_dropK, s_dropJ, true);
       }
       if (s_dropK < 0 && s_rainPend >= 0)
@@ -2596,7 +2655,7 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         s_dropJ = 0;
         s_rainPend = -1;
         s_rainPendShare = false;
-        if (ATT_ROWS - (hNow[s_dropK] & 0x7F) <= 0) s_dropK = -1; // full column: nothing to fall through
+        if (ATT_ROWS - (hNow[s_dropK] & 0x3F) <= 0) s_dropK = -1; // full column: nothing to fall through
         else dropCells(s_dropK, s_dropJ, true);
       }
       memcpy(s_rainDrawn, hNow, sizeof(s_rainDrawn));
@@ -2790,8 +2849,8 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
   // ================= bins layer =================
   const AttemptCounters ac = getAttemptCounters();
   char kb[64];
-  snprintf(kb, sizeof(kb), "b|%lu|%lu|%lu|%lu", (unsigned long)ac.found, (unsigned long)ac.accepted,
-           (unsigned long)ac.blocks, (unsigned long)(nowMs / ATT_MISS_BIN_MIN_MS));
+  snprintf(kb, sizeof(kb), "b|%lu|%lu|%lu|%lu|%s", (unsigned long)ac.found, (unsigned long)ac.accepted,
+           (unsigned long)ac.blocks, (unsigned long)(nowMs / ATT_MISS_BIN_MIN_MS), m.coin);
   if (need(W_ATT_BINS, kb))
   {
     banded(r.x, cratesTop - 3, r.w, cratesH + 5, C_BG, [&] {
@@ -2826,6 +2885,12 @@ static void drawSharesFigure(const Rect &r, const MineV &m)
         unsigned vs = 20;
         while (vs > 10 && textW(cr[c].val, vs) > cw - 8) vs--;
         text(d, cr[c].val, mid, dY(cy0 + 9), vs, col, crBg, Align::TopCenter); // glyph ~cy0+16..+29: centred
+        if (c == 2 && m.coin[0])
+        {
+          // BLOCK = blocks found on the ACTIVE pool (per-pool NVS stats, so per
+          // coin): tag the coin so a 0 on POL never reads as a BTC total.
+          text(d, m.coin, cx + cw - 4, dY(cy0 + 6), 8, mix565(col, C_BG, 80), crBg, Align::TopRight);
+        }
         if (showAcc)
         {
           char ab[20], an[12];
@@ -4610,10 +4675,13 @@ bool esp32_2432S028R_CaptureBmp(Print &client, int screenIdx)
   bool portrait = (rot == 0 || rot == 2);
   int w = portrait ? 240 : 320;
   int h = portrait ? 320 : 240;
-  // 4 slices (19.2 KB) normally; if the heap is fragmented (largest free
-  // block too small, seen after a pool switch) retry with 8 / 16 slices.
-  int nSlices = 4;
-  int sliceH = h / nSlices; // 80 portrait, 60 landscape
+  // If the heap is fragmented (largest free block too small, seen after a
+  // pool switch) retry with 16 slices.
+  // 8 slices (9.6 KB) by default: with 4 (19.2 KB) the capture took most of
+  // the largest free block, WiFi / lwIP ran out of buffers mid-transfer
+  // (truncated shots, "SSL - Memory allocation failed", a WiFi drop).
+  int nSlices = 8;
+  int sliceH = h / nSlices; // 40 portrait, 30 landscape
 
   shot.setColorDepth(8);
   for (;;)

@@ -19,6 +19,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DISPLAY = "src/drivers/displays/esp23_2432s028r.cpp"
 MINING = "src/mining.cpp"
 MINING_H = "src/mining.h"
+BOOT = "src/bootInfo.cpp"
+SETUP = "src/NerdMinerV2.ino.cpp"
+WEBCFG = "src/webConfig.cpp"
+MAX_RAIN_BLOB = 2048  # bytes: per-bit rain piles saved to NVS every RAIN_SAVE_MS
 
 MIN_DOTS_MS = 1000
 MIN_MISS_BIN_MS = 5000
@@ -127,6 +131,10 @@ def check(files):
     rain_ms = define_value(disp, "RAIN_TICK_MS")
     if rain_ms is None or rain_ms < MIN_DOTS_MS:
         errs.append("display: RAIN_TICK_MS missing or < %d (rain counters ticked too often)" % MIN_DOTS_MS)
+    cap = func_bodies(dispc, r"\nbool esp32_2432S028R_CaptureBmp\s*\(Print &client, int screenIdx\)\s*\{")
+    m = re.search(r"int nSlices = (\d+);", cap[0]) if cap else None
+    if not m or int(m.group(1)) < 8:
+        errs.append("shot: screenshot slices must start at >= 8 (<= 9.6 KB sprite; 19 KB starved WiFi)")
     rt = func_bodies(dispc, r"static void rainTick\s*\(const MineV &m\)\s*\{")
     if len(rt) != 1:
         errs.append("display: rainTick() not found exactly once")
@@ -286,7 +294,8 @@ def check(files):
                 r"static void[^;{]*\bhashTapSw\s*\([^)]*\)\s*\{"):
         hot += func_bodies(mine, sig)
     for b in hot:
-        mm = re.search(r"\bnvs_\w+|\bPreferences\b|\bput(?:Bytes|UChar|UInt|ULong)\b|\bsaveStat\b|\brainTick\b|\bcydRain\w*", b)
+        mm = re.search(r"\bnvs_\w+|\bPreferences\b|\bput(?:Bytes|UChar|UInt|ULong)\b|\bsaveStat\b|\brainTick\b|\bcydRain\w*"
+                       r"|\bbootInfo\w*|\bMDNS\b", b)
         if mm:
             errs.append("mining: flash/NVS or rain call on a mining path: " + mm.group(0))
 
@@ -294,12 +303,46 @@ def check(files):
     ub = func_bodies(mine, r"\nvoid updateBestDiff\s*\(double diff, const uint8_t \*hashLE\)\s*\{")
     if ub and re.search(r"hashSample|hashTap|millis\(", ub[0]):
         errs.append("mining: updateBestDiff() must not sample or read the clock")
+
+    # ---------------- rain piles: per-bit layout stays small ----------------
+    tb, sb = define_value(dispc, "RAIN_TAP_BINS"), define_value(dispc, "RAIN_SHR_BINS")
+    if tb is None or sb is None:
+        errs.append("rain: RAIN_TAP_BINS / RAIN_SHR_BINS missing (per-bit piles)")
+    elif 4 * (tb + sb) + 32 > MAX_RAIN_BLOB:
+        errs.append("rain: per-bit pile blob > %d bytes (NVS write every save)" % MAX_RAIN_BLOB)
+    rt = func_bodies(dispc, r"static void rainTick\s*\(const MineV &m\)\s*\{")
+    if rt and re.search(r"\brainColumns\s*\(", rt[0]):
+        errs.append("rain: rainColumns() (draw-time mapping) called from rainTick")
+
+    # ---------------- boot info: setup-only NVS, RTC-only tick ----------------
+    boot = strip_comments(files[BOOT])
+    bt = func_bodies(boot, r"\nvoid bootInfoTick\s*\(uint32_t uptimeS\)\s*\{")
+    if len(bt) != 1:
+        errs.append("boot: bootInfoTick() not found")
+    elif re.search(r"Preferences|nvs_|put\w*\(|Serial\.|delay\(|millis\(", bt[0]):
+        errs.append("boot: bootInfoTick() must only store RTC words (no NVS / Serial / clock)")
+    setup = strip_comments(files[SETUP])
+    bi, tc = setup.find("bootInfoInit("), setup.find("xTaskCreate")
+    if bi < 0 or (tc >= 0 and bi > tc):
+        errs.append("boot: bootInfoInit() (NVS write) must run in setup() before any task is created")
+    if len(re.findall(r"\bbootInfoInit\s*\(", setup + mine + dispc + strip_comments(files[WEBCFG]))) != 1:
+        errs.append("boot: bootInfoInit() called more than once / outside setup()")
+    rm = func_bodies(mine, r"\nvoid runMonitor\s*\(void \*name\)\s*\{")
+    if len(re.findall(r"\bbootInfoTick\s*\(", mine + dispc)) != 1 or not rm or "bootInfoTick(" not in rm[0]:
+        errs.append("boot: bootInfoTick() must be called once, from runMonitor (monitor task)")
+
+    # ---------------- mDNS: started once, from setup_webConfig ----------------
+    web = strip_comments(files[WEBCFG])
+    sw = func_bodies(web, r"\nvoid setup_webConfig\s*\((?:void)?\)\s*\{")
+    nb = len(re.findall(r"\bMDNS\.begin\s*\(", web + mine + dispc + setup))
+    if nb > 1 or (nb == 1 and (not sw or "MDNS.begin(" not in sw[0])):
+        errs.append("mdns: MDNS.begin() must be called once, from setup_webConfig()")
     return errs
 
 
 def load():
     return {p: open(os.path.join(ROOT, p), encoding="utf-8", errors="replace").read()
-            for p in (DISPLAY, MINING, MINING_H)}
+            for p in (DISPLAY, MINING, MINING_H, BOOT, SETUP, WEBCFG)}
 
 
 def selftest():
@@ -349,6 +392,15 @@ def selftest():
         ("NVS write in noteCandidate", MINING,
          "    s_candidates++;\n",
          "    s_candidates++;\n  nvs_set_u32(stat_handle, \"x\", 1);\n"),
+        ("rain blob too big", DISPLAY, "#define RAIN_SHR_BINS 224", "#define RAIN_SHR_BINS 900"),
+        ("screenshot back to 19 KB slices", DISPLAY, "  int nSlices = 8;\n", "  int nSlices = 4;\n"),
+        ("rain column mapping in rainTick", DISPLAY, "      g_rain.taps++;\n",
+         "      g_rain.taps++;\n      { float cc[48]; bool rr[16]; rainColumns(Tb, Nb, netKnown, cc, rr); }\n"),
+        ("NVS in bootInfoTick", BOOT, "  s_rtcUptimeS = uptimeS;\n",
+         "  s_rtcUptimeS = uptimeS;\n  Preferences q; q.begin(\"cyd_boot\", false);\n"),
+        ("bootInfoInit after tasks", SETUP, "  bootInfoInit(); // reset reason", "  // bootInfoInit(); // reset reason"),
+        ("bootInfoTick in SW miner", MINING, "    s_candidates++;\n", "    s_candidates++;\n  bootInfoTick(1);\n"),
+        ("mDNS restarted from monitor", MINING, "  restoreStat();\n", "  restoreStat();\n  MDNS.begin(\"x\");\n"),
         ("tap ungated", MINING, "if (--swTap == 0)", "if (true)"),
         ("tap every 1", MINING_H, "#define HASH_TAP_EVERY 256u", "#define HASH_TAP_EVERY 1u"),
         ("sampler in noteCandidate", MINING,

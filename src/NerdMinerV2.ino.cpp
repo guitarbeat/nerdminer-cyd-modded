@@ -17,6 +17,7 @@
 #include "drivers/storage/SDCard.h"
 #include "ShaTests/nerdSHA_HWTest.h"
 #include "timeconst.h"
+#include "bootInfo.h"
 
 #ifdef TOUCH_ENABLE
 #include "TouchHandler.h"
@@ -117,6 +118,8 @@ void setup()
 
   Serial.setTimeout(0);
   delay(SECOND_MS/10);
+
+  bootInfoInit(); // reset reason + boot counter (one NVS write, before any miner task)
 
 #ifdef SHA_BENCH
   // SHA engine characterisation bench instead of the miner (src/sha_bench.cpp)
