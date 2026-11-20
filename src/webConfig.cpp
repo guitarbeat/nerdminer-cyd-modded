@@ -442,7 +442,13 @@ String cydOnboardingJson();
 void cydOnboardingSkip();
 #ifdef CYD_TOUCH_SHARED_SPI
 String cydTouchDiagJson();
+void cydOpenHud();
 static void handleTouchDiag() { webCfgServer.send(200, "application/json", cydTouchDiagJson()); }
+static void handleApiHud()
+{
+  cydOpenHud();
+  webCfgServer.send(200, "application/json", "{\"status\":\"ok\",\"hud\":true}");
+}
 #endif
 static void handleOnboarding() { webCfgServer.send(200, "application/json", cydOnboardingJson()); }
 static void handleOnboardingSkip()
@@ -1673,10 +1679,12 @@ static void handleRoot()
             "<select name='ledmode' id='f-ledmode' class='form-control'>");
   static const char *const kLedModes[] = {
     "Off",
-    "Status (blink while mining, green on share, blue while connecting)",
-    "Steady color"
+    "Ambient (calm breathing status)",
+    "Steady custom color",
+    "Reactive Stratum Glow (green/cyan mining, blue share, rainbow block, amber fallback)",
+    "Share Pulse Only (dark mining, pulses on shares/blocks)"
   };
-  for (int i = LED_MODE_OFF; i <= LED_MODE_STEADY; i++)
+  for (int i = LED_MODE_OFF; i <= LED_MODE_MAX; i++)
   {
     page += "<option value='" + String(i) + "'";
     if (Settings.ledMode == i) page += " selected";
@@ -1700,6 +1708,11 @@ static void handleRoot()
   if (Settings.ledScreenOff) page += F(" checked");
   if (page.length() > 3500) flush();
   page += F("> <span>Turn the LED off when the screen sleeps</span></label>"
+            "<label class='form-check'>"
+            "<input type='checkbox' name='buzzer'");
+  if (Settings.buzzerEnabled) page += F(" checked");
+  if (page.length() > 3500) flush();
+  page += F("> <span>Enable 8-bit chiptune alerts (Mario coin on share, fanfare on block)</span></label>"
             "</div></details>");
 #endif
 
@@ -1925,13 +1938,14 @@ static void handleSave()
 #endif
 #ifdef HAS_RGB_LED
   if (webCfgServer.hasArg("ledmode"))
-    next.ledMode = constrain(webCfgServer.arg("ledmode").toInt(), LED_MODE_OFF, LED_MODE_STEADY);
+    next.ledMode = constrain(webCfgServer.arg("ledmode").toInt(), LED_MODE_OFF, LED_MODE_MAX);
   const String ledColor = webCfgServer.arg("ledcolor"); // "#rrggbb"
   if (ledColor.length() == 7 && ledColor[0] == '#')
     next.ledColor = strtoul(ledColor.c_str() + 1, NULL, 16) & 0xFFFFFF;
   if (webCfgServer.hasArg("ledbright"))
     next.ledBrightness = constrain(webCfgServer.arg("ledbright").toInt(), 1, 255);
   next.ledScreenOff = webCfgServer.hasArg("ledscreen");
+  next.buzzerEnabled = webCfgServer.hasArg("buzzer");
 #endif
 #ifdef HAS_BACKLIGHT_CONTROL
   if (webCfgServer.hasArg("screenoff"))
@@ -1979,6 +1993,7 @@ static void handleSave()
     Settings.ledColor = next.ledColor;
     Settings.ledBrightness = next.ledBrightness;
     Settings.ledScreenOff = next.ledScreenOff;
+    Settings.buzzerEnabled = next.buzzerEnabled;
     rgbLedTick();
 #endif
 #ifdef HAS_BACKLIGHT_CONTROL
@@ -2210,6 +2225,7 @@ void setup_webConfig(void)
   webCfgServer.on("/api/onboarding/skip", HTTP_POST, handleOnboardingSkip);
 #ifdef CYD_TOUCH_SHARED_SPI
   webCfgServer.on("/api/touchdiag", HTTP_GET, handleTouchDiag);
+  webCfgServer.on("/api/hud", HTTP_ANY, handleApiHud);
 #endif
 #endif
   webCfgServer.on("/api/screen", HTTP_GET, handleGetScreen);

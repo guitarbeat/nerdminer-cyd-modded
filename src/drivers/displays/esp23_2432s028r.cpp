@@ -33,6 +33,7 @@
 #include "drivers/storage/storage.h"
 #include "currency.h"
 #include "rgbLed.h"
+#include "../buzzer.h"
 #include "display.h"
 #include "utils.h"
 
@@ -4295,6 +4296,7 @@ void esp32_2432S028R_Init(void)
 
 #ifdef HAS_RGB_LED
   rgbLedInit();
+  buzzerInit();
 #else
   pinMode(LED_PIN, OUTPUT);
   pinMode(LED_PIN_B, OUTPUT);
@@ -4428,6 +4430,8 @@ enum TouchAction
   TA_HUD_CLOSE,
   TA_HUD_THEME,
   TA_HUD_BRIGHT,
+  TA_HUD_LED,
+  TA_HUD_SOUND,
   TA_HUD_POOL,
   TA_HUD_CALIB
 };
@@ -4517,6 +4521,11 @@ String cydTouchDiagJson()
   return String(b);
 }
 
+void cydOpenHud()
+{
+  pendingTouch = TA_HUD_OPEN;
+}
+
 #endif
 
 #define LDR_MIN_DUTY 15      // backlight floor in a dark room
@@ -4557,21 +4566,21 @@ static void touchTask(void *)
         }
         else if (g_hudVisible)
         {
-          const int hx = 10, hy = 32, hw = 220, hh = 256;
+          const int hx = 8, hy = 20, hw = 224, hh = 264;
           if (t_x < hx || t_x > hx + hw || t_y < hy || t_y > hy + hh)
           {
             pendingTouch = TA_HUD_CLOSE;
           }
-          else if (t_x >= hx + hw - 30 && t_y <= hy + 26)
+          else if (t_x >= hx + hw - 30 && t_y <= hy + 22)
           {
             pendingTouch = TA_HUD_CLOSE;
           }
-          else if (t_y >= hy + 46 && t_y <= hy + 72)
+          else if (t_y >= hy + 35 && t_y <= hy + 57)
           {
             for (int i = 0; i < THEME_COUNT; i++)
             {
-              int swX = hx + 8 + i * 34;
-              if (t_x >= swX - 2 && t_x <= swX + 32)
+              int swX = hx + 6 + i * 35;
+              if (t_x >= swX - 2 && t_x <= swX + 34)
               {
                 pendingTouch = TA_HUD_THEME;
                 g_hudArg = i;
@@ -4579,12 +4588,12 @@ static void touchTask(void *)
               }
             }
           }
-          else if (t_y >= hy + 86 && t_y <= hy + 114)
+          else if (t_y >= hy + 67 && t_y <= hy + 91)
           {
             for (int j = 0; j < 5; j++)
             {
-              int bX = hx + 8 + j * 41;
-              if (t_x >= bX - 2 && t_x <= bX + 40)
+              int bX = hx + 6 + j * 42;
+              if (t_x >= bX - 2 && t_x <= bX + 41)
               {
                 pendingTouch = TA_HUD_BRIGHT;
                 g_hudArg = j;
@@ -4592,11 +4601,29 @@ static void touchTask(void *)
               }
             }
           }
-          else if (t_y >= hy + 144 && t_y <= hy + 172 && t_x >= hx + 8 && t_x <= hx + hw - 8)
+          else if (t_y >= hy + 101 && t_y <= hy + 125)
+          {
+            const int lValues[4] = {LED_MODE_OFF, LED_MODE_STATUS, LED_MODE_REACTIVE, LED_MODE_SHARE_PULSE};
+            for (int k = 0; k < 4; k++)
+            {
+              int lX = hx + 6 + k * 53;
+              if (t_x >= lX - 2 && t_x <= lX + 51)
+              {
+                pendingTouch = TA_HUD_LED;
+                g_hudArg = lValues[k];
+                break;
+              }
+            }
+          }
+          else if (t_y >= hy + 135 && t_y <= hy + 159 && t_x >= hx + 6 && t_x <= hx + hw - 6)
+          {
+            pendingTouch = TA_HUD_SOUND;
+          }
+          else if (t_y >= hy + 169 && t_y <= hy + 193 && t_x >= hx + 6 && t_x <= hx + hw - 6)
           {
             pendingTouch = TA_HUD_POOL;
           }
-          else if (t_y >= hy + 190 && t_y <= hy + 218 && t_x >= hx + 8 && t_x <= hx + hw - 8)
+          else if (t_y >= hy + 195 && t_y <= hy + 219 && t_x >= hx + 6 && t_x <= hx + hw - 6)
           {
             pendingTouch = TA_HUD_CALIB;
           }
@@ -4638,33 +4665,38 @@ static void touchTask(void *)
       wasDown = false;
     }
 
-    // Auto-dimming: sample the LDR every 100 ms (cheap ADC1 read, no Wi-Fi conflict)
+    // Auto-dimming: continuous perceptual curve on LDR (GPIO 34, ADC1)
     unsigned long now = millis();
     if (g_backlightReady && (now - lastLdrCheck >= 100))
     {
       lastLdrCheck = now;
-      if (g_currentDuty > 0) // only adapt if backlight is active (not switched off by tap)
+      if (g_currentDuty > 0 && Settings.Brightness == 0) // only adapt if backlight is active and in AUTO mode
       {
         int raw = analogRead(PIN_LDR);
         // EMA smoothing (alpha 0.05) so passing shadows don't pump the light.
         ldrEma = (ldrEma < 0) ? (float)raw : (0.05f * (float)raw + 0.95f * ldrEma);
         // CYD LDR divider reads high in the dark (~3500-4095) and low in
-        // bright light (~200-1000). Map dark -> floor, bright -> user max.
-        int maxDuty = Settings.Brightness > 0 ? Settings.Brightness : 255;
-        if (maxDuty < LDR_MIN_DUTY)
-          maxDuty = LDR_MIN_DUTY;
-        int targetDuty = map(constrain((int)ldrEma, LDR_RAW_BRIGHT, LDR_RAW_DARK),
-                             LDR_RAW_DARK, LDR_RAW_BRIGHT, LDR_MIN_DUTY, maxDuty);
-        if (abs(g_currentDuty - targetDuty) > 3)
+        // bright light (~200-1000). Continuous non-linear curve: dark -> 15 (5.9%), bright -> 255 (100%).
+        float rawClamped = constrain(ldrEma, (float)LDR_RAW_BRIGHT, (float)LDR_RAW_DARK);
+        // normalized light level: 0.0 = total dark, 1.0 = full bright
+        float lightNorm = (float)(LDR_RAW_DARK - rawClamped) / (float)(LDR_RAW_DARK - LDR_RAW_BRIGHT);
+        // Quadratic exponential response curve for human eye perceptual linearity:
+        float curve = lightNorm * lightNorm;
+        int targetDuty = LDR_MIN_DUTY + (int)(curve * (255 - LDR_MIN_DUTY) + 0.5f);
+        targetDuty = constrain(targetDuty, LDR_MIN_DUTY, 255);
+
+        if (abs(g_currentDuty - targetDuty) > 2)
         {
-          // slew a few steps per tick for a smooth fade
-          int stepSz = abs(targetDuty - g_currentDuty) > 24 ? 6 : 2;
+          // slew a few steps per tick for a silky smooth fade
+          int stepSz = abs(targetDuty - g_currentDuty) > 24 ? 5 : 2;
           int newDuty = g_currentDuty + (targetDuty > g_currentDuty ? stepSz : -stepSz);
-          g_currentDuty = constrain(newDuty, LDR_MIN_DUTY, maxDuty);
+          g_currentDuty = constrain(newDuty, LDR_MIN_DUTY, 255);
           ledcWrite(0, g_currentDuty);
         }
       }
     }
+
+    buzzerTick();
 
     vTaskDelay(20 / portTICK_PERIOD_MS);
   }
@@ -4672,74 +4704,104 @@ static void touchTask(void *)
 
 static void drawHudOverlay()
 {
-  const int hx = 10, hy = 32, hw = 220, hh = 256;
-  tft.fillRoundRect(hx, hy, hw, hh, 6, C_PANEL);
-  tft.drawRoundRect(hx, hy, hw, hh, 6, C_EDGE);
-  tft.drawFastHLine(hx + 8, hy + 26, hw - 16, C_EDGE);
+  const int hx = 8, hy = 20, hw = 224, hh = 264;
+  TFT_eSPI &d = out();
+  d.fillRoundRect(hx, dY(hy), hw, hh, 6, C_PANEL);
+  d.drawRoundRect(hx, dY(hy), hw, hh, 6, C_EDGE);
+  d.drawFastHLine(hx + 6, dY(hy + 22), hw - 12, C_EDGE);
 
   // Title & [X] close button
-  text(out(), "QUICK CONTROLS", hx + 12, hy + 8, 12, C_GOLD, C_PANEL, Align::TopLeft);
-  tft.fillRoundRect(hx + hw - 26, hy + 5, 20, 18, 3, C_BG);
-  tft.drawRoundRect(hx + hw - 26, hy + 5, 20, 18, 3, C_EDGE);
-  text(out(), "X", hx + hw - 16, hy + 7, 11, C_TEXT, C_BG, Align::TopCenter);
+  text(d, "QUICK CONTROLS", hx + 10, dY(hy + 6), 12, C_GOLD, C_PANEL, Align::TopLeft);
+  d.fillRoundRect(hx + hw - 24, dY(hy + 4), 18, 15, 3, C_BG);
+  d.drawRoundRect(hx + hw - 24, dY(hy + 4), 18, 15, 3, C_EDGE);
+  text(d, "X", hx + hw - 15, dY(hy + 5), 10, C_TEXT, C_BG, Align::TopCenter);
 
   // Section 1: Themes
-  text(out(), "PALETTE:", hx + 12, hy + 34, 10, C_DIM, C_PANEL, Align::TopLeft);
-  text(out(), THEMES[currentThemeIdx].name, hx + 68, hy + 33, 11, C_TEXT, C_PANEL, Align::TopLeft);
+  text(d, "PALETTE:", hx + 10, dY(hy + 26), 10, C_DIM, C_PANEL, Align::TopLeft);
+  text(d, THEMES[currentThemeIdx].name, hx + 58, dY(hy + 26), 10, C_TEXT, C_PANEL, Align::TopLeft);
   for (int i = 0; i < THEME_COUNT; i++)
   {
-    int swX = hx + 8 + i * 34;
-    int swY = hy + 48;
-    tft.fillRoundRect(swX, swY, 30, 20, 3, THEMES[i].panel);
-    tft.fillRect(swX + 4, swY + 4, 22, 12, THEMES[i].meter);
+    int swX = hx + 6 + i * 35;
+    int swY = hy + 38;
+    d.fillRoundRect(swX, dY(swY), 32, 16, 3, THEMES[i].panel);
+    d.fillRect(swX + 4, dY(swY + 3), 24, 10, THEMES[i].meter);
     if (i == currentThemeIdx)
-      tft.drawRoundRect(swX - 1, swY - 1, 32, 22, 3, C_GOLD);
+      d.drawRoundRect(swX - 1, dY(swY - 1), 34, 18, 3, C_GOLD);
     else
-      tft.drawRoundRect(swX, swY, 30, 20, 3, C_EDGE);
+      d.drawRoundRect(swX, dY(swY), 32, 16, 3, C_EDGE);
   }
 
   // Section 2: Backlight
-  text(out(), "BACKLIGHT:", hx + 12, hy + 76, 10, C_DIM, C_PANEL, Align::TopLeft);
+  text(d, "BACKLIGHT:", hx + 10, dY(hy + 58), 10, C_DIM, C_PANEL, Align::TopLeft);
   const char *bLabels[5] = {"25%", "50%", "75%", "100%", "AUTO"};
   const uint8_t bValues[5] = {64, 128, 192, 255, 0};
-  int curBIdx = 4; // default auto
-  for (int j = 0; j < 4; j++)
+  int curBIdx = (Settings.Brightness == 0) ? 4 : 0;
+  if (Settings.Brightness > 0)
   {
-    if (abs((int)Settings.Brightness - (int)bValues[j]) < 32)
-      curBIdx = j;
+    for (int j = 0; j < 4; j++)
+    {
+      if (abs((int)Settings.Brightness - (int)bValues[j]) < 32)
+        curBIdx = j;
+    }
   }
   for (int j = 0; j < 5; j++)
   {
-    int bX = hx + 8 + j * 41;
-    int bY = hy + 90;
+    int bX = hx + 6 + j * 42;
+    int bY = hy + 70;
     bool sel = (j == curBIdx);
-    tft.fillRoundRect(bX, bY, 38, 20, 3, sel ? C_METER : C_BG);
-    tft.drawRoundRect(bX, bY, 38, 20, 3, sel ? C_GOLD : C_EDGE);
-    text(out(), bLabels[j], bX + 19, bY + 4, 10, sel ? C_BG : C_TEXT, sel ? C_METER : C_BG, Align::TopCenter);
+    d.fillRoundRect(bX, dY(bY), 39, 18, 3, sel ? C_METER : C_BG);
+    d.drawRoundRect(bX, dY(bY), 39, 18, 3, sel ? C_GOLD : C_EDGE);
+    text(d, bLabels[j], bX + 20, dY(bY + 3), 10, sel ? C_BG : C_TEXT, sel ? C_METER : C_BG, Align::TopCenter);
   }
 
-  // Section 3: Stratum Pool
-  text(out(), "STRATUM POOL:", hx + 12, hy + 118, 10, C_DIM, C_PANEL, Align::TopLeft);
+  // Section 3: RGB LED Reactive Stratum Glow
+  text(d, "RGB LED:", hx + 10, dY(hy + 92), 10, C_DIM, C_PANEL, Align::TopLeft);
+  const char *lLabels[4] = {"OFF", "AMBIENT", "REACTIVE", "PULSE"};
+  const int lValues[4] = {LED_MODE_OFF, LED_MODE_STATUS, LED_MODE_REACTIVE, LED_MODE_SHARE_PULSE};
+  int curLIdx = 2; // default reactive
+  for (int k = 0; k < 4; k++)
+  {
+    if (Settings.ledMode == lValues[k]) curLIdx = k;
+  }
+  for (int k = 0; k < 4; k++)
+  {
+    int lX = hx + 6 + k * 53;
+    int lY = hy + 104;
+    bool sel = (k == curLIdx);
+    d.fillRoundRect(lX, dY(lY), 49, 18, 3, sel ? C_METER : C_BG);
+    d.drawRoundRect(lX, dY(lY), 49, 18, 3, sel ? C_GOLD : C_EDGE);
+    text(d, lLabels[k], lX + 25, dY(lY + 3), 9, sel ? C_BG : C_TEXT, sel ? C_METER : C_BG, Align::TopCenter);
+  }
+
+  // Section 4: 8-Bit Alert Sound
+  text(d, "ALERT SOUND (GPIO 26):", hx + 10, dY(hy + 126), 10, C_DIM, C_PANEL, Align::TopLeft);
+  int sY = hy + 138;
+  bool snd = Settings.buzzerEnabled;
+  d.fillRoundRect(hx + 6, dY(sY), hw - 12, 18, 3, snd ? C_METER : C_BG);
+  d.drawRoundRect(hx + 6, dY(sY), hw - 12, 18, 3, snd ? C_GOLD : C_EDGE);
+  text(d, snd ? "SOUND: ON (MARIO COIN / FANFARE)" : "SOUND: MUTED", hx + hw / 2, dY(sY + 3), 10, snd ? C_BG : C_DIM, snd ? C_METER : C_BG, Align::TopCenter);
+
+  // Section 5: Stratum Pool
+  text(d, "STRATUM POOL:", hx + 10, dY(hy + 160), 10, C_DIM, C_PANEL, Align::TopLeft);
   String poolShort = activePoolAddress();
-  if (poolShort.length() > 20)
-    poolShort = poolShort.substring(0, 18) + "..";
+  if (poolShort.length() > 18)
+    poolShort = poolShort.substring(0, 16) + "..";
   if (g_usingFallback)
     poolShort += " [FB]";
-  text(out(), poolShort.c_str(), hx + 12, hy + 132, 11, g_usingFallback ? C_WARN : C_METER, C_PANEL, Align::TopLeft);
-  int rY = hy + 148;
-  tft.fillRoundRect(hx + 8, rY, hw - 16, 22, 4, C_BG);
-  tft.drawRoundRect(hx + 8, rY, hw - 16, 22, 4, C_EDGE);
-  text(out(), g_usingFallback ? "TRY PRIMARY POOL" : "RECONNECT STRATUM", hx + hw / 2, rY + 4, 11, g_usingFallback ? C_GOLD : C_TEXT, C_BG, Align::TopCenter);
+  text(d, poolShort.c_str(), hx + 94, dY(hy + 160), 10, g_usingFallback ? C_WARN : C_METER, C_PANEL, Align::TopLeft);
+  int rY = hy + 173;
+  d.fillRoundRect(hx + 6, dY(rY), hw - 12, 18, 3, C_BG);
+  d.drawRoundRect(hx + 6, dY(rY), hw - 12, 18, 3, C_EDGE);
+  text(d, g_usingFallback ? "TRY PRIMARY POOL" : "RECONNECT STRATUM", hx + hw / 2, dY(rY + 3), 10, g_usingFallback ? C_GOLD : C_TEXT, C_BG, Align::TopCenter);
 
-  // Section 4: Touch Alignment
-  text(out(), "TOUCH ALIGNMENT:", hx + 12, hy + 178, 10, C_DIM, C_PANEL, Align::TopLeft);
-  int cY = hy + 194;
-  tft.fillRoundRect(hx + 8, cY, hw - 16, 22, 4, C_BG);
-  tft.drawRoundRect(hx + 8, cY, hw - 16, 22, 4, C_EDGE);
-  text(out(), "START RECALIBRATION", hx + hw / 2, cY + 4, 11, C_WARN, C_BG, Align::TopCenter);
+  // Section 6: Touch Recalibration
+  int cY = hy + 196;
+  d.fillRoundRect(hx + 6, dY(cY), hw - 12, 18, 3, C_BG);
+  d.drawRoundRect(hx + 6, dY(cY), hw - 12, 18, 3, C_EDGE);
+  text(d, "START TOUCH RECALIBRATION", hx + hw / 2, dY(cY + 3), 10, C_WARN, C_BG, Align::TopCenter);
 
   // Dismiss Hint
-  text(out(), "Tap [X] or outside to close", hx + hw / 2, hy + 232, 10, C_DIM, C_PANEL, Align::TopCenter);
+  text(d, "Tap [X] or outside to close", hx + hw / 2, dY(hy + 224), 10, C_DIM, C_PANEL, Align::TopCenter);
 }
 
 void esp32_2432S028R_DoLedStuff(unsigned long frame)
@@ -4809,8 +4871,36 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
           g_currentDuty = duty;
           ledcWrite(0, duty);
         }
+        else
+        {
+          // AUTO mode: calculate duty immediately from LDR
+          int raw = analogRead(PIN_LDR);
+          float rawClamped = constrain((float)raw, (float)LDR_RAW_BRIGHT, (float)LDR_RAW_DARK);
+          float lightNorm = (float)(LDR_RAW_DARK - rawClamped) / (float)(LDR_RAW_DARK - LDR_RAW_BRIGHT);
+          int targetDuty = LDR_MIN_DUTY + (int)(lightNorm * lightNorm * (255 - LDR_MIN_DUTY));
+          g_currentDuty = constrain(targetDuty, LDR_MIN_DUTY, 255);
+          ledcWrite(0, g_currentDuty);
+        }
         drawHudOverlay();
       }
+    }
+    break;
+  case TA_HUD_LED:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudOpenMs = millis();
+      Settings.ledMode = g_hudArg;
+      drawHudOverlay();
+    }
+    break;
+  case TA_HUD_SOUND:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudOpenMs = millis();
+      Settings.buzzerEnabled = !Settings.buzzerEnabled;
+      if (Settings.buzzerEnabled)
+        buzzerPlayClick();
+      drawHudOverlay();
     }
     break;
   case TA_HUD_POOL:
@@ -4818,10 +4908,10 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
       std::lock_guard<std::mutex> lock(g_displayMutex);
       g_hudOpenMs = millis();
       requestPoolReconnect();
-      int rY = 32 + 148;
-      tft.fillRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_BG);
-      tft.drawRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_GOLD);
-      text(out(), "RECONNECTING...", 10 + 110, rY + 4, 11, C_GOLD, C_BG, Align::TopCenter);
+      int rY = 20 + 173;
+      tft.fillRoundRect(8 + 6, rY, 224 - 12, 18, 3, C_BG);
+      tft.drawRoundRect(8 + 6, rY, 224 - 12, 18, 3, C_GOLD);
+      text(out(), "RECONNECTING...", 8 + 112, rY + 3, 10, C_GOLD, C_BG, Align::TopCenter);
     }
     break;
   case TA_HUD_CALIB:
@@ -4874,6 +4964,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
 
 #ifdef HAS_RGB_LED
   rgbLedTick();
+  buzzerTick();
 #else
   switch (mMonitor.NerdStatus)
   {
@@ -5076,6 +5167,10 @@ bool esp32_2432S028R_CaptureBmp(Print &client, int screenIdx)
       paintWorld(w);
     }
 #endif
+    if (g_hudVisible || screenIdx == 11)
+    {
+      drawHudOverlay();
+    }
     shotOn = false;
   };
 

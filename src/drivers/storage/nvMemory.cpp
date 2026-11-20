@@ -82,6 +82,7 @@ bool nvMemory::saveConfig(TSettings* Settings)
         json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] = Settings->ledBrightness;
         json[JSON_SPIFFS_KEY_LEDSCREENOFF] = Settings->ledScreenOff;
 #endif
+        json[JSON_SPIFFS_KEY_BUZZER] = Settings->buzzerEnabled;
         json[JSON_SPIFFS_KEY_SCREENTIMEOUT] = Settings->ScreenTimeout;
         json[JSON_SPIFFS_KEY_NIGHTDIM] = Settings->nightDim;
         json[JSON_SPIFFS_KEY_NIGHTBRIGHTNESS] = Settings->NightBrightness;
@@ -235,6 +236,7 @@ bool nvMemory::loadConfig(TSettings* Settings)
                     Settings->ledBrightness = json[JSON_SPIFFS_KEY_LEDBRIGHTNESS] | DEFAULT_LEDBRIGHTNESS;
                     Settings->ledScreenOff = json[JSON_SPIFFS_KEY_LEDSCREENOFF] | DEFAULT_LEDSCREENOFF;
 #endif
+                    Settings->buzzerEnabled = json[JSON_SPIFFS_KEY_BUZZER] | DEFAULT_BUZZERENABLED;
                     Settings->ScreenTimeout = json[JSON_SPIFFS_KEY_SCREENTIMEOUT] | DEFAULT_SCREENTIMEOUT;
                     Settings->nightDim = json[JSON_SPIFFS_KEY_NIGHTDIM] | DEFAULT_NIGHTDIM;
                     Settings->NightBrightness = json[JSON_SPIFFS_KEY_NIGHTBRIGHTNESS] | DEFAULT_NIGHTBRIGHTNESS;

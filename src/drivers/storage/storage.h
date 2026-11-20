@@ -28,12 +28,16 @@
 #define DEFAULT_CURRENCY	"usd"
 #define DEFAULT_MEMPOOLHOST	"mempool.space"	// public mempool; may be a local node e.g. "http://umbrel.local:3006"
 #define LED_MODE_OFF		0
-#define LED_MODE_STATUS		1	// red at start-up, blue while connecting, blinks the colour while mining
+#define LED_MODE_STATUS		1	// AMBIENT / Status: calm breathing
 #define LED_MODE_STEADY		2	// the colour, always on
-#define DEFAULT_LEDMODE		LED_MODE_STATUS
+#define LED_MODE_REACTIVE	3	// reactive stratum glow (green/cyan mining, blue share, rainbow block, amber fallback)
+#define LED_MODE_SHARE_PULSE	4	// dark except vibrant pulses on accepted shares / blocks
+#define LED_MODE_MAX		4
+#define DEFAULT_LEDMODE		LED_MODE_REACTIVE
 #define DEFAULT_LEDCOLOR	0xF7931A	// 0xRRGGBB (Bitcoin Amber)
 #define DEFAULT_LEDBRIGHTNESS	255
 #define DEFAULT_LEDSCREENOFF	false
+#define DEFAULT_BUZZERENABLED	true
 #define DEFAULT_WEBPASSWORD	DEFAULT_WIFIPW	// LAN settings page login (user admin)
 #define DEFAULT_SCREENTIMEOUT	0	// minutes, 0 = never
 #define DEFAULT_NIGHTDIM	false
@@ -92,6 +96,7 @@
 #define JSON_SPIFFS_KEY_COLORCAL	"colorCalibrated"
 #define JSON_SPIFFS_KEY_TOUCHCALOK	"touchCalibrated"
 #define JSON_SPIFFS_KEY_TOUCHCAL	"touchCal"	// [x0, x1, y0, y1, relRotation] raw XPT2046 units
+#define JSON_SPIFFS_KEY_BUZZER		"buzzer"
 
 // settings
 struct TSettings
@@ -123,6 +128,7 @@ struct TSettings
 	uint32_t ledColor{ DEFAULT_LEDCOLOR };	// 0xRRGGBB
 	int ledBrightness{ DEFAULT_LEDBRIGHTNESS };	// 1-255
 	bool ledScreenOff{ DEFAULT_LEDSCREENOFF };	// LED off while the screen is off
+	bool buzzerEnabled{ DEFAULT_BUZZERENABLED };	// 8-bit piezo alerts (Mario coin on share, victory fanfare on block)
 	// Backlight timeout & night dimming
 	int ScreenTimeout{ DEFAULT_SCREENTIMEOUT };	// minutes without a touch until the backlight goes off, 0 = never
 	bool nightDim{ DEFAULT_NIGHTDIM };
