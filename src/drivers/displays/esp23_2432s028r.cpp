@@ -197,6 +197,7 @@ static inline int hexR() { return isPortrait() ? 87 : 79; }  // middle ring: cen
 
 static int uiScreen = -1;    // screen whose chrome is currently on the panel
 static bool uiLive = false;  // false while the boot / setup screens own the panel
+static volatile bool g_hudVisible = false; // true while quick-action HUD drawer is open
 static float gaugeTarget = 0;
 static float gaugeShown = 0;
 static uint8_t segLvl[G_SEGS];
@@ -3448,7 +3449,7 @@ void esp32_2432S028R_SetTheme(int idx)
   cAcc = p.meter;
   cAlt = p.meter;
 
-  if (uiLive && !g_onb)
+  if (uiLive && !g_onb && !g_hudVisible)
   {
     std::lock_guard<std::mutex> lock(g_displayMutex); // called from the web task
     int s = currentDisplayDriver->current_cyclic_screen;
@@ -3599,6 +3600,11 @@ void esp32_2432S028R_MinerScreen(unsigned long mElapsed)
   {
     (void)getMiningData(mElapsed); // keep the per-second hashrate sample ticking
     return;             // onboarding owns the panel
+  }
+  if (g_hudVisible)
+  {
+    (void)getMiningData(mElapsed); // keep the per-second hashrate sample ticking
+    return;             // HUD drawer owns the panel
   }
   if (restorePage > 0 && restorePage < currentDisplayDriver->num_cyclic_screens)
   {
@@ -4404,9 +4410,17 @@ enum TouchAction
   TA_PREV,
   TA_BACKLIGHT,
   TA_ACCENT,
-  TA_CHARTMODE // Mine: tap the MISS | SHARE | BLOCK band -> spectrogram -> rain -> target ruler
+  TA_CHARTMODE, // Mine: tap the MISS | SHARE | BLOCK band -> spectrogram -> rain -> target ruler
+  TA_HUD_OPEN,
+  TA_HUD_CLOSE,
+  TA_HUD_THEME,
+  TA_HUD_BRIGHT,
+  TA_HUD_POOL,
+  TA_HUD_CALIB
 };
 static volatile int pendingTouch = TA_NONE;
+static uint32_t g_hudOpenMs = 0;
+static volatile int g_hudArg = 0;
 
 // Ambient light sensor (LDR on GPIO 34, ADC1) auto-dimming
 #define PIN_LDR 34
@@ -4525,21 +4539,81 @@ static void touchTask(void *)
       {
         wasDown = true;
         if (ledcRead(0) == 0)
+        {
           pendingTouch = TA_BACKLIGHT; // dark screen: any touch wakes it
-        else if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
-          pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
-        // Mine (portrait): the band is the documented target, but with only
-        // one cyclic screen a tap anywhere else used to fall through to
-        // NEXT/PREV and do nothing. Any tap on the chart, or anywhere at all
-        // when there is no other page to cycle to, cycles Screen 0 -> 1 -> 2.
-        else if (uiScreen == SCR_MINE && isPortrait() &&
-                 (mineChartBandHit(t_x, t_y) || mineChartBodyHit(t_x, t_y) ||
-                  currentDisplayDriver->num_cyclic_screens <= 1))
-          pendingTouch = TA_CHARTMODE;
+        }
+        else if (g_hudVisible)
+        {
+          const int hx = 10, hy = 32, hw = 220, hh = 256;
+          if (t_x < hx || t_x > hx + hw || t_y < hy || t_y > hy + hh)
+          {
+            pendingTouch = TA_HUD_CLOSE;
+          }
+          else if (t_x >= hx + hw - 30 && t_y <= hy + 26)
+          {
+            pendingTouch = TA_HUD_CLOSE;
+          }
+          else if (t_y >= hy + 46 && t_y <= hy + 72)
+          {
+            for (int i = 0; i < THEME_COUNT; i++)
+            {
+              int swX = hx + 8 + i * 34;
+              if (t_x >= swX - 2 && t_x <= swX + 32)
+              {
+                pendingTouch = TA_HUD_THEME;
+                g_hudArg = i;
+                break;
+              }
+            }
+          }
+          else if (t_y >= hy + 86 && t_y <= hy + 114)
+          {
+            for (int j = 0; j < 5; j++)
+            {
+              int bX = hx + 8 + j * 41;
+              if (t_x >= bX - 2 && t_x <= bX + 40)
+              {
+                pendingTouch = TA_HUD_BRIGHT;
+                g_hudArg = j;
+                break;
+              }
+            }
+          }
+          else if (t_y >= hy + 144 && t_y <= hy + 172 && t_x >= hx + 8 && t_x <= hx + hw - 8)
+          {
+            pendingTouch = TA_HUD_POOL;
+          }
+          else if (t_y >= hy + 190 && t_y <= hy + 218 && t_x >= hx + 8 && t_x <= hx + hw - 8)
+          {
+            pendingTouch = TA_HUD_CALIB;
+          }
+        }
         else
-          pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
+        {
+          if (t_y < HDR_H + 4 && t_x > (isPortrait() ? 175 : 235))
+            pendingTouch = TA_BACKLIGHT; // top-right: backlight on/off
+          else if (isPortrait() && t_y < HDR_H + 10 && t_x < 85)
+            pendingTouch = TA_HUD_OPEN; // top-left (Coin/Pool badge): open Quick HUD!
+          // Mine (portrait): the band is the documented target, but with only
+          // one cyclic screen a tap anywhere else used to fall through to
+          // NEXT/PREV and do nothing. Any tap on the chart, or anywhere at all
+          // when there is no other page to cycle to, cycles Screen 0 -> 1 -> 2.
+          else if (uiScreen == SCR_MINE && isPortrait() &&
+                   (mineChartBandHit(t_x, t_y) || mineChartBodyHit(t_x, t_y) ||
+                    currentDisplayDriver->num_cyclic_screens <= 1))
+            pendingTouch = TA_CHARTMODE;
+          else
+            pendingTouch = t_x > (isPortrait() ? 120 : 160) ? TA_NEXT : TA_PREV;
+        }
         g_lastTap.x = t_x;
         g_lastTap.y = t_y;
+        g_lastTap.action = (int8_t)pendingTouch;
+        g_lastTap.ms = millis();
+        g_lastTap.count++;
+      }
+      else if (downCount == 45 && !g_hudVisible && ledcRead(0) > 0) // ~900ms steady hold opens HUD
+      {
+        pendingTouch = TA_HUD_OPEN;
         g_lastTap.action = (int8_t)pendingTouch;
         g_lastTap.ms = millis();
         g_lastTap.count++;
@@ -4583,6 +4657,76 @@ static void touchTask(void *)
   }
 }
 
+static void drawHudOverlay()
+{
+  const int hx = 10, hy = 32, hw = 220, hh = 256;
+  tft.fillRoundRect(hx, hy, hw, hh, 6, C_PANEL);
+  tft.drawRoundRect(hx, hy, hw, hh, 6, C_EDGE);
+  tft.drawFastHLine(hx + 8, hy + 26, hw - 16, C_EDGE);
+
+  // Title & [X] close button
+  text(out(), "QUICK CONTROLS", hx + 12, hy + 8, 12, C_GOLD, C_PANEL, Align::TopLeft);
+  tft.fillRoundRect(hx + hw - 26, hy + 5, 20, 18, 3, C_BG);
+  tft.drawRoundRect(hx + hw - 26, hy + 5, 20, 18, 3, C_EDGE);
+  text(out(), "X", hx + hw - 16, hy + 7, 11, C_TEXT, C_BG, Align::TopCenter);
+
+  // Section 1: Themes
+  text(out(), "PALETTE:", hx + 12, hy + 34, 10, C_DIM, C_PANEL, Align::TopLeft);
+  text(out(), THEMES[currentThemeIdx].name, hx + 68, hy + 33, 11, C_TEXT, C_PANEL, Align::TopLeft);
+  for (int i = 0; i < THEME_COUNT; i++)
+  {
+    int swX = hx + 8 + i * 34;
+    int swY = hy + 48;
+    tft.fillRoundRect(swX, swY, 30, 20, 3, THEMES[i].panel);
+    tft.fillRect(swX + 4, swY + 4, 22, 12, THEMES[i].meter);
+    if (i == currentThemeIdx)
+      tft.drawRoundRect(swX - 1, swY - 1, 32, 22, 3, C_GOLD);
+    else
+      tft.drawRoundRect(swX, swY, 30, 20, 3, C_EDGE);
+  }
+
+  // Section 2: Backlight
+  text(out(), "BACKLIGHT:", hx + 12, hy + 76, 10, C_DIM, C_PANEL, Align::TopLeft);
+  const char *bLabels[5] = {"25%", "50%", "75%", "100%", "AUTO"};
+  const uint8_t bValues[5] = {64, 128, 192, 255, 0};
+  int curBIdx = 4; // default auto
+  for (int j = 0; j < 4; j++)
+  {
+    if (abs((int)Settings.Brightness - (int)bValues[j]) < 32)
+      curBIdx = j;
+  }
+  for (int j = 0; j < 5; j++)
+  {
+    int bX = hx + 8 + j * 41;
+    int bY = hy + 90;
+    bool sel = (j == curBIdx);
+    tft.fillRoundRect(bX, bY, 38, 20, 3, sel ? C_METER : C_BG);
+    tft.drawRoundRect(bX, bY, 38, 20, 3, sel ? C_GOLD : C_EDGE);
+    text(out(), bLabels[j], bX + 19, bY + 4, 10, sel ? C_BG : C_TEXT, sel ? C_METER : C_BG, Align::TopCenter);
+  }
+
+  // Section 3: Stratum Pool
+  text(out(), "STRATUM POOL:", hx + 12, hy + 118, 10, C_DIM, C_PANEL, Align::TopLeft);
+  String poolShort = activePoolAddress();
+  if (poolShort.length() > 24)
+    poolShort = poolShort.substring(0, 22) + "..";
+  text(out(), poolShort.c_str(), hx + 12, hy + 132, 11, C_METER, C_PANEL, Align::TopLeft);
+  int rY = hy + 148;
+  tft.fillRoundRect(hx + 8, rY, hw - 16, 22, 4, C_BG);
+  tft.drawRoundRect(hx + 8, rY, hw - 16, 22, 4, C_EDGE);
+  text(out(), "RECONNECT STRATUM", hx + hw / 2, rY + 4, 11, C_TEXT, C_BG, Align::TopCenter);
+
+  // Section 4: Touch Alignment
+  text(out(), "TOUCH ALIGNMENT:", hx + 12, hy + 178, 10, C_DIM, C_PANEL, Align::TopLeft);
+  int cY = hy + 194;
+  tft.fillRoundRect(hx + 8, cY, hw - 16, 22, 4, C_BG);
+  tft.drawRoundRect(hx + 8, cY, hw - 16, 22, 4, C_EDGE);
+  text(out(), "START RECALIBRATION", hx + hw / 2, cY + 4, 11, C_WARN, C_BG, Align::TopCenter);
+
+  // Dismiss Hint
+  text(out(), "Tap [X] or outside to close", hx + hw / 2, hy + 232, 10, C_DIM, C_PANEL, Align::TopCenter);
+}
+
 void esp32_2432S028R_DoLedStuff(unsigned long frame)
 {
   unsigned long currentMillis = millis();
@@ -4608,6 +4752,82 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     if (drv->num_cyclic_screens > 1)
       drv->current_cyclic_screen = (drv->current_cyclic_screen + 1) % drv->num_cyclic_screens;
     break;
+  case TA_HUD_OPEN:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudVisible = true;
+      g_hudOpenMs = millis();
+      drawHudOverlay();
+    }
+    break;
+  case TA_HUD_CLOSE:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudVisible = false;
+      uiScreen = -1;
+      resetWidgets();
+      clearScreen(out());
+      ensureChrome(currentDisplayDriver->current_cyclic_screen);
+      repaintCached(currentDisplayDriver->current_cyclic_screen);
+    }
+    break;
+  case TA_HUD_THEME:
+    {
+      int theme = g_hudArg;
+      g_hudOpenMs = millis();
+      esp32_2432S028R_SetTheme(theme);
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      drawHudOverlay();
+    }
+    break;
+  case TA_HUD_BRIGHT:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudOpenMs = millis();
+      const uint8_t bValues[5] = {64, 128, 192, 255, 0};
+      if (g_hudArg >= 0 && g_hudArg < 5)
+      {
+        uint8_t duty = bValues[g_hudArg];
+        Settings.Brightness = duty;
+        if (duty > 0)
+        {
+          g_currentDuty = duty;
+          ledcWrite(0, duty);
+        }
+        drawHudOverlay();
+      }
+    }
+    break;
+  case TA_HUD_POOL:
+    {
+      std::lock_guard<std::mutex> lock(g_displayMutex);
+      g_hudOpenMs = millis();
+      requestPoolChange(Settings);
+      int rY = 32 + 148;
+      tft.fillRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_BG);
+      tft.drawRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_GOLD);
+      text(out(), "RECONNECTING...", 10 + 110, rY + 4, 11, C_GOLD, C_BG, Align::TopCenter);
+    }
+    break;
+  case TA_HUD_CALIB:
+    {
+      Settings.touchCalibrated = false;
+      nvMem.saveConfig(&Settings);
+      delay(200);
+      ESP.restart();
+    }
+    break;
+  }
+
+  if (g_hudVisible && (uint32_t)(millis() - g_hudOpenMs) > 15000)
+  {
+    std::lock_guard<std::mutex> lock(g_displayMutex);
+    g_hudVisible = false;
+    uiScreen = -1;
+    resetWidgets();
+    clearScreen(out());
+    ensureChrome(currentDisplayDriver->current_cyclic_screen);
+    repaintCached(currentDisplayDriver->current_cyclic_screen);
   }
 
   // Mine chart 0 -> 1 -> 2 (band tap or /api/minechart): applied here, on the
