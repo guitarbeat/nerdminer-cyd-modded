@@ -1677,7 +1677,14 @@ void minerWorkerSw(void * task_id)
         #endif
         uint32_t sw0 = 0, sw1 = 0;
         asm volatile("rsr.ccount %0" : "=a"(sw0));
+#if defined(NERD_SW_ASM)
+        // Assembly prefilter first (classic ESP32 and S3); the C version only
+        // runs for the 1 nonce in 65536 that passes it, to produce the hash.
+        bool sw_hit = nerd_sha256d_prefilter(job->midstate, job->sha_buffer+64, job->bake) &&
+                      nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash);
+#else
         bool sw_hit = nerd_sha256d_baked(job->midstate, job->sha_buffer+64, job->bake, hash);
+#endif
         asm volatile("rsr.ccount %0" : "=a"(sw1));
         uint32_t sw_cycles = sw1 - sw0;
         if (g_cycleProfile.sw_cycles_per_hash == 0)
