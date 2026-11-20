@@ -104,6 +104,7 @@ void runMiner(void *name);
 // reconnects to the pool, no restart needed.
 struct TSettings;
 void requestPoolChange(const TSettings &s);
+void requestPoolReconnect(void);
 void readPoolSettings(TSettings &s);
 
 #define POOL_FAILOVER_TRIES 3

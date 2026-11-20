@@ -707,10 +707,20 @@ MinerStatus getMinerStatus(void)
   return s;
 }
 
+static bool s_forcePoolReconnect = false;
+
 void requestPoolChange(const TSettings &s)
 {
   std::lock_guard<std::mutex> lock(g_settingsMutex);
   copyPoolSettings(s_poolChange, s);
+  s_poolChangePending = true;
+}
+
+void requestPoolReconnect(void)
+{
+  std::lock_guard<std::mutex> lock(g_settingsMutex);
+  copyPoolSettings(s_poolChange, Settings);
+  s_forcePoolReconnect = true;
   s_poolChangePending = true;
 }
 
@@ -726,6 +736,8 @@ static bool takePoolChange(void)
   if (!s_poolChangePending)
     return false;
   const TSettings &n = s_poolChange;
+  const bool force = s_forcePoolReconnect;
+  s_forcePoolReconnect = false;
   const bool mainChanged = n.PoolAddress != Settings.PoolAddress || n.PoolPort != Settings.PoolPort ||
                            strcmp(n.BtcWallet, Settings.BtcWallet) != 0 ||
                            strcmp(n.PoolPassword, Settings.PoolPassword) != 0;
@@ -734,14 +746,22 @@ static bool takePoolChange(void)
                              strcmp(n.FallbackPoolPassword, Settings.FallbackPoolPassword) != 0;
   copyPoolSettings(Settings, s_poolChange);
   s_poolChangePending = false;
-  if (!mainChanged && !(s_onBackup && backupChanged))
+  if (!force && !mainChanged && !(s_onBackup && backupChanged))
     return false;
-  if (mainChanged)
+  if (mainChanged || force)
     s_poolError[0] = 0;
-  if (mainChanged)
+  if (mainChanged || force)
     g_networkDifficulty = 0.0; // new pool may mine another chain: wait for its first job's nbits
-  s_onBackup = s_onBackup && !mainChanged && backupPoolSet();
-  g_usingFallback = s_onBackup;
+  if (force)
+  {
+    s_onBackup = false; // Forced reconnect always retries primary pool
+    g_usingFallback = false;
+  }
+  else
+  {
+    s_onBackup = s_onBackup && !mainChanged && backupPoolSet();
+    g_usingFallback = s_onBackup;
+  }
   s_poolFailures = 0;
   s_backupSince = millis();
   return true;
@@ -1158,10 +1178,9 @@ void runStratumWorker(void *name) {
       MiningJobStop(job_pool, s_submition_map);
       if (poolFailed())
         continue; // try the other pool straight away
-      // If server is not reachable add random delay for connection retries
-      // A second at a time, so a pool fixed on the settings page is tried
-      // straight away instead of after the rest of the wait.
-      for (int s = 1 + rand() % 60; s > 0; s--) {
+      // Shorter retry delay when backup pool is configured for fast failover
+      int maxWait = backupPoolSet() ? (4 + (s_poolFailures * 3)) : 30;
+      for (int s = 2 + (rand() % maxWait); s > 0; s--) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         std::lock_guard<std::mutex> lock(g_settingsMutex);
         if (s_poolChangePending) break;
@@ -1424,7 +1443,13 @@ void runStratumWorker(void *name) {
                                           if (s_authorized == 1)
                                             Serial.println("[STRATUM] Worker authorized by the pool");
                                           else
+                                          {
                                             Serial.printf("[STRATUM] The pool REFUSED the worker \"%s\": check the BTC address in the settings\n", mWorker.wName);
+                                            client.stop();
+                                            isMinerSuscribed = false;
+                                            MiningJobStop(job_pool, s_submition_map);
+                                            poolFailed();
+                                          }
                                           break;
                                         }
                                         auto itt = s_submition_map.find(id);
@@ -1476,6 +1501,10 @@ void runStratumWorker(void *name) {
                                           s_authorized = 0;
                                           notePoolError(line); // keep the pool's reason for the screens / api
                                           Serial.printf("[STRATUM] The pool REFUSED the worker \"%s\": check the BTC address in the settings\n", mWorker.wName);
+                                          client.stop();
+                                          isMinerSuscribed = false;
+                                          MiningJobStop(job_pool, s_submition_map);
+                                          poolFailed();
                                           break;
                                         }
                                         auto itt = s_submition_map.find(id);

@@ -1045,6 +1045,7 @@ struct HdrV
   String job;       // seconds since the last mining.notify job (under the clock)
   String coin;      // active pool's coin symbol, e.g. "EMB" / "BTC" (header, left, large)
   String poolHost;  // active pool host without the port (header, left, small)
+  bool fallback;    // true when active on secondary fallback pool
   String ip;
   int bars;
   int status;
@@ -1131,6 +1132,7 @@ static void drawHeader(const HdrV &h)
   // baseline, ~59 px at its descender row (measured on the panel).
   const int wCoin = 66, hCoin = 27, yCoin = 2, yPool = 11;
   String kCoin = "hcoin|" + h.coin + "|" + h.poolHost + "|" + (P ? "P" : "L");
+  if (h.fallback) kCoin += "|FB";
   if (need(W_HDR_BADGE, kCoin))
   {
     if (wBegin(wCoin, hCoin, C_BG))
@@ -1139,6 +1141,16 @@ static void drawHeader(const HdrV &h)
       unsigned cs = 16;
       while (cs > 10 && textW(c.c_str(), cs) > wCoin - 2) cs--;
       text(wgt, c.c_str(), 0, -3, cs, C_GOLD, C_BG);
+      if (h.fallback)
+      {
+        int cw = textW(c.c_str(), cs);
+        int fbx = cw + 3;
+        if (fbx + 18 <= wCoin)
+        {
+          wgt.fillRoundRect(fbx, 0, 18, 11, 2, C_WARN);
+          text(wgt, "FB", fbx + 9, 1, 10, C_BG, C_WARN, Align::TopCenter);
+        }
+      }
       // Fit test on the real rendering: draw the candidate into the pool rows
       // of the sprite and check every row's rightmost inked pixel against the
       // ring on that screen row (1 px of air). Runs only on a coin/pool change.
@@ -1160,7 +1172,7 @@ static void drawHeader(const HdrV &h)
       unsigned ps = 12;
       String ph = shortPoolHost(h.poolHost, 12, 11, &ps, fits);
       wgt.fillRect(0, pr0, wCoin, hCoin - pr0, C_BG);
-      text(wgt, ph.c_str(), 0, yPool, ps, mix565(C_TEXT, C_BG, 40), C_BG);
+      text(wgt, ph.c_str(), 0, yPool, ps, h.fallback ? C_WARN : mix565(C_TEXT, C_BG, 40), C_BG);
       wEndLeftOfDial(bx, yCoin, wCoin, hCoin);
       done(W_HDR_BADGE, kCoin);
     }
@@ -3559,6 +3571,7 @@ static HdrV liveHeader(const String &time)
   String t = (time.length() && time != "--") ? time : getTime();
   h.time12 = fmt12HourTime(t);
   h.blocks = String(valids);
+  h.fallback = g_usingFallback;
   {
     char pk[64];
     const char *coin = nullptr;
@@ -4708,13 +4721,15 @@ static void drawHudOverlay()
   // Section 3: Stratum Pool
   text(out(), "STRATUM POOL:", hx + 12, hy + 118, 10, C_DIM, C_PANEL, Align::TopLeft);
   String poolShort = activePoolAddress();
-  if (poolShort.length() > 24)
-    poolShort = poolShort.substring(0, 22) + "..";
-  text(out(), poolShort.c_str(), hx + 12, hy + 132, 11, C_METER, C_PANEL, Align::TopLeft);
+  if (poolShort.length() > 20)
+    poolShort = poolShort.substring(0, 18) + "..";
+  if (g_usingFallback)
+    poolShort += " [FB]";
+  text(out(), poolShort.c_str(), hx + 12, hy + 132, 11, g_usingFallback ? C_WARN : C_METER, C_PANEL, Align::TopLeft);
   int rY = hy + 148;
   tft.fillRoundRect(hx + 8, rY, hw - 16, 22, 4, C_BG);
   tft.drawRoundRect(hx + 8, rY, hw - 16, 22, 4, C_EDGE);
-  text(out(), "RECONNECT STRATUM", hx + hw / 2, rY + 4, 11, C_TEXT, C_BG, Align::TopCenter);
+  text(out(), g_usingFallback ? "TRY PRIMARY POOL" : "RECONNECT STRATUM", hx + hw / 2, rY + 4, 11, g_usingFallback ? C_GOLD : C_TEXT, C_BG, Align::TopCenter);
 
   // Section 4: Touch Alignment
   text(out(), "TOUCH ALIGNMENT:", hx + 12, hy + 178, 10, C_DIM, C_PANEL, Align::TopLeft);
@@ -4802,7 +4817,7 @@ void esp32_2432S028R_DoLedStuff(unsigned long frame)
     {
       std::lock_guard<std::mutex> lock(g_displayMutex);
       g_hudOpenMs = millis();
-      requestPoolChange(Settings);
+      requestPoolReconnect();
       int rY = 32 + 148;
       tft.fillRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_BG);
       tft.drawRoundRect(10 + 8, rY, 220 - 16, 22, 4, C_GOLD);
