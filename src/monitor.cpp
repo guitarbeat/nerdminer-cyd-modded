@@ -880,6 +880,13 @@ String getPoolAPIUrl(void) {
             url = "https://pool.nerdminers.org/users/";
             style = POOL_API_CKPOOL;
         }
+        else if (pool.endsWith(".ckpool.org")) {
+            // solo.ckpool.org, eusolo., ausolo.: each region serves its own
+            // stats at https://<host>/users/<address> (another region answers
+            // 404 for the same address), same fields as heliospool.
+            url = "https://" + pool + "/users/";
+            style = POOL_API_CKPOOL;
+        }
         else {
             switch (poolPort) {
                 case 3333:
