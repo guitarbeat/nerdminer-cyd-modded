@@ -43,8 +43,12 @@
 #define getPublicPool "https://public-pool.io:40557/api/client/" // +btcString
 // Each refresh holds g_hwShaMutex for the whole HTTPS request (~1.5 s with the
 // TLS handshake), which pauses the hardware miner. At 1 min that was ~2.4% of
-// all mining time; 5 min costs ~0.5% and pool stats barely change in 5 min.
-#define UPDATE_POOL_min   5
+// all mining time, 5 min ~0.5%; 15 min (upstream 53c8416) is ~0.17%.
+// Pool stats (workers, pool rate, pool best): each fetch is an HTTPS request
+// that pauses the HW miner ~1.5 s, a dip a 10 s hashrate reading shows as -13%.
+#ifndef UPDATE_POOL_min
+#define UPDATE_POOL_min   15
+#endif
 
 #define NEXT_HALVING_EVENT 1050000 //840000
 #define HALVING_BLOCKS (getActiveCoinProfile().halvingInterval)
