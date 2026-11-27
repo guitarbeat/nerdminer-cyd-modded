@@ -12,6 +12,7 @@
 // (esp23_2432s028r.cpp) the chrome is drawn straight to the panel and every
 // widget goes through a small scratch sprite.
 #include "displayDriver.h"
+#include "display.h" // screenLit()
 
 #ifdef ESP32_4IN_ST7796_DISPLAY
 
@@ -952,6 +953,11 @@ static void saveUiPrefs()
 
 static void refreshPool()
 {
+  // Screen off: nobody sees the pool stats, and each fetch is an HTTPS request
+  // that pauses the HW miner. The last values stay; the next draw with the
+  // screen on fetches again if they are older than UPDATE_POOL_min.
+  if (!screenLit())
+    return;
   if (Settings.PoolAddress != "tn.vkbit.com")
   {
     pData = getPoolData(); // throttled internally (UPDATE_POOL_min)
